@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 11 章 · 回调与状态提升 — React 19 入门教程</title>
+<meta name="description" content="子组件怎么通知父组件，状态应该放在哪">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="11">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 11 章 · 交互与数据流</span>
+<h1>回调与状态提升</h1>
+<p class="lede">
+  现在 <code>Search</code> 自己管着 <code>searchTerm</code>，能显示它，但别人用不到它。
+  我们真正想做的是：用这个搜索词去<strong>过滤</strong> <code>App</code> 里的文章列表。
+  问题来了 —— props 只能往下传，子组件怎么把数据“告诉”父组件？
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用<strong>回调处理函数</strong>让子组件向父组件通信</li>
+    <li>学会<strong>状态提升</strong>：把状态放到所有需要它的组件的共同祖先里</li>
+    <li>用 <code>filter()</code> 根据搜索词派生出过滤后的列表</li>
+    <li>理解“派生值不要存成状态”</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="callback">回调处理函数</h2>
+
+<p>
+  既然 props 可以传任何值，那当然也可以传<strong>函数</strong>。父组件定义一个函数，通过 props 交给子组件；
+  子组件在合适的时机调用它；函数真正执行的代码却在父组件里 —— 这样信息就“回”到了父组件。
+  这个函数叫<strong>回调处理函数</strong>（callback handler）。
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> stories = [ ... ];
+
+  <span class="tk-cm">// A：在父组件里定义</span>
+  <span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+    <span class="tk-cm">// D：最终在这里执行，App 拿到了输入的值</span>
+    console.<span class="tk-fn">log</span>(event.target.value);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-cm">{/* B：通过 props 传给子组件 */}</span>
+      <span class="tk-tg">&lt;Search</span> onSearch={handleSearch} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> list={stories} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">Search</span> = (props) =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-kw">const</span> handleChange = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+
+    <span class="tk-cm">// C：子组件调用它</span>
+    props.<span class="tk-fn">onSearch</span>(event);
+  };
+
+  <span class="tk-kw">return</span> ( ... );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="回调处理函数的四个步骤 A B C D">
+  <rect class="bx-a" x="210" y="20" width="340" height="96" rx="12"/>
+  <text class="ttl on-a" x="380" y="44" text-anchor="middle">App（父）</text>
+  <text class="mono sm" x="228" y="70"><tspan class="fill-a" style="font-weight:700">A</tspan>  const handleSearch = (event) =&gt; {</text>
+  <text class="mono sm" x="244" y="88"><tspan class="fill-g" style="font-weight:700">D</tspan>  console.log(event.target.value);</text>
+  <text class="mono sm" x="228" y="106">   };</text>
+
+  <rect class="bx-b" x="210" y="180" width="340" height="90" rx="12"/>
+  <text class="ttl on-b" x="380" y="204" text-anchor="middle">Search（子）</text>
+  <text class="mono sm" x="228" y="232">const handleChange = (event) =&gt; {</text>
+  <text class="mono sm" x="244" y="252"><tspan class="fill-p" style="font-weight:700">C</tspan>  props.onSearch(event);</text>
+
+  <path class="ln-a" d="M300 118 V176" marker-end="url(#ar-a)"/>
+  <text class="ttl on-a" x="20" y="140">B  向下：</text>
+  <text class="mono sm on-a" x="20" y="158">&lt;Search</text>
+  <text class="mono sm on-a" x="28" y="174">onSearch={handleSearch} /&gt;</text>
+  <text class="sm" x="20" y="192">把函数当作 prop 传下去</text>
+
+  <path class="ln-g flow" d="M460 176 V120" marker-end="url(#ar-g)"/>
+  <text class="ttl on-g" x="480" y="140">C → D  向上：</text>
+  <text class="sm" x="480" y="160">子组件调用这个函数，</text>
+  <text class="sm" x="480" y="176">执行的却是父组件里的代码</text>
+</svg>
+<figcaption>图 11-1　回调处理函数：函数通过 props 向下传，调用效果向上传</figcaption>
+</figure>
+
+<div class="box key">
+  <div class="t">&#9733; 一句话记住</div>
+  <p>
+    <strong>数据通过 props 向下流；事件通过回调函数向上流。</strong>
+    回调函数本身依然是“向下”传的 props，只是它被调用时，执行的是父组件里的逻辑。
+    按惯例，作为 prop 的回调命名为 <code>onXxx</code>（<code>onSearch</code>），父组件里的实现命名为 <code>handleXxx</code>（<code>handleSearch</code>）。
+  </p>
+</div>
+
+<h2 id="lifting">状态提升</h2>
+
+<p>
+  现在 <code>App</code> 能收到输入的值了，可以用它来过滤列表。但怎么存？如果在 <code>App</code> 里再建一个状态，
+  <code>Search</code> 和 <code>App</code> 就各有一份 <code>searchTerm</code> —— 两份数据，迟早会不同步。
+</p>
+
+<p>
+  换个角度想：既然 <code>App</code> 需要 <code>searchTerm</code>，那为什么不<strong>一开始就把状态放在 <code>App</code> 里</strong>？
+  这就是<strong>状态提升</strong>（lifting state up）：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="把状态从 Search 提升到 App">
+  <text class="ttl" x="180" y="22" text-anchor="middle">提升前</text>
+  <rect class="bx" x="100" y="36" width="160" height="44" rx="10"/>
+  <text class="ttl" x="180" y="63" text-anchor="middle">App</text>
+  <text class="sm on-r" x="180" y="216" text-anchor="middle">❓ App 想过滤列表，但拿不到 searchTerm</text>
+  <rect class="bx-a" x="20" y="130" width="150" height="60" rx="10"/>
+  <text class="ttl on-a" x="95" y="154" text-anchor="middle">Search</text>
+  <text class="mono sm" x="95" y="176" text-anchor="middle">searchTerm ●</text>
+  <rect class="bx" x="200" y="130" width="140" height="60" rx="10"/>
+  <text class="ttl" x="270" y="164" text-anchor="middle">List</text>
+  <path class="ln" d="M150 82 L100 128"/>
+  <path class="ln" d="M210 82 L260 128"/>
+
+  <path class="ln-a" d="M372 150 H408" marker-end="url(#ar-a)"/>
+
+  <text class="ttl" x="580" y="22" text-anchor="middle">提升后</text>
+  <rect class="bx-a" x="480" y="36" width="200" height="60" rx="10"/>
+  <text class="ttl on-a" x="580" y="60" text-anchor="middle">App</text>
+  <text class="mono sm" x="580" y="82" text-anchor="middle">searchTerm ●  setSearchTerm</text>
+  <rect class="bx-b" x="420" y="190" width="150" height="60" rx="10"/>
+  <text class="ttl on-b" x="495" y="214" text-anchor="middle">Search</text>
+  <text class="sm" x="495" y="236" text-anchor="middle">无状态，只负责输入</text>
+  <rect class="bx-g" x="600" y="190" width="150" height="60" rx="10"/>
+  <text class="ttl on-g" x="675" y="214" text-anchor="middle">List</text>
+  <text class="sm" x="675" y="236" text-anchor="middle">显示过滤后的列表</text>
+
+  <path class="ln-g flow" d="M470 188 L520 100" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="420" y="140">onSearch(event)</text>
+  <text class="sm on-g" x="420" y="156">回调向上</text>
+  <path class="ln-a" d="M640 98 L670 186" marker-end="url(#ar-a)"/>
+  <text class="mono sm on-a" x="664" y="140">list={…}</text>
+  <text class="sm on-a" x="664" y="156">props 向下</text>
+</svg>
+<figcaption>图 11-2　状态提升：把状态移到需要它的组件的共同父组件里</figcaption>
+</figure>
+
+<p>把 <code>useState</code> 从 <code>Search</code> 挪到 <code>App</code>，回调函数里改为更新 <code>App</code> 的状态：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> stories = [ ... ];
+
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;Search</span> onSearch={handleSearch} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> list={stories} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">Search</span> = (props) =&gt; (
+  <span class="tk-tg">&lt;div</span>&gt;
+    <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+    <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> onChange={props.onSearch} <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/div</span>&gt;
+);</pre></div>
+
+<p>
+  <code>Search</code> 变回了一个没有状态的简单组件：它只是把 <code>change</code> 事件交给父组件。
+  状态统一由 <code>App</code> 管理。
+</p>
+
+<h2 id="filter">用 filter() 过滤列表</h2>
+
+<p>
+  状态在 <code>App</code> 里了，就可以在把列表交给 <code>List</code> 之前先过滤一遍。
+  先复习一下数组的 <code>filter()</code>：回调返回 <code>true</code> 的项留下，返回 <code>false</code> 的项被丢掉，结果是一个新数组：
+</p>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre><span class="tk-kw">const</span> words = [<span class="tk-st">'spray'</span>, <span class="tk-st">'limit'</span>, <span class="tk-st">'elite'</span>, <span class="tk-st">'exuberant'</span>, <span class="tk-st">'destruction'</span>, <span class="tk-st">'present'</span>];
+
+<span class="tk-kw">const</span> filteredWords = words.<span class="tk-fn">filter</span>((word) =&gt; word.length &gt; <span class="tk-nm">6</span>);
+
+console.<span class="tk-fn">log</span>(filteredWords); <span class="tk-cm">// ['exuberant', 'destruction', 'present']</span></pre></div>
+
+<p>应用到文章列表上：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> stories = [ ... ];
+
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  <span class="tk-kw">const</span> searchedStories = stories.<span class="tk-fn">filter</span>((story) =&gt;
+    story.title.<span class="tk-fn">includes</span>(searchTerm)
+  );
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;Search</span> onSearch={handleSearch} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> list={searchedStories} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>
+  还有个小问题：搜 “react” 找不到 “React”，因为 <code>includes</code> 区分大小写。两边都转成小写再比：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> searchedStories = stories.<span class="tk-fn">filter</span>((story) =&gt;
+  story.title.<span class="tk-fn">toLowerCase</span>().<span class="tk-fn">includes</span>(searchTerm.<span class="tk-fn">toLowerCase</span>())
+);</pre></div>
+
+<p>
+  现在输入 “eact”“React”“react” 都能找到对应文章。恭喜，你完成了第一个真正的交互功能 ——
+  它同时用到了 <strong>state</strong>（保存搜索词）和 <strong>props</strong>（向下传列表、向下传回调）。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="一次输入引发的完整数据流">
+  <rect class="bx-b" x="20" y="90" width="120" height="56" rx="10"/>
+  <text class="ttl on-b" x="80" y="114" text-anchor="middle">输入 "re"</text>
+  <text class="sm" x="80" y="134" text-anchor="middle">Search</text>
+
+  <rect class="bx-p" x="180" y="90" width="140" height="56" rx="10"/>
+  <text class="mono sm on-p" x="250" y="114" text-anchor="middle">handleSearch</text>
+  <text class="mono sm" x="250" y="134" text-anchor="middle" style="font-size:10.5px">setSearchTerm('re')</text>
+
+  <rect class="bx-a" x="360" y="70" width="190" height="96" rx="10"/>
+  <text class="ttl on-a" x="455" y="94" text-anchor="middle">App 重新渲染</text>
+  <text class="mono sm" x="455" y="116" text-anchor="middle">searchTerm = 're'</text>
+  <text class="mono sm" x="455" y="136" text-anchor="middle">searchedStories =</text>
+  <text class="mono sm" x="455" y="154" text-anchor="middle">stories.filter(…)</text>
+
+  <rect class="bx-g" x="590" y="90" width="150" height="56" rx="10"/>
+  <text class="ttl on-g" x="665" y="114" text-anchor="middle">List</text>
+  <text class="sm" x="665" y="134" text-anchor="middle">显示过滤后的列表</text>
+
+  <path class="ln-b" d="M142 118 H176" marker-end="url(#ar-b)"/>
+  <path class="ln-p" d="M322 118 H356" marker-end="url(#ar-p)"/>
+  <path class="ln-g" d="M552 118 H586" marker-end="url(#ar-g)"/>
+  <text class="sm" x="380" y="206" text-anchor="middle">子组件 → 回调 → 父组件状态 → 重新渲染 → 派生新数据 → props 传给另一个子组件</text>
+</svg>
+<figcaption>图 11-3　一次按键引发的完整数据流</figcaption>
+</figure>
+
+<h2 id="derived">派生值不要存成状态</h2>
+
+<p>
+  注意 <code>searchedStories</code> 并不是状态，它只是每次渲染时由 <code>stories</code> 和 <code>searchTerm</code> <strong>算出来</strong>的普通变量。
+  这是一个非常重要的习惯：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">&#10060; 把派生值也存成状态</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+<span class="tk-kw">const</span> [searchedStories, setSearchedStories] =
+  <span class="tk-fn">useState</span>(stories);
+
+<span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+  <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  <span class="tk-cm">// 必须记得同步更新另一个状态……</span>
+  <span class="tk-fn">setSearchedStories</span>(stories.<span class="tk-fn">filter</span>(...));
+};</pre></div>
+  </div>
+  <div class="new"><div class="h">&#9989; 渲染时直接算出来</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+<span class="tk-cm">// 每次渲染自动计算，永远不会不同步</span>
+<span class="tk-kw">const</span> searchedStories = stories.<span class="tk-fn">filter</span>((story) =&gt;
+  story.title.<span class="tk-fn">toLowerCase</span>()
+    .<span class="tk-fn">includes</span>(searchTerm.<span class="tk-fn">toLowerCase</span>())
+);</pre></div>
+  </div>
+</div>
+
+<div class="box tip">
+  <div class="t">&#128161; 判断标准</div>
+  <p>
+    如果一个值可以从已有的 props 或 state <strong>计算出来</strong>，它就不应该是 state。
+    state 越少，出现“两份数据不一致”的 bug 就越少。担心每次都算太慢？绝大多数情况下都不慢；真慢了再看第 28 章的 <code>useMemo</code>。
+  </p>
+</div>
+
+<h2 id="where">状态应该放在哪里？</h2>
+
+<div class="box key">
+  <div class="t">&#9733; 状态放置的经验法则</div>
+  <ul style="margin:0">
+    <li>找出<strong>所有</strong>需要读取或修改这个状态的组件；</li>
+    <li>把状态放在它们<strong>最近的共同祖先</strong>里；</li>
+    <li>需要<strong>读</strong>的子组件，通过 props 拿到值；需要<strong>改</strong>的子组件，通过 props 拿到回调函数。</li>
+  </ul>
+  <p style="margin-top:8px">放得太低，别的组件用不到；放得太高，无关的组件也会跟着重新渲染。学会判断状态放在哪里，是 React 开发者最重要的技能之一。</p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>回调处理函数：父组件把函数作为 prop 传给子组件，子组件调用它来通知父组件。</li>
+  <li>状态提升：把状态放到所有需要它的组件的最近共同祖先中，避免重复的、不同步的状态。</li>
+  <li><code>filter()</code> + <code>toLowerCase().includes()</code> 实现了不区分大小写的搜索。</li>
+  <li>能算出来的值不要存成状态，在渲染时直接计算。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>App</code> 里显示当前的搜索词，例如“找到 N 条与 xxx 相关的文章”。</li>
+    <li>让搜索同时匹配作者名（<code>story.author</code>）。</li>
+    <li>把 <code>Search</code> 改成在输入框下方显示 “Searching for …”：它现在没有状态了，要显示搜索词，需要从 <code>App</code> 传什么 prop 下来？</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是回调处理函数？子组件如何与父组件通信？</summary>
+    <div><p>父组件定义函数并通过 props 传给子组件，子组件在事件发生时调用它（可带参数），从而让父组件执行相应逻辑。</p></div></details>
+  <details><summary>什么是状态提升？为什么需要它？</summary>
+    <div><p>把状态移动到需要共享它的多个组件的最近共同祖先中，由祖先通过 props 分发值和修改函数。这样只有一份数据源，避免重复与不同步。</p></div></details>
+  <details><summary>子组件能通过回调直接修改父组件的状态吗？</summary>
+    <div><p>子组件只是调用回调来“通知”父组件，怎样更新状态由父组件决定。</p></div></details>
+  <details><summary>是否应该把所有状态都提升到顶层组件？</summary>
+    <div><p>不应该。只提升到需要共享的层级即可；无关状态放在顶层会导致不必要的重新渲染和更高的耦合。</p></div></details>
+  <details><summary>什么是派生状态？应该怎么处理？</summary>
+    <div><p>可以由现有 props/state 计算出来的值。应在渲染时直接计算，而不是另存为 state 并手动同步。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 31 章 · 集成测试与快照测试 — React 19 入门教程</title>
+<meta name="description" content="mock 网络请求，像用户一样测试整个应用">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="31">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 31 章 · 维护</span>
+<h1>集成测试与快照测试</h1>
+<p class="lede">
+  单元测试证明每块积木都没问题，但积木拼在一起还能不能用？这一章测试整个 <code>App</code>：
+  它会请求数据、显示加载状态、删除文章、执行搜索。我们要解决的第一个问题是 —— 测试里不能真的去请求 Hacker News。
+  最后再介绍一种轻量的测试方式：<strong>快照测试</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 <code>vi.mock</code> 替换 axios，控制网络请求返回什么</li>
+    <li>用 <code>waitFor</code> 等待异步更新，测试加载、成功、失败三种路径</li>
+    <li>模拟完整的用户操作：删除、输入、提交搜索</li>
+    <li>编写快照测试，了解 MSW 等更现代的网络 mock 方式</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="mock">mock 掉网络请求</h2>
+
+<p>
+  <code>App</code> 渲染后会用 axios 请求远程 API。测试里真的发请求既慢又不稳定（网络可能断、数据会变）。
+  用 Vitest 把整个 axios 模块替换成假的：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-kw">import</span> { describe, it, expect, vi } <span class="tk-kw">from</span> <span class="tk-st">'vitest'</span>;
+<span class="tk-kw">import</span> { render, screen, fireEvent, waitFor } <span class="tk-kw">from</span> <span class="tk-st">'@testing-library/react'</span>;
+<span class="tk-kw">import</span> axios <span class="tk-kw">from</span> <span class="tk-st">'axios'</span>;
+
+...
+
+vi.<span class="tk-fn">mock</span>(<span class="tk-st">'axios'</span>);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="vi.mock 把 axios 替换为测试控制的假实现">
+  <rect class="bx-a" x="20" y="60" width="160" height="80" rx="12"/>
+  <text class="ttl on-a" x="100" y="88" text-anchor="middle">App</text>
+  <text class="mono sm" x="100" y="112" text-anchor="middle">axios.get(url)</text>
+
+  <rect class="bx-d" x="260" y="20" width="220" height="60" rx="10"/>
+  <text class="sm" x="370" y="46" text-anchor="middle">真实 axios → 网络 → Hacker News</text>
+  <text class="sm on-r" x="370" y="66" text-anchor="middle">✗ 测试中被替换掉了</text>
+
+  <rect class="bx-g" x="260" y="110" width="220" height="80" rx="10"/>
+  <text class="ttl on-g" x="370" y="136" text-anchor="middle">mock 的 axios</text>
+  <text class="mono sm" x="370" y="158" text-anchor="middle">mockImplementationOnce(</text>
+  <text class="mono sm" x="370" y="176" text-anchor="middle">() =&gt; promise)</text>
+
+  <rect class="bx-b" x="560" y="110" width="180" height="80" rx="10"/>
+  <text class="ttl on-b" x="650" y="136" text-anchor="middle">测试决定返回什么</text>
+  <text class="mono sm" x="650" y="160" text-anchor="middle">{ data: { hits:</text>
+  <text class="mono sm" x="650" y="176" text-anchor="middle">stories } }</text>
+
+  <path class="ln-d" d="M182 88 L256 56" marker-end="url(#ar)"/>
+  <path class="ln-g" d="M182 112 L256 146" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M556 150 H484" marker-end="url(#ar-b)"/>
+</svg>
+<figcaption>图 31-1　mock：App 以为自己在请求网络，其实拿到的是测试准备好的数据</figcaption>
+</figure>
+
+<h2 id="success">测试数据获取成功</h2>
+
+<p>准备一个会兑现的 Promise，让 <code>axios.get</code> 下一次被调用时返回它，然后渲染 <code>App</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-fn">describe</span>(<span class="tk-st">'App'</span>, () =&gt; {
+  <span class="tk-fn">it</span>(<span class="tk-st">'succeeds fetching data'</span>, <span class="tk-kw">async</span> () =&gt; {
+    <span class="tk-kw">const</span> promise = <span class="tk-tp">Promise</span>.<span class="tk-fn">resolve</span>({
+      data: {
+        hits: stories,
+      },
+    });
+
+    axios.get.<span class="tk-fn">mockImplementationOnce</span>(() =&gt; promise);
+
+    <span class="tk-fn">render</span>(<span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>);
+
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(/<span class="tk-tp">Loading</span>/)).<span class="tk-fn">toBeInTheDocument</span>();
+
+    <span class="tk-kw">await</span> <span class="tk-fn">waitFor</span>(<span class="tk-kw">async</span> () =&gt; <span class="tk-kw">await</span> promise);
+
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(/<span class="tk-tp">Loading</span>/)).<span class="tk-fn">toBeNull</span>();
+
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getByText</span>(<span class="tk-st">'React'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getByText</span>(<span class="tk-st">'Redux'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getAllByText</span>(<span class="tk-st">'Dismiss'</span>).length).<span class="tk-fn">toBe</span>(<span class="tk-nm">2</span>);
+  });
+});</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="集成测试的时间线">
+  <path class="ln" d="M20 120 H740" marker-end="url(#ar)"/>
+  <rect class="bx-a" x="20" y="30" width="150" height="60" rx="10"/>
+  <text class="mono sm on-a" x="95" y="56" text-anchor="middle">render(&lt;App /&gt;)</text>
+  <text class="sm" x="95" y="76" text-anchor="middle">effect 发起请求</text>
+  <rect class="bx-b" x="200" y="150" width="170" height="60" rx="10"/>
+  <text class="sm" x="285" y="174" text-anchor="middle">断言：Loading 存在</text>
+  <text class="mono sm" x="285" y="194" text-anchor="middle">queryByText(/Loading/)</text>
+  <rect class="bx-p" x="400" y="30" width="160" height="60" rx="10"/>
+  <text class="mono sm on-p" x="480" y="56" text-anchor="middle">await waitFor(…)</text>
+  <text class="sm" x="480" y="76" text-anchor="middle">等 Promise 兑现、重渲染</text>
+  <rect class="bx-g" x="580" y="150" width="160" height="60" rx="10"/>
+  <text class="sm" x="660" y="174" text-anchor="middle">断言：Loading 消失</text>
+  <text class="sm" x="660" y="194" text-anchor="middle">React、Redux 出现</text>
+  <path class="ln-d" d="M95 92 V116"/><path class="ln-d" d="M285 124 V148"/>
+  <path class="ln-d" d="M480 92 V116"/><path class="ln-d" d="M660 124 V148"/>
+</svg>
+<figcaption>图 31-2　先断言“加载中”，等待，再断言“数据已显示”</figcaption>
+</figure>
+
+<ul>
+  <li><code>waitFor</code> 会反复执行回调，直到它不再抛错（或超时），用来等待异步的状态更新和重新渲染完成。测试函数因此要写成 <code>async</code>。</li>
+  <li>断言“不存在”用 <code>queryByText</code>：它找不到时返回 <code>null</code>；<code>getByText</code> 找不到会直接抛错。</li>
+  <li>用正则 <code>/Loading/</code> 而不是 <code>'Loading'</code>：字符串必须完全匹配 <code>'Loading ...'</code>，正则只要包含即可。</li>
+</ul>
+
+<div class="box tip">
+  <div class="t">&#128161; 更简洁的等待方式</div>
+  <p>
+    <code>findBy</code> 系列查询自带等待：<code>expect(await screen.findByText('React')).toBeInTheDocument()</code>
+    相当于 <code>waitFor</code> + <code>getByText</code>，读起来更直接。
+  </p>
+</div>
+
+<h2 id="failure">测试数据获取失败</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-fn">it</span>(<span class="tk-st">'fails fetching data'</span>, <span class="tk-kw">async</span> () =&gt; {
+  <span class="tk-kw">const</span> promise = <span class="tk-tp">Promise</span>.<span class="tk-fn">reject</span>();
+
+  axios.get.<span class="tk-fn">mockImplementationOnce</span>(() =&gt; promise);
+
+  <span class="tk-fn">render</span>(<span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>);
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getByText</span>(/<span class="tk-tp">Loading</span>/)).<span class="tk-fn">toBeInTheDocument</span>();
+
+  <span class="tk-kw">try</span> {
+    <span class="tk-kw">await</span> <span class="tk-fn">waitFor</span>(<span class="tk-kw">async</span> () =&gt; <span class="tk-kw">await</span> promise);
+  } <span class="tk-kw">catch</span> (error) {
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(/<span class="tk-tp">Loading</span>/)).<span class="tk-fn">toBeNull</span>();
+    <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(/went wrong/)).<span class="tk-fn">toBeInTheDocument</span>();
+  }
+});</pre></div>
+
+<div class="box key">
+  <div class="t">&#9733; 选择查询函数的经验法则</div>
+  <p>
+    找单个元素用 <code>getBy</code>，找多个用 <code>getAllBy</code>；要断言元素<strong>不存在</strong>时用 <code>queryBy</code> / <code>queryAllBy</code>；
+    要<strong>等待</strong>元素出现时用 <code>findBy</code> / <code>findAllBy</code>。
+  </p>
+</div>
+
+<h2 id="remove">测试删除文章</h2>
+
+<p>数据加载完成后，点击第一个 Dismiss 按钮，“Jordan Walke” 那条文章应该消失：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-fn">it</span>(<span class="tk-st">'removes a story'</span>, <span class="tk-kw">async</span> () =&gt; {
+  <span class="tk-kw">const</span> promise = <span class="tk-tp">Promise</span>.<span class="tk-fn">resolve</span>({
+    data: {
+      hits: stories,
+    },
+  });
+
+  axios.get.<span class="tk-fn">mockImplementationOnce</span>(() =&gt; promise);
+
+  <span class="tk-fn">render</span>(<span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>);
+
+  <span class="tk-kw">await</span> <span class="tk-fn">waitFor</span>(<span class="tk-kw">async</span> () =&gt; <span class="tk-kw">await</span> promise);
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getAllByText</span>(<span class="tk-st">'Dismiss'</span>).length).<span class="tk-fn">toBe</span>(<span class="tk-nm">2</span>);
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getByText</span>(<span class="tk-st">'Jordan Walke'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+
+  fireEvent.<span class="tk-fn">click</span>(screen.<span class="tk-fn">getAllByText</span>(<span class="tk-st">'Dismiss'</span>)[<span class="tk-nm">0</span>]);
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">getAllByText</span>(<span class="tk-st">'Dismiss'</span>).length).<span class="tk-fn">toBe</span>(<span class="tk-nm">1</span>);
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Jordan Walke'</span>)).<span class="tk-fn">toBeNull</span>();
+});</pre></div>
+
+<p>
+  这次测试的不再是“回调有没有被调用”（第 30 章），而是<strong>真实的结果</strong>：状态更新了、界面变了。
+  这就是集成测试的价值 —— <code>Item</code>、<code>List</code>、<code>App</code> 和 reducer 一起工作。
+</p>
+
+<h2 id="search">测试搜索：一个完整的用户场景</h2>
+
+<p>搜索会发出两次请求（初始的 React、之后的 JavaScript），所以 mock 要根据 URL 返回不同的数据：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-fn">it</span>(<span class="tk-st">'searches for specific stories'</span>, <span class="tk-kw">async</span> () =&gt; {
+  <span class="tk-kw">const</span> reactPromise = <span class="tk-tp">Promise</span>.<span class="tk-fn">resolve</span>({
+    data: {
+      hits: stories,
+    },
+  });
+
+  <span class="tk-kw">const</span> anotherStory = {
+    title: <span class="tk-st">'JavaScript'</span>,
+    url: <span class="tk-st">'https://en.wikipedia.org/wiki/JavaScript'</span>,
+    author: <span class="tk-st">'Brendan Eich'</span>,
+    num_comments: <span class="tk-nm">15</span>,
+    points: <span class="tk-nm">10</span>,
+    objectID: <span class="tk-nm">3</span>,
+  };
+
+  <span class="tk-kw">const</span> javascriptPromise = <span class="tk-tp">Promise</span>.<span class="tk-fn">resolve</span>({
+    data: {
+      hits: [anotherStory],
+    },
+  });
+
+  axios.get.<span class="tk-fn">mockImplementation</span>((url) =&gt; {
+    <span class="tk-kw">if</span> (url.<span class="tk-fn">includes</span>(<span class="tk-st">'React'</span>)) {
+      <span class="tk-kw">return</span> reactPromise;
+    }
+
+    <span class="tk-kw">if</span> (url.<span class="tk-fn">includes</span>(<span class="tk-st">'JavaScript'</span>)) {
+      <span class="tk-kw">return</span> javascriptPromise;
+    }
+
+    <span class="tk-kw">throw</span> <span class="tk-tp">Error</span>();
+  });
+
+  <span class="tk-cm">// 初次渲染</span>
+  <span class="tk-fn">render</span>(<span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>);
+
+  <span class="tk-cm">// 第一次数据请求</span>
+  <span class="tk-kw">await</span> <span class="tk-fn">waitFor</span>(<span class="tk-kw">async</span> () =&gt; <span class="tk-kw">await</span> reactPromise);
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByDisplayValue</span>(<span class="tk-st">'React'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByDisplayValue</span>(<span class="tk-st">'JavaScript'</span>)).<span class="tk-fn">toBeNull</span>();
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Jordan Walke'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Dan Abramov, Andrew Clark'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Brendan Eich'</span>)).<span class="tk-fn">toBeNull</span>();
+
+  <span class="tk-cm">// 用户输入</span>
+  fireEvent.<span class="tk-fn">change</span>(screen.<span class="tk-fn">queryByDisplayValue</span>(<span class="tk-st">'React'</span>), {
+    target: {
+      value: <span class="tk-st">'JavaScript'</span>,
+    },
+  });
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByDisplayValue</span>(<span class="tk-st">'React'</span>)).<span class="tk-fn">toBeNull</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByDisplayValue</span>(<span class="tk-st">'JavaScript'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+
+  <span class="tk-cm">// 用户提交</span>
+  fireEvent.<span class="tk-fn">click</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Submit'</span>));
+
+  <span class="tk-cm">// 第二次数据请求</span>
+  <span class="tk-kw">await</span> <span class="tk-fn">waitFor</span>(<span class="tk-kw">async</span> () =&gt; <span class="tk-kw">await</span> javascriptPromise);
+
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Jordan Walke'</span>)).<span class="tk-fn">toBeNull</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Dan Abramov, Andrew Clark'</span>)).<span class="tk-fn">toBeNull</span>();
+  <span class="tk-fn">expect</span>(screen.<span class="tk-fn">queryByText</span>(<span class="tk-st">'Brendan Eich'</span>)).<span class="tk-fn">toBeInTheDocument</span>();
+});</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 180" role="img" aria-label="搜索测试的五个步骤">
+  <rect class="bx-a" x="10" y="50" width="136" height="80" rx="10"/>
+  <text class="ttl on-a" x="78" y="76" text-anchor="middle">① 渲染</text>
+  <text class="sm" x="78" y="98" text-anchor="middle">mock 按 URL</text>
+  <text class="sm" x="78" y="114" text-anchor="middle">返回不同数据</text>
+  <rect class="bx-b" x="162" y="50" width="136" height="80" rx="10"/>
+  <text class="ttl on-b" x="230" y="76" text-anchor="middle">② 首次请求</text>
+  <text class="sm" x="230" y="98" text-anchor="middle">显示 React、</text>
+  <text class="sm" x="230" y="114" text-anchor="middle">Redux 的作者</text>
+  <rect class="bx-p" x="314" y="50" width="136" height="80" rx="10"/>
+  <text class="ttl on-p" x="382" y="76" text-anchor="middle">③ 输入</text>
+  <text class="sm" x="382" y="98" text-anchor="middle">输入框变成</text>
+  <text class="sm" x="382" y="114" text-anchor="middle">JavaScript</text>
+  <rect class="bx-p" x="466" y="50" width="136" height="80" rx="10"/>
+  <text class="ttl on-p" x="534" y="76" text-anchor="middle">④ 提交</text>
+  <text class="sm" x="534" y="98" text-anchor="middle">点击 Submit</text>
+  <text class="sm" x="534" y="114" text-anchor="middle">url 状态改变</text>
+  <rect class="bx-g" x="618" y="50" width="132" height="80" rx="10"/>
+  <text class="ttl on-g" x="684" y="76" text-anchor="middle">⑤ 第二次请求</text>
+  <text class="sm" x="684" y="98" text-anchor="middle">只剩</text>
+  <text class="sm" x="684" y="114" text-anchor="middle">Brendan Eich</text>
+  <path class="ln" d="M148 90 H158" marker-end="url(#ar)"/>
+  <path class="ln" d="M300 90 H310" marker-end="url(#ar)"/>
+  <path class="ln" d="M452 90 H462" marker-end="url(#ar)"/>
+  <path class="ln" d="M604 90 H614" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="160" text-anchor="middle">一个测试用例描述了一个完整的用户故事</text>
+</svg>
+<figcaption>图 31-3　像用户一样操作：看到什么、输入什么、点击什么、期待看到什么</figcaption>
+</figure>
+
+<h2 id="snapshot">快照测试</h2>
+
+<p>
+  快照测试是一种更轻量的方式：第一次运行时，把组件渲染出的 HTML 结构保存成一个“快照”文件；
+  之后每次运行都和它对比，结构变了就报告差异。
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.test.jsx</span></div><pre><span class="tk-fn">describe</span>(<span class="tk-st">'SearchForm'</span>, () =&gt; {
+  ...
+
+  <span class="tk-fn">it</span>(<span class="tk-st">'renders snapshot'</span>, () =&gt; {
+    <span class="tk-kw">const</span> { container } = <span class="tk-fn">render</span>(<span class="tk-tg">&lt;SearchForm</span> {...searchFormProps} <span class="tk-tg">/&gt;</span>);
+    <span class="tk-fn">expect</span>(container.firstChild).<span class="tk-fn">toMatchSnapshot</span>();
+  });
+});</pre></div>
+
+<p>运行测试后，项目里会多出一个 <code>src/__snapshots__/</code> 目录。现在去掉 <code>SearchForm</code> 里标签的加粗：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;InputWithLabel</span> ...&gt;
+  <span class="tk-tp">Search</span>:
+<span class="tk-tg">&lt;/InputWithLabel</span>&gt;</pre></div>
+
+<p>测试会失败，并清楚地显示差异：</p>
+
+<div class="code console" data-lang="console"><div class="bar"><span class="tag">控制台输出</span></div><pre>- Expected  - 3
++ Received  + 1
+
+  &lt;label
+    for="search"
+  &gt;
+-   &lt;strong&gt;
+-     Search:
+-   &lt;/strong&gt;
++   Search:
+  &lt;/label&gt;
+
+ Snapshots  1 failed</pre></div>
+
+<p>
+  如果这是<strong>意外</strong>的改动，就去修代码；如果是<strong>有意</strong>的改动，在监听模式下按 <kbd>u</kbd> 更新快照。
+  快照文件应该提交到 Git，团队共享。
+</p>
+
+<div class="box warn">
+  <div class="t">&#9888; 快照测试的局限</div>
+  <p>
+    快照写起来很快，但它只能说明“和上次不一样了”，不能说明“对不对”。快照太大时，大家往往看都不看就按 <kbd>u</kbd>。
+    适合用在<strong>结构稳定、不常改</strong>的小组件上，不能代替针对行为的测试。
+  </p>
+</div>
+
+<h2 id="modern">更现代的做法</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">mock 请求库 <span class="ver old">原书写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre>vi.<span class="tk-fn">mock</span>(<span class="tk-st">'axios'</span>);
+
+axios.get.<span class="tk-fn">mockImplementationOnce</span>(() =&gt;
+  <span class="tk-tp">Promise</span>.<span class="tk-fn">resolve</span>({ data: { hits: stories } })
+);</pre></div>
+  </div>
+  <div class="new"><div class="h">mock 网络层：MSW <span class="ver">推荐</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { http, <span class="tk-tp">HttpResponse</span> } <span class="tk-kw">from</span> <span class="tk-st">'msw'</span>;
+<span class="tk-kw">import</span> { setupServer } <span class="tk-kw">from</span> <span class="tk-st">'msw/node'</span>;
+
+<span class="tk-kw">const</span> server = <span class="tk-fn">setupServer</span>(
+  http.<span class="tk-fn">get</span>(<span class="tk-st">'https://hn.algolia.com/api/v1/search'</span>, () =&gt;
+    <span class="tk-tp">HttpResponse</span>.<span class="tk-fn">json</span>({ hits: stories })
+  )
+);
+<span class="tk-cm">// 不管用 fetch 还是 axios，测试都不用改</span></pre></div>
+  </div>
+</div>
+
+<ul>
+  <li><strong>MSW（Mock Service Worker）</strong>在网络层拦截请求。好处是测试不依赖你用的是哪个请求库，换掉 axios 测试也不用改。</li>
+  <li>端到端测试：原书提到 Cypress，现在 <strong>Playwright</strong> 更为流行，它在真实浏览器里跑完整流程。</li>
+</ul>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li><code>vi.mock('axios')</code> + <code>mockImplementationOnce</code> / <code>mockImplementation</code> 控制请求返回的数据。</li>
+  <li><code>await waitFor(…)</code> 或 <code>findBy</code> 等待异步更新；<code>queryBy</code> 用于断言元素不存在。</li>
+  <li>集成测试从用户视角验证真实结果：数据显示、删除生效、搜索换出新数据。</li>
+  <li>快照测试能快速发现结构变化，但只适合稳定的小组件。</li>
+  <li>现代项目常用 MSW mock 网络、用 Playwright 做端到端测试。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>把 “succeeds fetching data” 改写成使用 <code>findByText</code> 的版本。</li>
+    <li>为 <code>Item</code>、<code>List</code>、<code>InputWithLabel</code> 各加一个快照测试，看看 <code>__snapshots__</code> 目录的内容。</li>
+    <li>挑战：安装 MSW，把 axios mock 替换为网络层 mock。</li>
+    <li>后续章节修改代码时，保持测试全部通过，必要时补充新测试。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么在测试中要 mock 网络请求？</summary>
+    <div><p>真实请求慢、不稳定、数据不可控，还可能产生副作用。mock 让测试快速、确定、可重复。</p></div></details>
+  <details><summary>waitFor 的作用是什么？</summary>
+    <div><p>反复执行回调直到其不再抛错或超时，用于等待异步操作导致的状态更新和重新渲染完成。</p></div></details>
+  <details><summary>mockImplementationOnce 和 mockImplementation 的区别？</summary>
+    <div><p>前者只对下一次调用生效；后者对之后所有调用生效，可以根据参数（如 URL）返回不同结果。</p></div></details>
+  <details><summary>什么是快照测试？适用于什么场景？</summary>
+    <div><p>保存组件渲染输出并在后续运行时对比差异的测试。适合结构稳定、简单的组件，用来发现意外的结构变化，不能替代行为测试。</p></div></details>
+  <details><summary>MSW 和直接 mock 请求库相比有什么优势？</summary>
+    <div><p>在网络层拦截请求，与具体请求库解耦；同一套 mock 可用于测试和开发环境。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

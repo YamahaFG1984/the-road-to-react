@@ -1,0 +1,314 @@
+<p class="lede">
+  每个 React 应用都由组件搭成。这一章我们打开 <code>src/App.jsx</code>，把模板代码清理干净，
+  写出属于自己的第一个组件，并弄清楚一个会影响你以后每一行代码的事实：
+  <strong>组件就是一个会被 React 反复调用的函数</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>读懂 Vite 模板生成的 <code>App</code> 组件</li>
+    <li>记住函数组件的三个特征：大写开头、接收 props、返回 JSX</li>
+    <li>理解“渲染”就是 React 调用你的组件函数，以及它对变量定义位置的影响</li>
+    <li>知道函数组件和旧式类组件的区别</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="template">模板里的 App 组件</h2>
+
+<p>打开 <code>src/App.jsx</code>，模板代码大致长这样（不同版本略有差异）：</p>
+
+```jsx src/App.jsx（Vite 模板）
+import { useState } from 'react';
+import reactLogo from './assets/react.svg';
+import viteLogo from '/vite.svg';
+import './App.css';
+
+function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <>
+      <div>
+        <a href="https://vite.dev" target="_blank">
+          <img src={viteLogo} className="logo" alt="Vite logo" />
+        </a>
+        <a href="https://react.dev" target="_blank">
+          <img src={reactLogo} className="logo react" alt="React logo" />
+        </a>
+      </div>
+      <h1>Vite + React</h1>
+      <div className="card">
+        <button onClick={() => setCount((count) => count + 1)}>
+          count is {count}
+        </button>
+      </div>
+    </>
+  );
+}
+
+export default App;
+```
+
+<p>
+  里面已经出现了不少后面要学的东西：<code>useState</code>（第 10 章）、<code>&lt;&gt;</code>（第 16 章）、
+  <code>className</code>（第 4 章）、<code>onClick</code>（第 8 章）。现在先不管它们，
+  把它精简成最小的样子，从头开始：
+</p>
+
+```jsx src/App.jsx
+function App() {
+  return (
+    <div>
+      <h1>Hello React</h1>
+    </div>
+  );
+}
+
+export default App;
+```
+
+<p>
+  顺手把 <code>src/index.css</code> 和 <code>src/App.css</code> 的内容清空（文件保留），
+  让页面从一张白纸开始。保存后浏览器应该只显示一个标题 “Hello React”。
+</p>
+
+<h2 id="anatomy">解剖一个函数组件</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="函数组件的组成部分">
+  <rect class="code-bg" x="200" y="30" width="360" height="222" rx="10"/>
+  <text class="code-tx" x="222" y="62"><tspan class="fill-a" style="font-weight:700">function</tspan> <tspan class="fill-b" style="font-weight:700">App</tspan>(<tspan class="fill-g">/* props */</tspan>) {</text>
+  <text class="code-tx" x="240" y="92">const title = 'React';</text>
+  <text class="code-tx" x="240" y="122"><tspan class="fill-a">return</tspan> (</text>
+  <text class="code-tx" x="258" y="146">&lt;div&gt;</text>
+  <text class="code-tx" x="276" y="170">&lt;h1&gt;Hello React&lt;/h1&gt;</text>
+  <text class="code-tx" x="258" y="194">&lt;/div&gt;</text>
+  <text class="code-tx" x="240" y="218">);</text>
+  <text class="code-tx" x="222" y="242">}</text>
+
+  <path class="ln-b" d="M196 58 H150" marker-end="url(#ar-b)"/>
+  <text class="ttl on-b" x="20" y="54">① 普通 JS 函数</text>
+  <text class="sm" x="20" y="72">名字必须大写开头</text>
+  <text class="sm" x="20" y="88">（PascalCase）</text>
+
+  <path class="ln-g" d="M564 58 H610" marker-end="url(#ar-g)"/>
+  <text class="ttl on-g" x="616" y="54">② 参数：props</text>
+  <text class="sm" x="616" y="72">父组件传进来的数据</text>
+  <text class="sm" x="616" y="88">（第 9 章）</text>
+
+  <path class="ln-d" d="M196 92 H150" marker-end="url(#ar)"/>
+  <text class="ttl" x="20" y="118">③ 函数体</text>
+  <text class="sm" x="20" y="136">可以写任意逻辑</text>
+  <text class="sm" x="20" y="152">每次渲染都会重新执行</text>
+
+  <path class="ln-a" d="M564 160 H610" marker-end="url(#ar-a)"/>
+  <text class="ttl on-a" x="616" y="156">④ 返回 JSX</text>
+  <text class="sm" x="616" y="174">描述界面长什么样</text>
+  <text class="sm" x="616" y="190">（第 4 章）</text>
+
+  <text class="sm" x="380" y="276" text-anchor="middle">export default App; —— 导出，让 main.jsx 可以 import 它</text>
+</svg>
+<figcaption>图 3-1　一个函数组件 = 大写开头的函数 + 可选的 props 参数 + 返回 JSX</figcaption>
+</figure>
+
+<ol>
+  <li>
+    <strong>它就是一个 JavaScript 函数。</strong>这种组件叫<strong>函数组件</strong>（function component），
+    是现代 React 的唯一推荐写法。唯一的特殊要求是<strong>名字必须大写开头</strong>：
+    React 靠首字母区分 <code>&lt;div&gt;</code>（HTML 标签）和 <code>&lt;App /&gt;</code>（你的组件）。
+    写成 <code>function app()</code>，<code>&lt;app /&gt;</code> 会被当成一个不存在的 HTML 标签。
+  </li>
+  <li>
+    <strong>它可以接收参数。</strong>现在 <code>App</code> 没有参数，第 9 章学 props 时，
+    父组件传来的数据就会作为第一个参数传进来。
+  </li>
+  <li>
+    <strong>它返回长得像 HTML 的东西。</strong>这叫 JSX，下一章专门讲。
+  </li>
+</ol>
+
+<h2 id="render">渲染 = 调用你的函数</h2>
+
+<p>
+  和普通函数一样，组件在 <code>return</code> 之前可以写任何逻辑：
+</p>
+
+```jsx src/App.jsx
+function App() {
+  // 这里可以做任何事：定义变量、计算、调用函数……
+  const title = 'React';
+
+  return (
+    <div>
+      <h1>Hello React</h1>
+    </div>
+  );
+}
+```
+
+<p>
+  关键问题是：<strong>这个函数什么时候执行？</strong>答案是：<strong>每次 React 需要知道这个组件长什么样的时候</strong>。
+  组件第一次出现在页面上时执行一次，叫<strong>渲染</strong>（render）；之后每当它的数据发生变化，
+  React 会再调用一次，叫<strong>重新渲染</strong>（re-render）。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="首次渲染和重新渲染都会调用组件函数">
+  <rect class="bx-b" x="20" y="80" width="150" height="70" rx="10"/>
+  <text class="ttl on-b" x="95" y="108" text-anchor="middle">首次渲染</text>
+  <text class="sm" x="95" y="128" text-anchor="middle">组件第一次出现</text>
+
+  <rect class="bx-a" x="250" y="60" width="220" height="110" rx="12"/>
+  <text class="ttl on-a" x="360" y="88" text-anchor="middle">React 调用 App()</text>
+  <text class="mono sm" x="270" y="114">const title = 'React';</text>
+  <text class="sm" x="270" y="134">← 变量每次都重新创建</text>
+  <text class="mono sm" x="270" y="156">return &lt;div&gt;…&lt;/div&gt;</text>
+
+  <rect class="bx-g" x="560" y="80" width="180" height="70" rx="10"/>
+  <text class="ttl on-g" x="650" y="108" text-anchor="middle">更新页面</text>
+  <text class="sm" x="650" y="128" text-anchor="middle">只改真正变化的部分</text>
+
+  <path class="ln-b" d="M172 115 H246" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M472 115 H556" marker-end="url(#ar-g)"/>
+
+  <rect class="bx-p" x="20" y="180" width="150" height="46" rx="10"/>
+  <text class="ttl on-p" x="95" y="202" text-anchor="middle">重新渲染</text>
+  <text class="sm" x="95" y="218" text-anchor="middle">数据变了（第 10 章）</text>
+  <path class="ln-p" d="M172 203 H300 V174" marker-end="url(#ar-p)"/>
+
+  <text class="sm" x="380" y="30" text-anchor="middle">组件函数可能被调用很多次 —— 所以函数体里的代码要“便宜”且没有副作用</text>
+</svg>
+<figcaption>图 3-2　每一次渲染，React 都会从头到尾执行一遍你的组件函数</figcaption>
+</figure>
+
+<h3>变量放在组件里面还是外面？</h3>
+
+<p>
+  既然函数体每次渲染都会重新执行，定义在里面的 <code>title</code> 也会每次重新创建。
+  而 <code>title</code> 根本不依赖组件内部的任何东西，完全可以挪到外面，只定义一次：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">放在里面：每次渲染都重新定义</div>
+```jsx
+function App() {
+  const title = 'React';
+
+  return <h1>Hello React</h1>;
+}
+```
+  </div>
+  <div class="new"><div class="h">放在外面：只定义一次</div>
+```jsx
+const title = 'React';
+
+function App() {
+  return <h1>Hello React</h1>;
+}
+```
+  </div>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 经验法则</div>
+  <p>
+    如果一个变量（或函数）<strong>不需要用到组件内部的任何东西</strong>（参数、状态），
+    就把它定义在组件外面。需要用到的，才放在组件里面。
+    整本书你都会反复遇到这两种情况。
+  </p>
+</div>
+
+<h2 id="export">导出与导入</h2>
+
+<p>
+  文件末尾的 <code>export default App;</code> 把组件导出，<code>main.jsx</code> 才能通过
+  <code>import App from './App.jsx'</code> 拿到它。这是标准的 JavaScript 模块语法，不是 React 特有的。
+  一个文件只能有一个 <code>export default</code>，但可以有多个具名导出 <code>export { A, B }</code>，
+  第 30、32 章会用到。
+</p>
+
+<h2 id="class">旧写法：类组件</h2>
+
+<p>
+  如果你在老项目或老教程里看到 <code>class App extends React.Component</code>，那是 <strong>类组件</strong>。
+  在 2019 年 Hooks 出现之前，只有类组件能拥有状态和生命周期，所以老代码里到处都是它。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">类组件 <span class="ver old">旧写法</span></div>
+```jsx
+import React from 'react';
+
+class App extends React.Component {
+  render() {
+    return (
+      <div>
+        <h1>Hello React</h1>
+      </div>
+    );
+  }
+}
+
+export default App;
+```
+  </div>
+  <div class="new"><div class="h">函数组件 <span class="ver">推荐</span></div>
+```jsx
+function App() {
+  return (
+    <div>
+      <h1>Hello React</h1>
+    </div>
+  );
+}
+
+export default App;
+```
+  </div>
+</div>
+
+<ul>
+  <li>类组件的界面写在 <code>render()</code> 方法里；函数组件直接 <code>return</code>。</li>
+  <li>类组件要和 <code>this</code>、<code>this.state</code>、<code>this.setState</code>、<code>componentDidMount</code> 打交道；函数组件用 Hooks（<code>useState</code>、<code>useEffect</code>）。</li>
+  <li>类组件<strong>没有被删除</strong>，React 19 依然支持，但官方文档已经把它放进 “Legacy API”。新代码一律写函数组件。</li>
+</ul>
+
+<div class="box note">
+  <div class="t">&#9432; 关于 <code>import React from 'react'</code></div>
+  <p>
+    老代码每个文件开头都有 <code>import React from 'react'</code>，因为以前 JSX 会被编译成
+    <code>React.createElement(...)</code>，必须有 <code>React</code> 这个变量在作用域里。
+    React 17 起引入了“新 JSX 转换”，编译器会自动导入需要的函数，<strong>只写 JSX 的文件不必再导入 React</strong>。
+    只有用到 <code>useState</code> 等 API 时才需要导入，本教程统一写成 <code>import { useState } from 'react'</code>。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>React 组件就是一个大写开头、返回 JSX 的 JavaScript 函数。</li>
+  <li>每次渲染（首次渲染和重新渲染）React 都会调用一次组件函数，函数体从头执行。</li>
+  <li>不依赖组件内部数据的变量和函数，应当定义在组件外面。</li>
+  <li>类组件是旧写法；函数组件 + Hooks 是现代 React 的标准。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>App</code> 函数体里加一行 <code>console.log('App 渲染了')</code>，打开浏览器控制台，看看它打印了几次。（如果是两次，别急，第 6 章讲 <code>StrictMode</code> 时会解释。）</li>
+    <li>把 <code>function App</code> 改成 <code>function app</code>（同时改 <code>export default app</code>），看看会发生什么，然后改回来。</li>
+    <li>想一想：怎么把 <code>title</code> 变量显示到 <code>&lt;h1&gt;</code> 里？下一章揭晓。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么组件名必须以大写字母开头？</summary>
+    <div><p>JSX 通过首字母区分原生 HTML 元素和自定义组件：小写被当作 DOM 标签字符串（如 <code>'div'</code>），大写被当作变量引用（组件函数）。</p></div></details>
+  <details><summary>函数组件每次渲染时会发生什么？</summary>
+    <div><p>React 会重新调用这个函数，函数体内的变量和函数都会重新创建，返回新的 JSX；React 再将其与上次结果比较，只更新 DOM 中变化的部分。</p></div></details>
+  <details><summary>函数组件和类组件有什么区别？</summary>
+    <div><p>函数组件是普通函数，用 Hooks 管理状态和副作用，没有 <code>this</code>；类组件继承 <code>React.Component</code>，用 <code>this.state</code> 和生命周期方法。现代 React 推荐函数组件，类组件属于遗留 API。</p></div></details>
+</div>

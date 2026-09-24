@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 5 章 · 渲染列表与 key — React 19 入门教程</title>
+<meta name="description" content="map() 把数组变成元素，key 让 React 认得每一项">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="5">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 5 章 · 组件与 JSX</span>
+<h1>渲染列表与 key</h1>
+<p class="lede">
+  真实应用里的数据几乎总是“一组对象组成的数组”。这一章我们把一组文章渲染成列表 ——
+  这是 Hacker Stories 的雏形 —— 并弄明白 React 为什么总是追着你要一个叫 <code>key</code> 的属性。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用数组的 <code>map()</code> 把数据变成一组 JSX 元素</li>
+    <li>理解 <code>key</code> 的作用，知道应该用什么当 key</li>
+    <li>看清用数组下标当 key 会引发的真实 bug</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="map">先复习：数组的 map()</h2>
+
+<p>
+  <code>map()</code> 遍历数组，对每一项调用你给的函数，把返回值收集成一个<strong>新数组</strong>，原数组不变：
+</p>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre><span class="tk-kw">const</span> numbers = [<span class="tk-nm">1</span>, <span class="tk-nm">2</span>, <span class="tk-nm">3</span>, <span class="tk-nm">4</span>];
+
+<span class="tk-kw">const</span> squares = numbers.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (number) {
+  <span class="tk-kw">return</span> number * number;
+});
+
+console.<span class="tk-fn">log</span>(squares); <span class="tk-cm">// [1, 4, 9, 16]</span></pre></div>
+
+<p>
+  在 React 里，我们让回调函数返回的不是数字，而是 <strong>JSX</strong>。上一章说过，
+  花括号里放一个数组，React 会依次渲染每一项 —— 两件事一结合，就是列表渲染。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="map 把数据数组变成 JSX 元素数组">
+  <text class="ttl on-b" x="120" y="24" text-anchor="middle">数据数组</text>
+  <rect class="bx-b" x="30" y="36" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="120" y="61" text-anchor="middle">{ title: 'React', … }</text>
+  <rect class="bx-b" x="30" y="86" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="120" y="111" text-anchor="middle">{ title: 'Redux', … }</text>
+  <rect class="bx-b" x="30" y="136" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="120" y="161" text-anchor="middle">{ title: 'Vite', … }</text>
+
+  <rect class="bx-a" x="280" y="76" width="200" height="60" rx="12"/>
+  <text class="ttl on-a" x="380" y="100" text-anchor="middle">.map(item =&gt;</text>
+  <text class="mono sm on-a" x="380" y="120" text-anchor="middle">&lt;li&gt;{item.title}&lt;/li&gt;)</text>
+
+  <path class="ln-a" d="M212 56 L276 96" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M212 106 H276" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M212 156 L276 118" marker-end="url(#ar-a)"/>
+
+  <text class="ttl on-g" x="640" y="24" text-anchor="middle">JSX 元素数组</text>
+  <rect class="bx-g" x="550" y="36" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="640" y="61" text-anchor="middle">&lt;li&gt;React&lt;/li&gt;</text>
+  <rect class="bx-g" x="550" y="86" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="640" y="111" text-anchor="middle">&lt;li&gt;Redux&lt;/li&gt;</text>
+  <rect class="bx-g" x="550" y="136" width="180" height="40" rx="8"/>
+  <text class="mono sm" x="640" y="161" text-anchor="middle">&lt;li&gt;Vite&lt;/li&gt;</text>
+
+  <path class="ln-g" d="M482 96 L546 56" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M482 106 H546" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M482 118 L546 156" marker-end="url(#ar-g)"/>
+
+  <text class="sm" x="380" y="212" text-anchor="middle">一个数据对象 → 一个界面元素。没有模板语法，只有普通的 JavaScript。</text>
+</svg>
+<figcaption>图 5-1　map() 是 React 里渲染列表的标准方式</figcaption>
+</figure>
+
+<h2 id="render">渲染文章列表</h2>
+
+<p>
+  先在组件外定义一些示例数据。字段名模仿了后面要接入的 Hacker News API 返回的真实数据
+  （所以才有 <code>num_comments</code> 这种下划线命名和 <code>objectID</code> 这种写法）：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> list = [
+  {
+    title: <span class="tk-st">'React'</span>,
+    url: <span class="tk-st">'https://react.dev/'</span>,
+    author: <span class="tk-st">'Jordan Walke'</span>,
+    num_comments: <span class="tk-nm">3</span>,
+    points: <span class="tk-nm">4</span>,
+    objectID: <span class="tk-nm">0</span>,
+  },
+  {
+    title: <span class="tk-st">'Redux'</span>,
+    url: <span class="tk-st">'https://redux.js.org/'</span>,
+    author: <span class="tk-st">'Dan Abramov, Andrew Clark'</span>,
+    num_comments: <span class="tk-nm">2</span>,
+    points: <span class="tk-nm">5</span>,
+    objectID: <span class="tk-nm">1</span>,
+  },
+];
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() { ... }
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-tp">App</span>;</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 关于 <code>...</code></div>
+  <p>本教程的代码片段里，<code>...</code> 表示“这部分和之前一样，省略不写”。</p>
+</div>
+
+<p>然后在 JSX 里用 <code>map()</code> 渲染每一项的标题：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;ul</span>&gt;
+        {list.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (item) {
+          <span class="tk-kw">return</span> <span class="tk-tg">&lt;li</span>&gt;{item.title}<span class="tk-tg">&lt;/li</span>&gt;;
+        })}
+      <span class="tk-tg">&lt;/ul</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  页面上出现了两个标题。但打开控制台，你会看到一条警告：
+</p>
+
+<div class="code console" data-lang="console"><div class="bar"><span class="tag">控制台输出</span></div><pre>Warning: Each child in a list should have a unique "key" prop.</pre></div>
+
+<h2 id="key">key：给每一项一个身份证</h2>
+
+<p>
+  修复很简单 —— 给列表里的每个元素加一个 <code>key</code> 属性，值用数据里<strong>稳定且唯一</strong>的标识：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;ul</span>&gt;
+  {list.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (item) {
+    <span class="tk-kw">return</span> <span class="tk-tg">&lt;li</span> key={item.objectID}&gt;{item.title}<span class="tk-tg">&lt;/li</span>&gt;;
+  })}
+<span class="tk-tg">&lt;/ul</span>&gt;</pre></div>
+
+<p>
+  为什么需要它？每次重新渲染，React 都会拿新的元素列表和旧的对比，找出需要改动的最少 DOM 操作。
+  对列表来说，React 需要知道<strong>“新列表里的这一项，是旧列表里的哪一项”</strong>。
+  没有 key，React 只能按位置一一对应。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="在列表开头插入新项时，有 key 和没有 key 的区别">
+  <text class="ttl" x="190" y="24" text-anchor="middle">没有 key：按位置对比</text>
+  <text class="ttl" x="570" y="24" text-anchor="middle">有 key：按身份对比</text>
+
+  <text class="sm" x="60" y="50" text-anchor="middle">旧</text>
+  <text class="sm" x="300" y="50" text-anchor="middle">新（开头插入 Vite）</text>
+  <rect class="bx" x="20" y="60" width="90" height="34" rx="6"/><text class="sm" x="65" y="82" text-anchor="middle">React</text>
+  <rect class="bx" x="20" y="104" width="90" height="34" rx="6"/><text class="sm" x="65" y="126" text-anchor="middle">Redux</text>
+  <rect class="bx-r" x="250" y="60" width="100" height="34" rx="6"/><text class="sm on-r" x="300" y="82" text-anchor="middle">Vite</text>
+  <rect class="bx-r" x="250" y="104" width="100" height="34" rx="6"/><text class="sm on-r" x="300" y="126" text-anchor="middle">React</text>
+  <rect class="bx-r" x="250" y="148" width="100" height="34" rx="6"/><text class="sm on-r" x="300" y="170" text-anchor="middle">Redux</text>
+  <path class="ln-r" d="M112 77 H246" marker-end="url(#ar-r)"/>
+  <text class="sm on-r" x="180" y="72" text-anchor="middle">改文字</text>
+  <path class="ln-r" d="M112 121 H246" marker-end="url(#ar-r)"/>
+  <text class="sm on-r" x="180" y="116" text-anchor="middle">改文字</text>
+  <text class="sm on-r" x="180" y="170" text-anchor="middle">新建 →</text>
+  <text class="sm on-r" x="190" y="210" text-anchor="middle">3 次 DOM 操作，每一行都被改了</text>
+
+  <text class="sm" x="440" y="50" text-anchor="middle">旧</text>
+  <text class="sm" x="680" y="50" text-anchor="middle">新（开头插入 Vite）</text>
+  <rect class="bx" x="400" y="60" width="90" height="34" rx="6"/><text class="sm" x="445" y="82" text-anchor="middle">key=0 React</text>
+  <rect class="bx" x="400" y="104" width="90" height="34" rx="6"/><text class="sm" x="445" y="126" text-anchor="middle">key=1 Redux</text>
+  <rect class="bx-g" x="630" y="60" width="100" height="34" rx="6"/><text class="sm on-g" x="680" y="82" text-anchor="middle">key=2 Vite</text>
+  <rect class="bx" x="630" y="104" width="100" height="34" rx="6"/><text class="sm" x="680" y="126" text-anchor="middle">key=0 React</text>
+  <rect class="bx" x="630" y="148" width="100" height="34" rx="6"/><text class="sm" x="680" y="170" text-anchor="middle">key=1 Redux</text>
+  <path class="ln-d" d="M492 77 L626 121" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M492 121 L626 165" marker-end="url(#ar)"/>
+  <text class="sm on-g" x="560" y="68" text-anchor="middle">只插入 1 个 →</text>
+  <text class="sm on-g" x="570" y="210" text-anchor="middle">1 次 DOM 操作，旧节点原样保留</text>
+
+  <rect class="bx-d" x="20" y="236" width="720" height="78" rx="10"/>
+  <text class="ttl" x="380" y="262" text-anchor="middle">多做几次 DOM 操作还只是慢一点；真正的问题是“状态跟错了人”</text>
+  <text class="sm" x="380" y="284" text-anchor="middle">如果每一行里有输入框、勾选框、展开状态，按位置对比会让这些状态停留在原来的位置上，</text>
+  <text class="sm" x="380" y="302" text-anchor="middle">而文字已经换成了另一条数据 —— 看下面的演示</text>
+</svg>
+<figcaption>图 5-2　key 让 React 按“身份”而不是“位置”匹配新旧列表</figcaption>
+</figure>
+
+<h3>用下标当 key 会怎样</h3>
+
+<p>
+  如果数据没有 id，很多人会顺手用 <code>map</code> 回调的第二个参数 <code>index</code> 当 key。
+  这等于告诉 React“按位置对比” —— 和不写 key 效果一样（只是把警告压下去了）：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;ul</span>&gt;
+  {list.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (item, index) {
+    <span class="tk-kw">return</span> (
+      <span class="tk-tg">&lt;li</span> key={index}&gt;
+        <span class="tk-cm">{/* 下标只能作为最后的选择 */}</span>
+        <span class="tk-cm">{/* 顺便一提：这就是 JSX 里写注释的方式 */}</span>
+        {item.title}
+      <span class="tk-tg">&lt;/li</span>&gt;
+    );
+  })}
+<span class="tk-tg">&lt;/ul</span>&gt;</pre></div>
+
+<p>动手体验一下区别：在每个输入框里写点备注，然后点“在开头插入一项”。</p>
+
+<div class="demo" id="key-demo">
+  <div class="h">交互演示 · key 的作用</div>
+  <p style="margin-top:0;font-size:14px">
+    <button type="button" data-act="add">在开头插入一项</button>
+    <button type="button" data-act="reset">重置</button>
+  </p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div><strong style="font-size:13px;color:var(--red)">key={index}</strong><ul data-mode="index" style="padding-left:1.2em;font-size:14px"></ul></div>
+    <div><strong style="font-size:13px;color:var(--green)">key={item.objectID}</strong><ul data-mode="id" style="padding-left:1.2em;font-size:14px"></ul></div>
+  </div>
+  <p style="font-size:13px;color:var(--fg-faint);margin-bottom:0">
+    左边：输入框按位置复用，你写给 “React” 的备注会留在第一行，而第一行的文字已经变成了新插入的那一项。右边：备注跟着数据走。
+  </p>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('key-demo');
+  var names = ['Vue', 'Svelte', 'Solid', 'Angular', 'Preact', 'Qwik'];
+  var data, next;
+  function reset() {
+    data = [{ id: 0, t: 'React' }, { id: 1, t: 'Redux' }]; next = 0;
+    root.querySelectorAll('ul').forEach(function (ul) { ul.innerHTML = ''; });
+    sync();
+  }
+  function row(item) {
+    var li = document.createElement('li');
+    li.style.margin = '4px 0';
+    li.innerHTML = '<span style="display:inline-block;width:62px"></span><input size="10" placeholder="备注">';
+    li.firstChild.textContent = item.t;
+    return li;
+  }
+  function sync() {
+    // 模拟 React：index 模式按位置复用 DOM；id 模式按 key 复用 DOM
+    var byIndex = root.querySelector('ul[data-mode=index]');
+    data.forEach(function (item, i) {
+      var li = byIndex.children[i];
+      if (!li) { li = row(item); byIndex.appendChild(li); }
+      li.firstChild.textContent = item.t;
+    });
+    var byId = root.querySelector('ul[data-mode=id]');
+    var old = {};
+    Array.prototype.forEach.call(byId.children, function (li) { old[li.dataset.key] = li; });
+    data.forEach(function (item, i) {
+      var li = old[item.id] || row(item);
+      li.dataset.key = item.id;
+      if (byId.children[i] !== li) byId.insertBefore(li, byId.children[i] || null);
+    });
+  }
+  root.addEventListener('click', function (e) {
+    var act = e.target.dataset && e.target.dataset.act;
+    if (act === 'add' && next < names.length) {
+      data.unshift({ id: 100 + next, t: names[next++] }); sync();
+    } else if (act === 'reset') reset();
+  });
+  reset();
+})();
+</script>
+
+<div class="box key">
+  <div class="t">&#9733; key 的选择顺序</div>
+  <ol style="margin:0">
+    <li><strong>数据自带的 id</strong>（数据库主键、API 返回的 <code>objectID</code>）—— 首选。</li>
+    <li><strong>其他唯一且不会变的字段</strong>，比如在列表里不会重复的标题。</li>
+    <li><strong>下标 <code>index</code></strong> —— 只有在列表<strong>永远不会重新排序、插入、删除</strong>时才可以用。</li>
+  </ol>
+  <p style="margin-top:8px">千万不要用 <code>Math.random()</code> 或 <code>crypto.randomUUID()</code> 在渲染时生成 key：每次渲染 key 都不同，React 会把整个列表销毁重建。</p>
+</div>
+
+<h2 id="full">显示完整信息</h2>
+
+<p>
+  把每篇文章的链接、作者、评论数和点数都显示出来。标题用 <code>&lt;a&gt;</code> 包起来，
+  <code>href</code> 用花括号动态赋值：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      ...
+      <span class="tk-tg">&lt;ul</span>&gt;
+        {list.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (item) {
+          <span class="tk-kw">return</span> (
+            <span class="tk-tg">&lt;li</span> key={item.objectID}&gt;
+              <span class="tk-tg">&lt;span</span>&gt;
+                <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+              <span class="tk-tg">&lt;/span</span>&gt;
+              <span class="tk-tg">&lt;span</span>&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+              <span class="tk-tg">&lt;span</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+              <span class="tk-tg">&lt;span</span>&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+            <span class="tk-tg">&lt;/li</span>&gt;
+          );
+        })}
+      <span class="tk-tg">&lt;/ul</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  JavaScript 在 JSX 里不仅能决定<strong>显示什么内容</strong>，也能决定<strong>属性的值</strong>。
+  整个列表没有用到任何“模板语法”，全是你已经会的 JavaScript。
+</p>
+
+<div class="box note">
+  <div class="t">&#9432; key 不会传给组件</div>
+  <p>
+    <code>key</code> 是给 React 自己用的特殊属性，不会出现在 DOM 上，也不能在组件内部通过 props 读到。
+    它只需要在<strong>兄弟元素之间</strong>唯一，不需要全局唯一。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>用 <code>array.map(item =&gt; &lt;li&gt;…&lt;/li&gt;)</code> 把数据数组渲染成列表。</li>
+  <li>列表中的每个元素都需要一个稳定、唯一的 <code>key</code>，让 React 在更新时按身份匹配元素。</li>
+  <li>下标当 key 在列表会增删、排序时会导致状态错位，只能作为最后选择。</li>
+  <li>JSX 的花括号既能用于内容，也能用于属性值（如 <code>href={item.url}</code>）。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>往 <code>list</code> 里再加两三条数据，让例子更真实。</li>
+    <li>复习数组的另外两个常用方法 <code>filter()</code> 和 <code>reduce()</code> —— 第 11 章和第 34 章会用到。</li>
+    <li>在列表前面显示一行“共 N 篇文章”，N 用 <code>list.length</code> 计算。</li>
+    <li>去掉 <code>key</code>，在控制台里找到警告；再换成 <code>key={index}</code>，确认警告消失 —— 然后想一想为什么“警告消失”不等于“问题解决”。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>在 React 中如何渲染一个列表？</summary>
+    <div><p>用数组的 <code>map()</code> 方法把每一项数据映射成 JSX 元素，并给每个元素一个唯一的 <code>key</code>。</p></div></details>
+  <details><summary>key 的作用是什么？</summary>
+    <div><p>帮助 React 在重新渲染时识别列表中哪些元素被添加、删除或移动，从而正确复用 DOM 节点和组件状态，并减少不必要的 DOM 操作。</p></div></details>
+  <details><summary>为什么不推荐用数组下标作为 key？</summary>
+    <div><p>当列表发生插入、删除或排序时，下标与数据的对应关系会改变，导致 React 错误复用节点，出现输入框内容、勾选状态等错位的 bug，并带来多余的更新。</p></div></details>
+  <details><summary>组件返回 null 会怎样？</summary>
+    <div><p>什么都不渲染。这是合法的，常用于“在某些条件下不显示”。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

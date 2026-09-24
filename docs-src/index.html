@@ -1,0 +1,256 @@
+<div class="hero">
+  <svg class="react-logo" viewBox="-11.5 -10.23 23 20.46" aria-hidden="true">
+    <circle r="2.05" fill="var(--accent)"/>
+    <g stroke="var(--accent)" stroke-width="1" fill="none">
+      <ellipse rx="11" ry="4.2"/>
+      <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
+      <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
+    </g>
+  </svg>
+  <span class="chapter-eyebrow">面向初学者的 37 章图解教程</span>
+  <h1>React 19 入门：从零做出一个真实应用</h1>
+  <p class="sub">
+    这套教程以 Robin Wieruch 的《The Road to React》（2025 版）为骨架，
+    跟着原书一路做出同一个应用 —— <strong>Hacker Stories</strong>：一个可以搜索、删除、排序、分页浏览
+    Hacker News 文章的小网站。每一章都配了图，并且全部代码按 <strong>React 19</strong> 的写法来写；
+    凡是新版本和旧版本思路不同的地方，都会用「旧写法 / 新写法」对照卡片专门讲清楚。
+  </p>
+  <p style="margin-top:14px">
+    <span class="pill">React 19</span><span class="pill">Hooks</span><span class="pill">Vite</span>
+    <span class="pill">JSX</span><span class="pill">Form Actions</span><span class="pill">useReducer</span>
+    <span class="pill">TypeScript</span><span class="pill">Vitest</span><span class="pill">React Testing Library</span>
+    <span class="pill">React Compiler</span>
+  </p>
+</div>
+
+<h2 id="what">React 是什么，一句话版</h2>
+
+<p>
+  React 是一个用来<strong>构建用户界面</strong>的 JavaScript 库。它的核心思想只有一句：
+  <strong>界面是状态的函数</strong> —— 你描述“在某种数据下，界面应该长什么样”，
+  数据一变，React 负责把页面更新成新的样子。你不再需要自己去找 DOM 节点、改文字、加删元素。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="UI 等于 f(state)：状态经过组件函数得到界面">
+  <rect class="bx-b" x="30" y="70" width="170" height="70" rx="12"/>
+  <text class="ttl on-b" x="115" y="98" text-anchor="middle">状态 state</text>
+  <text class="mono sm" x="115" y="120" text-anchor="middle">{ searchTerm: 'react' }</text>
+
+  <path class="ln-b" d="M202 105 H288" marker-end="url(#ar-b)"/>
+
+  <rect class="bx-a" x="292" y="60" width="176" height="90" rx="12"/>
+  <text class="ttl on-a" x="380" y="92" text-anchor="middle">组件函数</text>
+  <text class="mono" x="380" y="116" text-anchor="middle">f(state) =&gt; JSX</text>
+  <text class="sm" x="380" y="136" text-anchor="middle">你只写这一部分</text>
+
+  <path class="ln-g" d="M470 105 H556" marker-end="url(#ar-g)"/>
+
+  <rect class="bx-g" x="560" y="70" width="170" height="70" rx="12"/>
+  <text class="ttl on-g" x="645" y="98" text-anchor="middle">界面 UI</text>
+  <text class="sm" x="645" y="120" text-anchor="middle">浏览器里看到的页面</text>
+
+  <path class="ln-d" d="M645 142 V180 H115 V142" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="196" text-anchor="middle">用户输入、网络返回 → 更新 state → React 重新调用组件函数 → 页面自动更新</text>
+  <text class="lbl" x="380" y="30" text-anchor="middle">UI = f(state)</text>
+</svg>
+<figcaption>图 0-1　React 的心智模型：界面是状态的函数</figcaption>
+</figure>
+
+<h2 id="versions">为什么强调“新版本”</h2>
+
+<p>
+  React 从 2013 年发布到现在，写法已经变过好几轮。网上大量教程、博客、Stack Overflow 答案
+  还停留在旧写法上 —— 初学者最容易踩的坑，就是把不同年代的写法混在一起。下面这张时间线标出了
+  <strong>影响日常写法</strong>的几个关键版本：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="React 版本时间线">
+  <path class="ln" d="M30 150 H735" marker-end="url(#ar)"/>
+
+  <circle class="fill-f" cx="60" cy="150" r="6"/>
+  <text class="ttl" x="60" y="120" text-anchor="middle">2013</text>
+  <text class="sm" x="60" y="178" text-anchor="middle">React 发布</text>
+  <text class="sm" x="60" y="194" text-anchor="middle">类组件</text>
+  <text class="sm" x="60" y="210" text-anchor="middle">createClass</text>
+
+  <circle class="fill-f" cx="165" cy="150" r="6"/>
+  <text class="ttl" x="165" y="120" text-anchor="middle">2017 · 16</text>
+  <text class="sm" x="165" y="178" text-anchor="middle">Fiber 架构</text>
+  <text class="sm" x="165" y="194" text-anchor="middle">Fragment</text>
+
+  <circle class="fill-b" cx="275" cy="150" r="8"/>
+  <text class="ttl on-b" x="275" y="120" text-anchor="middle">2019 · 16.8</text>
+  <text class="sm on-b" x="275" y="178" text-anchor="middle">Hooks 登场</text>
+  <text class="sm" x="275" y="194" text-anchor="middle">函数组件</text>
+  <text class="sm" x="275" y="210" text-anchor="middle">成为主流</text>
+
+  <circle class="fill-f" cx="385" cy="150" r="6"/>
+  <text class="ttl" x="385" y="120" text-anchor="middle">2020 · 17</text>
+  <text class="sm" x="385" y="178" text-anchor="middle">新 JSX 转换</text>
+  <text class="sm" x="385" y="194" text-anchor="middle">不必 import React</text>
+
+  <circle class="fill-p" cx="495" cy="150" r="8"/>
+  <text class="ttl on-p" x="495" y="120" text-anchor="middle">2022 · 18</text>
+  <text class="sm" x="495" y="178" text-anchor="middle">createRoot</text>
+  <text class="sm" x="495" y="194" text-anchor="middle">并发渲染</text>
+  <text class="sm" x="495" y="210" text-anchor="middle">自动批处理</text>
+
+  <circle class="fill-a" cx="620" cy="150" r="10"/>
+  <text class="ttl on-a" x="620" y="112" text-anchor="middle">2024-12 · 19</text>
+  <text class="sm on-a" x="620" y="178" text-anchor="middle">Actions / use()</text>
+  <text class="sm" x="620" y="194" text-anchor="middle">ref 作为 prop</text>
+  <text class="sm" x="620" y="210" text-anchor="middle">&lt;Context&gt; 直接当 Provider</text>
+  <text class="sm" x="620" y="226" text-anchor="middle">文档元数据</text>
+
+  <circle class="fill-a" cx="715" cy="150" r="6"/>
+  <text class="ttl on-a" x="712" y="88" text-anchor="end">2025-10 · 19.2</text>
+  <text class="sm" x="712" y="250" text-anchor="end">&lt;Activity&gt; · useEffectEvent</text>
+  <text class="sm" x="712" y="266" text-anchor="end">React Compiler 1.0</text>
+
+  <rect class="bx-d" x="30" y="30" width="330" height="40" rx="8"/>
+  <text class="lbl" x="195" y="55" text-anchor="middle">旧教程常见：类组件、this.setState、生命周期方法</text>
+  <rect class="bx-a" x="440" y="30" width="200" height="40" rx="8"/>
+  <text class="lbl on-a" x="540" y="55" text-anchor="middle">本教程：函数组件 + Hooks</text>
+</svg>
+<figcaption>图 0-2　React 版本时间线。本教程只使用函数组件和 Hooks，并用上 React 19 的新特性</figcaption>
+</figure>
+
+<div class="cards">
+  <div class="card"><span class="ic">&#129513;</span><h4>函数组件 + Hooks</h4><p>不再写类组件、不写 <code>this</code>、不写生命周期方法。状态用 <code>useState</code>，副作用用 <code>useEffect</code>。</p></div>
+  <div class="card"><span class="ic">&#128640;</span><h4>createRoot</h4><p>旧的 <code>ReactDOM.render()</code> 在 React 19 中已被移除，入口统一用 <code>createRoot</code>。</p></div>
+  <div class="card"><span class="ic">&#128221;</span><h4>Form Actions</h4><p><code>&lt;form action={fn}&gt;</code> 取代“<code>onSubmit</code> + <code>preventDefault</code>”，配合 <code>useActionState</code> 管理提交状态。</p></div>
+  <div class="card"><span class="ic">&#9881;&#65039;</span><h4>React Compiler</h4><p>编译器自动做记忆化，<code>memo</code>、<code>useCallback</code>、<code>useMemo</code> 不再需要到处手写。</p></div>
+</div>
+
+<h2 id="project">贯穿全书的项目：Hacker Stories</h2>
+
+<p>
+  和原书一样，我们不做零散的小例子，而是一路打磨同一个应用。它会从一个只显示 “Hello React” 的组件，
+  长成一个能连接真实 API、带搜索历史和分页加载、有类型、有测试、部署上线的完整应用：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="Hacker Stories 应用在各章中逐步成长">
+  <text class="sm" x="20" y="22">第 3–7 章</text>
+  <rect class="bx" x="20" y="32" width="160" height="50" rx="8"/>
+  <text class="lbl" x="100" y="53" text-anchor="middle">静态列表</text>
+  <text class="sm" x="100" y="70" text-anchor="middle">JSX · map · 组件拆分</text>
+
+  <text class="sm" x="205" y="22">第 8–13 章</text>
+  <rect class="bx" x="205" y="32" width="160" height="50" rx="8"/>
+  <text class="lbl" x="285" y="53" text-anchor="middle">可搜索</text>
+  <text class="sm" x="285" y="70" text-anchor="middle">props · state · 状态提升</text>
+
+  <text class="sm" x="390" y="22">第 14–18 章</text>
+  <rect class="bx" x="390" y="32" width="160" height="50" rx="8"/>
+  <text class="lbl" x="470" y="53" text-anchor="middle">记住搜索 · 删除</text>
+  <text class="sm" x="470" y="70" text-anchor="middle">useEffect · 自定义 Hook</text>
+
+  <text class="sm" x="575" y="22">第 19–24 章</text>
+  <rect class="bx-b" x="575" y="32" width="165" height="50" rx="8"/>
+  <text class="lbl on-b" x="657" y="53" text-anchor="middle">真实 API 数据</text>
+  <text class="sm" x="657" y="70" text-anchor="middle">reducer · async · Actions</text>
+
+  <path class="ln-d" d="M182 57 H203" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M367 57 H388" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M552 57 H573" marker-end="url(#ar)"/>
+  <path class="ln-a" d="M657 84 V112 H100 V142" marker-end="url(#ar-a)"/>
+
+  <text class="sm" x="20" y="162">第 26–27 章</text>
+  <rect class="bx" x="20" y="172" width="160" height="50" rx="8"/>
+  <text class="lbl" x="100" y="193" text-anchor="middle">好看起来</text>
+  <text class="sm" x="100" y="210" text-anchor="middle">CSS Modules · SVG</text>
+
+  <text class="sm" x="205" y="162">第 28–32 章</text>
+  <rect class="bx-p" x="205" y="172" width="160" height="50" rx="8"/>
+  <text class="lbl on-p" x="285" y="193" text-anchor="middle">可维护</text>
+  <text class="sm" x="285" y="210" text-anchor="middle">性能 · TS · 测试 · 结构</text>
+
+  <text class="sm" x="390" y="162">第 33–35 章</text>
+  <rect class="bx" x="390" y="172" width="160" height="50" rx="8"/>
+  <text class="lbl" x="470" y="193" text-anchor="middle">真实功能</text>
+  <text class="sm" x="470" y="210" text-anchor="middle">排序 · 历史 · 分页</text>
+
+  <text class="sm" x="575" y="162">第 36 章</text>
+  <rect class="bx-a" x="575" y="172" width="165" height="50" rx="8"/>
+  <text class="lbl on-a" x="657" y="193" text-anchor="middle">部署上线 &#127881;</text>
+  <text class="sm" x="657" y="210" text-anchor="middle">GitHub Pages / Firebase</text>
+
+  <path class="ln-d" d="M182 197 H203" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M367 197 H388" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M552 197 H573" marker-end="url(#ar)"/>
+
+  <rect class="bx" x="120" y="252" width="520" height="62" rx="10"/>
+  <text class="ttl" x="140" y="275">My Hacker Stories</text>
+  <rect class="bx-d" x="140" y="284" width="200" height="20" rx="4"/>
+  <text class="sm" x="148" y="298">Search: react</text>
+  <rect class="bx-a" x="348" y="284" width="56" height="20" rx="4"/>
+  <text class="sm on-a" x="376" y="298" text-anchor="middle">Submit</text>
+  <text class="sm" x="420" y="298">React · Redux · Vite …</text>
+  <text class="sm" x="600" y="275" text-anchor="end">最终效果示意</text>
+</svg>
+<figcaption>图 0-3　Hacker Stories 在各章中逐步成长</figcaption>
+</figure>
+
+<h2 id="who">这套教程写给谁</h2>
+<ul>
+  <li><strong>学过一点 HTML / CSS / JavaScript，第一次接触 React</strong>的人。每个概念都从“为什么需要它”讲起。</li>
+  <li><strong>看过老教程、被类组件和新写法搞混</strong>的人。每章的「新旧对照」会告诉你旧代码为什么那样写、现在为什么不这样写。</li>
+  <li><strong>会用 Vue / Angular，想快速迁移</strong>的人。React 的核心概念不多，理解“单向数据流 + 重新渲染”后其余都是细节。</li>
+</ul>
+
+<div class="box note">
+  <div class="t">&#9432; 需要什么前置知识</div>
+  <p>
+    会写变量、函数、数组和对象就够了。<code>map</code> / <code>filter</code>、箭头函数、解构、展开运算符、
+    <code>Promise</code> 和 <code>async/await</code> 这些“现代 JavaScript”，用到的时候都会顺手讲一遍。
+    命令行只需要会 <code>cd</code> 和敲命令。
+  </p>
+</div>
+
+<h2 id="how">怎么用这套教程</h2>
+<ul>
+  <li><strong>按顺序读，边读边敲。</strong>第 1–25 章是一条直线，后面的章节都依赖前面写好的代码。第 26 章以后的几部分（样式、维护、实战）相互独立，可以挑着读。</li>
+  <li><strong>留意这些标记：</strong>
+    <span class="ver">React 19</span> 表示新版本特性；
+    <span class="ver old">旧写法</span> 表示你在老代码里会见到、但现在不推荐的写法；
+    对照卡片左边是旧写法，右边是新写法。
+  </li>
+  <li><strong>每章末尾有「动手练习」和「面试题」。</strong>练习题动手做，面试题先自己回答再展开看答案。</li>
+</ul>
+
+<div class="vs">
+  <div class="old"><div class="h">旧写法 <span class="ver old">React ≤ 17</span></div>
+```jsx
+import ReactDOM from 'react-dom';
+
+ReactDOM.render(<App />, document.getElementById('root'));
+```
+  </div>
+  <div class="new"><div class="h">新写法 <span class="ver">React 18+ / 19</span></div>
+```jsx
+import { createRoot } from 'react-dom/client';
+
+createRoot(document.getElementById('root')).render(<App />);
+```
+  </div>
+</div>
+
+<h2 id="toc">全部章节</h2>
+<div id="toc-grid"></div>
+
+<div class="box tip" style="margin-top:32px">
+  <div class="t">&#128161; 一句话总结</div>
+  <p>
+    如果你只记住一件事：<strong>React 组件就是一个函数，输入是 props 和 state，输出是界面描述（JSX）；
+    数据只从上往下流，想往上通知就传一个回调函数下去。</strong>
+    剩下的 37 章，都是在展开这句话。
+  </p>
+</div>
+
+<p style="font-size:13px;color:var(--fg-faint);margin-top:28px">
+  说明：本站是基于《The Road to React》（Robin Wieruch 著，<a href="https://www.roadtoreact.com/">roadtoreact.com</a>）
+  整理的中文学习笔记，按原书的项目顺序重新组织讲解并补充了图示与 React 19 的新旧对照。想获得完整原文、练习源码和后续更新，请支持原书。
+</p>

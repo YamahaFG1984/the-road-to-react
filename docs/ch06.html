@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 6 章 · 组件树、实例与 React DOM — React 19 入门教程</title>
+<meta name="description" content="拆分组件、声明与实例、createRoot 挂载">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="6">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 6 章 · 组件与 JSX</span>
+<h1>组件树、实例与 React DOM</h1>
+<p class="lede">
+  一个组件越长越大是迟早的事。这一章我们把 <code>App</code> 拆成几个小组件，
+  借此认识组件树的术语、“声明”和“实例”的区别，最后回到 <code>main.jsx</code>，
+  看看 React 究竟是怎么把整棵树挂到页面上的。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>从 <code>App</code> 中提取 <code>List</code> 和 <code>Search</code> 组件</li>
+    <li>掌握组件树术语：父、子、兄弟、根、叶子</li>
+    <li>分清组件声明、元素与实例</li>
+    <li>理解 <code>createRoot</code> 和 <code>StrictMode</code>，知道 <code>ReactDOM.render</code> 已被移除</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="extract">提取第一个组件：List</h2>
+
+<p>
+  现在所有东西都挤在 <code>App</code> 里。把渲染列表的那部分搬到一个新组件 <code>List</code> 中：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> list = [ ... ];
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() { ... }
+
+<span class="tk-kw">function</span> <span class="tk-tp">List</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;ul</span>&gt;
+      {list.<span class="tk-fn">map</span>(<span class="tk-kw">function</span> (item) {
+        <span class="tk-kw">return</span> (
+          <span class="tk-tg">&lt;li</span> key={item.objectID}&gt;
+            <span class="tk-tg">&lt;span</span>&gt;
+              <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+            <span class="tk-tg">&lt;/span</span>&gt;
+            <span class="tk-tg">&lt;span</span>&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+            <span class="tk-tg">&lt;span</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+            <span class="tk-tg">&lt;span</span>&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+          <span class="tk-tg">&lt;/li</span>&gt;
+        );
+      })}
+    <span class="tk-tg">&lt;/ul</span>&gt;
+  );
+}</pre></div>
+
+<p>然后在 <code>App</code> 里像使用 HTML 标签一样使用它：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  你刚刚创建了第一个自己的组件。同样的道理，把 <code>label</code> 和 <code>input</code> 提取成 <code>Search</code> 组件：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;Search</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}
+
+<span class="tk-kw">function</span> <span class="tk-tp">Search</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  现在 <code>App</code> 读起来像一份目录：标题、搜索、分割线、列表。细节藏在各自的组件里。
+</p>
+
+<h2 id="tree">组件树</h2>
+
+<p>
+  组件套组件，就形成了一棵<strong>组件树</strong>（component tree / hierarchy）。
+  下图假设我们以后还会从 <code>List</code> 里再拆出一个 <code>Item</code> 组件（第 9 章就会做）：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="组件树中的父子、兄弟、根和叶子">
+  <rect class="bx-a" x="300" y="26" width="160" height="44" rx="10"/>
+  <text class="ttl on-a" x="380" y="53" text-anchor="middle">App</text>
+
+  <rect class="bx-b" x="150" y="126" width="160" height="44" rx="10"/>
+  <text class="ttl on-b" x="230" y="153" text-anchor="middle">Search</text>
+  <rect class="bx-b" x="450" y="126" width="160" height="44" rx="10"/>
+  <text class="ttl on-b" x="530" y="153" text-anchor="middle">List</text>
+
+  <rect class="bx-g" x="400" y="226" width="100" height="40" rx="10"/>
+  <text class="ttl on-g" x="450" y="251" text-anchor="middle">Item</text>
+  <rect class="bx-g" x="560" y="226" width="100" height="40" rx="10"/>
+  <text class="ttl on-g" x="610" y="251" text-anchor="middle">Item</text>
+
+  <path class="ln" d="M350 72 L240 124"/>
+  <path class="ln" d="M410 72 L520 124"/>
+  <path class="ln" d="M510 172 L460 224"/>
+  <path class="ln" d="M550 172 L600 224"/>
+
+  <text class="sm on-a" x="470" y="44">根组件（root）</text>
+  <text class="sm on-a" x="470" y="60">整棵树的入口</text>
+
+  <path class="ln-p" d="M314 148 H446" marker-start="url(#ar-p)" marker-end="url(#ar-p)"/>
+  <text class="sm on-p" x="380" y="140" text-anchor="middle">兄弟（sibling）</text>
+
+  <text class="sm" x="210" y="98" text-anchor="end">App 是 Search 和 List 的</text>
+  <text class="sm" x="210" y="114" text-anchor="end">父组件（parent）</text>
+  <text class="sm" x="750" y="98" text-anchor="end">List 是 App 的子组件（child）</text>
+  <text class="sm" x="750" y="114" text-anchor="end">同时是 Item 的父组件</text>
+
+  <rect class="bx-d" x="20" y="200" width="230" height="80" rx="10"/>
+  <text class="ttl" x="36" y="224">叶子组件（leaf）</text>
+  <text class="sm" x="36" y="244">不再渲染其他组件的组件</text>
+  <text class="sm" x="36" y="262">这里是 Search 和 Item</text>
+  <path class="ln-d" d="M200 198 L220 174" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M252 250 H396" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 6-1　组件树的术语：根、父、子、兄弟、叶子</figcaption>
+</figure>
+
+<p>
+  什么时候该拆出新组件？初学者常常拿不准。两个信号：
+</p>
+<ul>
+  <li><strong>组件太大了</strong>：一屏看不完、名字已经概括不了它在做什么。</li>
+  <li><strong>出现了自然的边界</strong>：一块界面有独立的职责（“显示列表”“搜索表单”），或者同样的结构重复出现。</li>
+</ul>
+<p>通常的做法是先写在一个组件里，等它长大了再拆 —— 不必一开始就设计好完美的组件树。</p>
+
+<h2 id="instance">声明、元素与实例</h2>
+
+<p>
+  写 <code>function List() {...}</code> 是<strong>声明</strong>一个组件；在 JSX 里写 <code>&lt;List /&gt;</code> 是<strong>使用</strong>它。
+  用 JavaScript 的类来类比最好理解（注意：只是类比，函数组件和类没有技术上的关系）：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">类：声明一次，new 很多次</div>
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre><span class="tk-cm">// 类声明：蓝图</span>
+<span class="tk-kw">class</span> <span class="tk-tp">Person</span> {
+  <span class="tk-fn">constructor</span>(firstName, lastName) {
+    <span class="tk-kw">this</span>.firstName = firstName;
+    <span class="tk-kw">this</span>.lastName = lastName;
+  }
+  <span class="tk-fn">getName</span>() {
+    <span class="tk-kw">return</span> <span class="tk-kw">this</span>.firstName + <span class="tk-st">' '</span> + <span class="tk-kw">this</span>.lastName;
+  }
+}
+
+<span class="tk-cm">// 实例化：用蓝图造出具体对象</span>
+<span class="tk-kw">const</span> robin = <span class="tk-kw">new</span> <span class="tk-tp">Person</span>(<span class="tk-st">'Robin'</span>, <span class="tk-st">'Wieruch'</span>);
+<span class="tk-kw">const</span> dennis = <span class="tk-kw">new</span> <span class="tk-tp">Person</span>(<span class="tk-st">'Dennis'</span>, <span class="tk-st">'Wieruch'</span>);</pre></div>
+  </div>
+  <div class="new"><div class="h">组件：声明一次，使用很多次</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 组件声明：蓝图</span>
+<span class="tk-kw">function</span> <span class="tk-tp">List</span>() { ... }
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-cm">{/* 两个 List 元素 → 两个独立的实例 */}</span>
+      <span class="tk-tg">&lt;List</span> <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;List</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+  </div>
+</div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="组件、元素与实例的关系">
+  <rect class="bx-a" x="20" y="70" width="200" height="80" rx="12"/>
+  <text class="ttl on-a" x="120" y="98" text-anchor="middle">组件（Component）</text>
+  <text class="mono sm" x="120" y="120" text-anchor="middle">function List() {…}</text>
+  <text class="sm" x="120" y="138" text-anchor="middle">蓝图，只有一份</text>
+
+  <rect class="bx-b" x="290" y="30" width="190" height="60" rx="10"/>
+  <text class="ttl on-b" x="385" y="54" text-anchor="middle">元素（Element）</text>
+  <text class="mono sm" x="385" y="76" text-anchor="middle">&lt;List /&gt;</text>
+  <rect class="bx-b" x="290" y="130" width="190" height="60" rx="10"/>
+  <text class="ttl on-b" x="385" y="154" text-anchor="middle">元素（Element）</text>
+  <text class="mono sm" x="385" y="176" text-anchor="middle">&lt;List /&gt;</text>
+
+  <path class="ln-a" d="M222 100 L286 64" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M222 120 L286 156" marker-end="url(#ar-a)"/>
+
+  <rect class="bx-g" x="550" y="30" width="190" height="60" rx="10"/>
+  <text class="ttl on-g" x="645" y="54" text-anchor="middle">实例（Instance）</text>
+  <text class="sm" x="645" y="76" text-anchor="middle">有自己的状态和生命周期</text>
+  <rect class="bx-g" x="550" y="130" width="190" height="60" rx="10"/>
+  <text class="ttl on-g" x="645" y="154" text-anchor="middle">实例（Instance）</text>
+  <text class="sm" x="645" y="176" text-anchor="middle">和上面那个互不影响</text>
+
+  <path class="ln-g" d="M482 60 H546" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M482 160 H546" marker-end="url(#ar-g)"/>
+  <text class="sm" x="514" y="116" text-anchor="middle">React 渲染时创建</text>
+</svg>
+<figcaption>图 6-2　组件是蓝图；JSX 元素是“请渲染一个 List”的描述；React 为每个元素维护一个实例</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th>术语</th><th>是什么</th><th>例子</th></tr>
+  <tr><td>组件声明</td><td>一个返回 JSX 的函数</td><td><code>function List() {...}</code></td></tr>
+  <tr><td>元素</td><td>JSX 编译出的普通对象，描述“要渲染什么”</td><td><code>&lt;List /&gt;</code>，即 <code>{ type: List, props: {} }</code></td></tr>
+  <tr><td>实例</td><td>React 内部为页面上每一个组件维护的记录，保存它的状态</td><td>页面上每出现一次 <code>List</code>，就有一个实例</td></tr>
+</table>
+</div>
+
+<div class="box tip">
+  <div class="t">&#128161; 思考题</div>
+  <p>
+    现在 <code>list</code> 是全局变量，两个 <code>&lt;List /&gt;</code> 只能显示同一份数据。
+    怎样才能让每个 <code>List</code> 显示不同的数据？答案是 <strong>props</strong>（第 9 章）。
+  </p>
+</div>
+
+<h2 id="react-dom">React DOM：把组件树挂到页面上</h2>
+
+<p>
+  我们一直在声明 <code>App</code>，却从没写过 <code>&lt;App /&gt;</code>。它在哪里被使用？打开 <code>src/main.jsx</code>：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/main.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StrictMode</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+<span class="tk-kw">import</span> <span class="tk-st">'./index.css'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">App</span> <span class="tk-kw">from</span> <span class="tk-st">'./App.jsx'</span>;
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<p>这里用到了两个库：</p>
+<ul>
+  <li><strong><code>react</code></strong>：组件、Hooks、JSX 相关的一切，你日常写代码用的都是它。</li>
+  <li><strong><code>react-dom</code></strong>：把 React 连接到浏览器 DOM 的“渲染器”。整个应用通常只在入口处用它一次。</li>
+</ul>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="createRoot 接管 root 元素并渲染组件树">
+  <rect class="bx-b" x="20" y="40" width="210" height="170" rx="10"/>
+  <text class="ttl on-b" x="125" y="64" text-anchor="middle">index.html 里的 DOM</text>
+  <text class="mono sm" x="36" y="92">&lt;body&gt;</text>
+  <rect class="bx-a" x="44" y="104" width="170" height="60" rx="6"/>
+  <text class="mono sm on-a" x="54" y="124">&lt;div id="root"&gt;</text>
+  <text class="sm" x="54" y="142">  由 React 接管，</text>
+  <text class="sm" x="54" y="158">  里面的内容都归它管</text>
+  <text class="mono sm" x="36" y="190">&lt;/body&gt;</text>
+
+  <rect class="bx-g" x="280" y="60" width="200" height="54" rx="10"/>
+  <text class="mono sm on-g" x="380" y="84" text-anchor="middle">createRoot(rootEl)</text>
+  <text class="sm" x="380" y="102" text-anchor="middle">① 创建一个 React 根</text>
+  <rect class="bx-g" x="280" y="136" width="200" height="54" rx="10"/>
+  <text class="mono sm on-g" x="380" y="160" text-anchor="middle">root.render(&lt;App /&gt;)</text>
+  <text class="sm" x="380" y="178" text-anchor="middle">② 渲染根组件</text>
+  <path class="ln-g" d="M380 116 V132" marker-end="url(#ar-g)"/>
+  <path class="ln-a" d="M278 87 H232" marker-end="url(#ar-a)"/>
+
+  <rect class="bx-a" x="560" y="40" width="180" height="40" rx="8"/>
+  <text class="ttl on-a" x="650" y="65" text-anchor="middle">App</text>
+  <rect class="bx" x="545" y="110" width="90" height="34" rx="7"/>
+  <text class="sm" x="590" y="132" text-anchor="middle">Search</text>
+  <rect class="bx" x="665" y="110" width="90" height="34" rx="7"/>
+  <text class="sm" x="710" y="132" text-anchor="middle">List</text>
+  <path class="ln" d="M620 82 L590 108"/>
+  <path class="ln" d="M680 82 L710 108"/>
+  <path class="ln-g" d="M482 163 H540 V64 H556" marker-end="url(#ar-g)"/>
+  <text class="sm" x="650" y="176" text-anchor="middle">React 从 App 开始，</text>
+  <text class="sm" x="650" y="192" text-anchor="middle">逐层调用所有组件函数</text>
+  <text class="sm" x="650" y="208" text-anchor="middle">把结果写进 #root</text>
+</svg>
+<figcaption>图 6-3　createRoot 接管 HTML 中的一个元素；render 从根组件开始渲染整棵组件树</figcaption>
+</figure>
+
+<p>
+  <code>render()</code> 的参数不一定是 <code>&lt;App /&gt;</code>，任何 JSX 都行：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+
+<span class="tk-kw">const</span> title = <span class="tk-st">'React'</span>;
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">Hello</span> {title}<span class="tk-tg">&lt;/h1</span>&gt;
+);</pre></div>
+
+<p>
+  从零开始的 React 应用通常只有一个 <code>createRoot</code>。但如果你在给一个老网站逐步引入 React，
+  可能会看到页面上有好几个 <code>createRoot</code>，分别接管不同区域 —— 这正是 React 能“渐进式采用”的原因。
+</p>
+
+<h3>旧写法：ReactDOM.render</h3>
+
+<div class="vs">
+  <div class="old"><div class="h">React 17 及以前 <span class="ver old">React 19 已移除</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> <span class="tk-tp">React</span> <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">ReactDOM</span> <span class="tk-kw">from</span> <span class="tk-st">'react-dom'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">App</span> <span class="tk-kw">from</span> <span class="tk-st">'./App'</span>;
+
+<span class="tk-tp">ReactDOM</span>.<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;React.StrictMode</span>&gt;
+    <span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/React.StrictMode</span>&gt;,
+  document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)
+);</pre></div>
+  </div>
+  <div class="new"><div class="h">React 18 / 19 <span class="ver">现在</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StrictMode</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">App</span> <span class="tk-kw">from</span> <span class="tk-st">'./App'</span>;
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+  </div>
+</div>
+
+<p>
+  差别不只是写法：<code>createRoot</code> 开启了 React 18 引入的<strong>并发渲染</strong>能力
+  （React 可以中断、推迟不紧急的渲染，让界面保持响应）以及<strong>自动批处理</strong>。
+  旧的 <code>ReactDOM.render</code> 在 React 18 中被标记为废弃，在 <strong>React 19 中彻底移除</strong>，
+  同时被移除的还有 <code>ReactDOM.hydrate</code>（服务端渲染用，改为 <code>hydrateRoot</code>）
+  和 <code>unmountComponentAtNode</code>（改为 <code>root.unmount()</code>）。
+</p>
+
+<h3>StrictMode：开发时的“体检”</h3>
+
+<p>
+  <code>&lt;StrictMode&gt;</code> 不渲染任何可见内容，它只在<strong>开发环境</strong>里帮你做额外检查：
+</p>
+<ul>
+  <li><strong>每个组件渲染两次</strong>：用来发现“渲染函数不纯”的问题（第 3 章说过，渲染应该没有副作用）。</li>
+  <li><strong>每个 Effect 挂载 → 卸载 → 再挂载</strong>：用来发现忘记清理的副作用（第 14 章）。</li>
+  <li>对使用了过时 API 的代码给出警告。</li>
+</ul>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 170" role="img" aria-label="StrictMode 在开发环境中重复调用渲染">
+  <rect class="bx-b" x="20" y="30" width="340" height="120" rx="12"/>
+  <text class="ttl on-b" x="190" y="56" text-anchor="middle">开发环境（npm run dev）</text>
+  <rect class="bx" x="44" y="72" width="130" height="32" rx="6"/>
+  <text class="mono sm" x="109" y="93" text-anchor="middle">App() 第 1 次</text>
+  <rect class="bx" x="206" y="72" width="130" height="32" rx="6"/>
+  <text class="mono sm" x="271" y="93" text-anchor="middle">App() 第 2 次</text>
+  <path class="ln-b" d="M176 88 H202" marker-end="url(#ar-b)"/>
+  <text class="sm" x="190" y="130" text-anchor="middle">console.log 可能出现两次 —— 这是正常的</text>
+
+  <rect class="bx-g" x="400" y="30" width="340" height="120" rx="12"/>
+  <text class="ttl on-g" x="570" y="56" text-anchor="middle">生产环境（npm run build）</text>
+  <rect class="bx" x="505" y="72" width="130" height="32" rx="6"/>
+  <text class="mono sm" x="570" y="93" text-anchor="middle">App() 1 次</text>
+  <text class="sm" x="570" y="130" text-anchor="middle">StrictMode 的检查全部去掉，零开销</text>
+</svg>
+<figcaption>图 6-4　StrictMode 只在开发时生效。控制台日志打印两次，多半是它在工作</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 回头看第 1 章</div>
+  <p>
+    现在整个 SPA 的拼图就完整了：服务器发来一个小小的 <code>index.html</code> 和打包好的 JS；
+    JS 里的 <code>createRoot</code> 找到 <code>#root</code>，从 <code>App</code> 开始调用所有组件函数，
+    把得到的界面写进页面。HTML 文件只负责“请求 JS”和“提供一个挂载点”。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>把一块有独立职责的 JSX 搬进新函数，就提取出一个组件；在 JSX 里用 <code>&lt;Name /&gt;</code> 使用它。</li>
+  <li>组件构成一棵树：根组件在最上面，没有子组件的是叶子。</li>
+  <li>组件声明是蓝图；每个 <code>&lt;List /&gt;</code> 元素都会产生一个独立的实例。</li>
+  <li><code>createRoot(el).render(&lt;App /&gt;)</code> 是 React 应用的入口；<code>ReactDOM.render</code> 已在 React 19 中移除。</li>
+  <li><code>StrictMode</code> 在开发时会故意重复调用渲染和 Effect，帮你提早发现问题。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>App</code> 里渲染两个 <code>&lt;List /&gt;</code>，观察结果。</li>
+    <li>在 <code>App</code>、<code>Search</code>、<code>List</code> 里各加一个 <code>console.log</code>，看看调用顺序；然后暂时去掉 <code>StrictMode</code>，对比打印次数（记得改回来）。</li>
+    <li>试着从 <code>List</code> 里提取出 <code>Item</code> 组件 —— 你会发现不知道怎么把每一项的数据交给 <code>Item</code>。记住这个困惑，第 9 章解答。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么要把大组件拆分成小组件？</summary>
+    <div><p>提升可读性、可维护性和复用性；每个组件职责单一，改动影响范围更小，也更容易测试。</p></div></details>
+  <details><summary>React 元素和组件有什么区别？</summary>
+    <div><p>组件是返回元素的函数（或类）；元素是描述“要渲染什么”的不可变普通对象，由 JSX 编译产生。</p></div></details>
+  <details><summary>createRoot 和 ReactDOM.render 有什么区别？</summary>
+    <div><p><code>createRoot</code> 是 React 18 引入的新根 API，启用并发特性和自动批处理；<code>ReactDOM.render</code> 是旧 API，React 18 废弃，React 19 已移除。</p></div></details>
+  <details><summary>StrictMode 有什么作用？会影响生产环境吗？</summary>
+    <div><p>它在开发环境中对子树做额外检查（重复渲染、重复执行 Effect、过时 API 警告）以暴露潜在问题；生产构建中不做任何事。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

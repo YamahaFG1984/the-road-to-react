@@ -1,0 +1,431 @@
+<p class="lede">
+  现代应用离不开表单。这一章先用传统方式把输入框和按钮包进一个真正的 <code>&lt;form&gt;</code>（<code>onSubmit</code> + <code>preventDefault</code>），
+  再升级为 <strong>React 19 的 form Actions</strong>：<code>&lt;form action={fn}&gt;</code>。
+  这是 React 19 最重要的新特性之一，也是新旧写法差异最大的地方。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 <code>&lt;form onSubmit&gt;</code> 提交搜索，理解 <code>preventDefault</code> 的作用</li>
+    <li>把表单提取成 <code>SearchForm</code> 组件</li>
+    <li>改用 React 19 的 <code>&lt;form action={fn}&gt;</code>，理解它和 onSubmit 的区别</li>
+    <li>认识配套的新 Hook：<code>useActionState</code>、<code>useFormStatus</code>、<code>useOptimistic</code></li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="form">第一步：换成真正的表单</h2>
+
+<p>
+  表单就是一个“把若干输入控件的数据通过按钮提交出去”的容器。用 <code>&lt;form&gt;</code> 包住输入框和按钮，
+  带来的直接好处是：<strong>在输入框里按回车就能提交</strong>，键盘用户和读屏软件用户也更友好。
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+
+  return (
+    <div>
+      <h1>My Hacker Stories</h1>
+
+      <form onSubmit={handleSearchSubmit}>
+        <InputWithLabel
+          id="search"
+          value={searchTerm}
+          isFocused
+          onInputChange={handleSearchInput}
+        >
+          <strong>Search:</strong>
+        </InputWithLabel>
+
+        <button type="submit" disabled={!searchTerm}>
+          Submit
+        </button>
+      </form>
+
+      <hr />
+
+      ...
+    </div>
+  );
+};
+```
+
+<p>
+  处理函数从按钮的 <code>onClick</code> 挪到了表单的 <code>onSubmit</code>，按钮的 <code>type</code> 改成 <code>"submit"</code>，
+  表示“点我就提交所在的表单”。处理函数里还要加一句 <code>event.preventDefault()</code>：
+</p>
+
+```jsx src/App.jsx
+const handleSearchSubmit = (event) => {
+  setUrl(`${API_ENDPOINT}${searchTerm}`);
+
+  event.preventDefault();
+};
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="原生表单提交会刷新页面，preventDefault 阻止刷新">
+  <rect class="bx-b" x="20" y="90" width="150" height="60" rx="10"/>
+  <text class="ttl on-b" x="95" y="116" text-anchor="middle">提交表单</text>
+  <text class="sm" x="95" y="136" text-anchor="middle">点按钮 / 按回车</text>
+
+  <rect class="bx-r" x="260" y="20" width="220" height="80" rx="10"/>
+  <text class="ttl on-r" x="370" y="46" text-anchor="middle">浏览器默认行为</text>
+  <text class="sm" x="370" y="68" text-anchor="middle">把数据发到 action 地址</text>
+  <text class="sm" x="370" y="86" text-anchor="middle">整页刷新 → React 状态全部丢失</text>
+
+  <rect class="bx-g" x="260" y="140" width="220" height="80" rx="10"/>
+  <text class="ttl on-g" x="370" y="166" text-anchor="middle">event.preventDefault()</text>
+  <text class="sm" x="370" y="188" text-anchor="middle">阻止默认行为</text>
+  <text class="sm" x="370" y="206" text-anchor="middle">由我们的 JS 处理提交</text>
+
+  <path class="ln-r" d="M172 110 L256 64" marker-end="url(#ar-r)"/>
+  <path class="ln-g" d="M172 130 L256 176" marker-end="url(#ar-g)"/>
+
+  <rect class="bx-a" x="560" y="140" width="180" height="80" rx="10"/>
+  <text class="ttl on-a" x="650" y="166" text-anchor="middle">SPA 的做法</text>
+  <text class="sm" x="650" y="188" text-anchor="middle">setUrl(…) → 重新渲染</text>
+  <text class="sm" x="650" y="206" text-anchor="middle">页面不刷新</text>
+  <path class="ln-g" d="M482 180 H556" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 24-1　原生表单提交会跳转并刷新页面；在 SPA 里需要阻止它</figcaption>
+</figure>
+
+<p>
+  原生 HTML 表单提交时，浏览器会把数据发送到 <code>action</code> 属性指定的地址并<strong>刷新整个页面</strong> ——
+  这是服务器渲染时代（第 1 章）的遗产。对单页应用来说刷新意味着所有状态丢失，所以要调用 <code>preventDefault()</code> 阻止它。
+</p>
+
+<h2 id="extract">第二步：提取 SearchForm 组件</h2>
+
+```jsx src/App.jsx
+const SearchForm = ({
+  searchTerm,
+  onSearchInput,
+  onSearchSubmit,
+}) => (
+  <form onSubmit={onSearchSubmit}>
+    <InputWithLabel
+      id="search"
+      value={searchTerm}
+      isFocused
+      onInputChange={onSearchInput}
+    >
+      <strong>Search:</strong>
+    </InputWithLabel>
+
+    <button type="submit" disabled={!searchTerm}>
+      Submit
+    </button>
+  </form>
+);
+```
+
+<p>
+  状态仍然留在 <code>App</code> 里，因为请求数据的是 <code>App</code>，拿到的数据还要交给 <code>List</code>。
+  <code>SearchForm</code> 只负责显示和转发事件：
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+
+  return (
+    <div>
+      <h1>My Hacker Stories</h1>
+
+      <SearchForm
+        searchTerm={searchTerm}
+        onSearchInput={handleSearchInput}
+        onSearchSubmit={handleSearchSubmit}
+      />
+
+      <hr />
+
+      {stories.isError && <p>Something went wrong ...</p>}
+
+      {stories.isLoading ? (
+        <p>Loading ...</p>
+      ) : (
+        <List list={stories.data} onRemoveItem={handleRemoveStory} />
+      )}
+    </div>
+  );
+};
+```
+
+<h2 id="actions">第三步：React 19 的 form Actions</h2>
+
+<p>
+  HTML 的 <code>&lt;form&gt;</code> 本来就有 <code>action</code> 属性（提交地址）。React 19 扩展了它：
+  <strong>可以给 <code>action</code> 传一个函数</strong>，表单提交时 React 会调用这个函数。
+</p>
+
+```jsx src/App.jsx
+const SearchForm = ({ searchTerm, onSearchInput, searchAction }) => (
+  <form action={searchAction}>
+    <InputWithLabel
+      id="search"
+      value={searchTerm}
+      isFocused
+      onInputChange={onSearchInput}
+    >
+      <strong>Search:</strong>
+    </InputWithLabel>
+
+    <button type="submit" disabled={!searchTerm}>
+      Submit
+    </button>
+  </form>
+);
+```
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+
+  const searchAction = () => {
+    setUrl(`${API_ENDPOINT}${searchTerm}`);
+    // event.preventDefault(); ← 不再需要了
+  };
+
+  ...
+
+  return (
+    <div>
+      <h1>My Hacker Stories</h1>
+
+      <SearchForm
+        searchTerm={searchTerm}
+        onSearchInput={handleSearchInput}
+        searchAction={searchAction}
+      />
+      ...
+    </div>
+  );
+};
+```
+
+<p>
+  <code>preventDefault</code> 消失了：使用函数形式的 action 时，React 自己会拦截原生提交、不刷新页面。
+  这种写法更贴近原生表单的语义，也是 React 19 之后推荐的提交方式。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">onSubmit <span class="ver old">React 18 及以前的惯例</span></div>
+```jsx
+const handleSubmit = (event) => {
+  event.preventDefault();          // 必须手动阻止刷新
+  const data = new FormData(event.target);
+  save(data.get('title'));
+};
+
+<form onSubmit={handleSubmit}>
+  <input name="title" />
+  <button type="submit">Save</button>
+</form>
+```
+  </div>
+  <div class="new"><div class="h">action <span class="ver">React 19</span></div>
+```jsx
+const saveAction = (formData) => {  // 直接拿到 FormData
+  save(formData.get('title'));
+};
+
+<form action={saveAction}>
+  <input name="title" />
+  <button type="submit">Save</button>
+</form>
+```
+  </div>
+</div>
+
+<h3>action 函数能拿到 FormData</h3>
+
+<p>
+  action 函数的参数就是表单的 <code>FormData</code>。只要输入框有 <code>name</code> 属性，就能按名字取值 ——
+  这意味着简单的表单甚至不需要为每个字段写状态（第 12 章讲的非受控写法）：
+</p>
+
+```jsx
+const searchAction = (formData) => {
+  const term = formData.get('search'); // 需要 <input name="search" />
+  setUrl(`${API_ENDPOINT}${term}`);
+};
+```
+
+<p>
+  我们的搜索框是受控组件，<code>searchTerm</code> 本来就在状态里，所以沿用原书的写法直接读状态即可。
+</p>
+
+<h2 id="more">Actions 全家桶</h2>
+
+<p>
+  form action 真正强大的地方在于<strong>异步</strong>。action 函数可以是 async 的，React 会把它放进一个“过渡”（transition）里，
+  自动追踪“正在提交”的状态、处理错误、在成功后重置非受控字段。围绕它，React 19 提供了几个新 Hook：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="React 19 Actions 相关 API 的关系">
+  <rect class="bx-a" x="270" y="20" width="220" height="70" rx="12"/>
+  <text class="ttl on-a" x="380" y="46" text-anchor="middle">&lt;form action={fn}&gt;</text>
+  <text class="sm" x="380" y="68" text-anchor="middle">fn 可以是 async 函数</text>
+  <text class="sm" x="380" y="82" text-anchor="middle">React 自动追踪 pending</text>
+
+  <rect class="bx-b" x="20" y="150" width="230" height="120" rx="12"/>
+  <text class="ttl on-b" x="135" y="176" text-anchor="middle">useActionState</text>
+  <text class="mono sm" x="135" y="200" text-anchor="middle">[state, formAction,</text>
+  <text class="mono sm" x="135" y="216" text-anchor="middle">isPending]</text>
+  <text class="sm" x="135" y="242" text-anchor="middle">保存 action 的返回结果</text>
+  <text class="sm" x="135" y="258" text-anchor="middle">（成功信息、错误信息）</text>
+
+  <rect class="bx-g" x="265" y="150" width="230" height="120" rx="12"/>
+  <text class="ttl on-g" x="380" y="176" text-anchor="middle">useFormStatus</text>
+  <text class="mono sm" x="380" y="200" text-anchor="middle">{ pending, data }</text>
+  <text class="sm" x="380" y="226" text-anchor="middle">在表单内部的子组件里</text>
+  <text class="sm" x="380" y="242" text-anchor="middle">读取“所在表单是否提交中”</text>
+  <text class="sm" x="380" y="258" text-anchor="middle">（比如禁用提交按钮）</text>
+
+  <rect class="bx-p" x="510" y="150" width="230" height="120" rx="12"/>
+  <text class="ttl on-p" x="625" y="176" text-anchor="middle">useOptimistic</text>
+  <text class="mono sm" x="625" y="200" text-anchor="middle">[optimistic, add]</text>
+  <text class="sm" x="625" y="226" text-anchor="middle">请求还没返回时</text>
+  <text class="sm" x="625" y="242" text-anchor="middle">先乐观地显示结果</text>
+  <text class="sm" x="625" y="258" text-anchor="middle">失败自动回滚</text>
+
+  <path class="ln-a" d="M320 92 L160 146" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M380 92 V146" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M440 92 L600 146" marker-end="url(#ar-a)"/>
+</svg>
+<figcaption>图 24-2　围绕 form action 的三个新 Hook</figcaption>
+</figure>
+
+<p>
+  用一个“发表评论”的小例子感受一下（这不是 Hacker Stories 的代码，只是演示）：
+</p>
+
+```jsx
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
+
+// 读取所在表单的提交状态，不需要从父组件传 props
+const SubmitButton = () => {
+  const { pending } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? 'Posting…' : 'Post'}
+    </button>
+  );
+};
+
+const CommentForm = () => {
+  const [message, formAction, isPending] = useActionState(
+    // 第一个参数是上一次的返回值，第二个是 FormData
+    async (previousMessage, formData) => {
+      try {
+        await postComment(formData.get('comment'));
+        return 'Thanks for your comment!';
+      } catch {
+        return 'Something went wrong.';
+      }
+    },
+    null // 初始 state
+  );
+
+  return (
+    <form action={formAction}>
+      <textarea name="comment" />
+      <SubmitButton />
+      {message && <p>{message}</p>}
+    </form>
+  );
+};
+```
+
+<div class="vs">
+  <div class="old"><div class="h">手动管理提交状态 <span class="ver old">旧写法</span></div>
+```jsx
+const [isPending, setIsPending] = useState(false);
+const [message, setMessage] = useState(null);
+
+const handleSubmit = async (event) => {
+  event.preventDefault();
+  setIsPending(true);
+  try {
+    await postComment(
+      new FormData(event.target).get('comment')
+    );
+    setMessage('Thanks!');
+    event.target.reset();          // 手动清空表单
+  } catch {
+    setMessage('Something went wrong.');
+  } finally {
+    setIsPending(false);
+  }
+};
+```
+  </div>
+  <div class="new"><div class="h">useActionState <span class="ver">React 19</span></div>
+```jsx
+const [message, formAction, isPending] =
+  useActionState(async (prev, formData) => {
+    try {
+      await postComment(formData.get('comment'));
+      return 'Thanks!';
+    } catch {
+      return 'Something went wrong.';
+    }
+  }, null);
+
+// pending 自动追踪；成功后非受控字段自动重置
+<form action={formAction}>…</form>
+```
+  </div>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; 几个细节</div>
+  <ul style="margin:0">
+    <li><code>useFormStatus</code> 从 <code>react-dom</code> 导入，并且必须在 <code>&lt;form&gt;</code> <strong>内部</strong>的子组件中调用，它读取的是“所在的那个表单”的状态。</li>
+    <li>React 19 早期的 Canary 版本里 <code>useActionState</code> 叫 <code>useFormState</code>，老文章里看到它就是同一个东西。</li>
+    <li>按钮也可以有自己的 action：<code>&lt;button formAction={fn}&gt;</code>，一个表单里的多个按钮可以做不同的事。</li>
+    <li>在 Next.js 等框架里，action 还可以是运行在服务器上的<strong>服务端函数</strong>（Server Functions），第 25 章会提到。</li>
+  </ul>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>用 <code>&lt;form&gt;</code> 包裹输入和按钮，按钮 <code>type="submit"</code>，就能用回车提交，可访问性也更好。</li>
+  <li>传统写法用 <code>onSubmit</code>，必须 <code>event.preventDefault()</code> 阻止页面刷新。</li>
+  <li>React 19 可以写 <code>&lt;form action={fn}&gt;</code>：不需要 preventDefault，函数直接收到 <code>FormData</code>。</li>
+  <li>异步 action 配合 <code>useActionState</code>（结果 + pending）、<code>useFormStatus</code>（子组件读取提交状态）、<code>useOptimistic</code>（乐观更新），取代了大量手写的加载/错误状态代码。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>onSubmit</code> 版本时，删掉 <code>preventDefault()</code> 看看会发生什么（注意地址栏）。</li>
+    <li>改成 action 版本后，确认按回车也能提交。</li>
+    <li>给输入框加上 <code>name="search"</code>，把 <code>searchAction</code> 改成从 <code>formData</code> 读取搜索词。</li>
+    <li>挑战：写一个独立的“订阅邮件”小表单，用 <code>useActionState</code> + 一个 <code>setTimeout</code> 模拟的 async 函数，显示“提交中…”和结果信息；再用 <code>useFormStatus</code> 做一个会自动禁用的提交按钮。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么在 onSubmit 里要调用 event.preventDefault()？</summary>
+    <div><p>阻止浏览器提交表单并刷新页面的默认行为，否则 SPA 的状态会丢失。</p></div></details>
+  <details><summary>React 19 的 form action 和 onSubmit 有什么区别？</summary>
+    <div><p>action 接收一个函数，React 自动阻止默认提交并把 FormData 传给函数；支持 async，自动追踪 pending 状态、在成功后重置非受控字段，并可与 useActionState / useFormStatus 配合。onSubmit 需要手动完成这些工作。</p></div></details>
+  <details><summary>useActionState 返回什么？</summary>
+    <div><p><code>[state, formAction, isPending]</code>：action 最近一次的返回值、传给 form 的包装后的 action、是否正在执行。</p></div></details>
+  <details><summary>useFormStatus 有什么限制？</summary>
+    <div><p>只能在 <code>&lt;form&gt;</code> 内部渲染的组件中调用，读取的是最近的父级表单的状态；不能在渲染表单的同一个组件里读取它自己的表单。</p></div></details>
+  <details><summary>如何用一个 onChange 处理多个输入框？</summary>
+    <div><p>给每个输入框设置 name，在处理函数中根据 <code>event.target.name</code> 更新对应字段，例如 <code>setForm({ ...form, [e.target.name]: e.target.value })</code>。</p></div></details>
+</div>

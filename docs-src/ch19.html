@@ -1,0 +1,381 @@
+<p class="lede">
+  真实应用的数据来自服务器，而网络请求需要时间 —— 数据是<strong>异步</strong>到达的。
+  这意味着组件必须先在“没有数据”的状态下渲染一次，等数据到了再渲染一次。
+  这一章先用一个假的异步函数模拟网络请求，再学习如何根据“加载中 / 出错 / 有数据”显示不同的界面。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 Promise + <code>setTimeout</code> 模拟异步数据</li>
+    <li>在 <code>useEffect</code> 中获取数据并存入状态</li>
+    <li>掌握条件渲染的三种写法：提前 return、三元运算符、<code>&amp;&amp;</code></li>
+    <li>给用户展示加载中和出错的反馈</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="fake-api">模拟一个异步 API</h2>
+
+<p>先写一个函数，它返回一个 Promise，Promise 兑现（resolve）后给出和真实 API 结构类似的数据：</p>
+
+```jsx src/App.jsx
+const initialStories = [ ... ];
+
+const getAsyncStories = () =>
+  Promise.resolve({ data: { stories: initialStories } });
+```
+
+<p>
+  <code>App</code> 里的列表状态改成以<strong>空数组</strong>开始，然后在 effect 里“请求”数据。依赖数组为空，所以只在组件第一次渲染后执行一次：
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+
+  const [stories, setStories] = useState([]);
+
+  useEffect(() => {
+    getAsyncStories().then((result) => {
+      setStories(result.data.stories);
+    });
+  }, []);
+
+  ...
+};
+```
+
+<p>
+  数据几乎是瞬间出现的，看不出“异步”。给它加 2 秒延迟，更像真实的网络请求：
+</p>
+
+```jsx src/App.jsx
+const getAsyncStories = () =>
+  new Promise((resolve) =>
+    setTimeout(
+      () => resolve({ data: { stories: initialStories } }),
+      2000
+    )
+  );
+```
+
+<p>刷新页面：先是一个空列表，2 秒后列表出现。</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="异步数据的时间线：首次渲染空列表，effect 发请求，数据到达后重新渲染">
+  <path class="ln" d="M20 130 H740" marker-end="url(#ar)"/>
+  <text class="sm" x="730" y="152" text-anchor="end">时间 →</text>
+
+  <circle class="fill-a" cx="70" cy="130" r="7"/>
+  <rect class="bx-a" x="20" y="30" width="110" height="70" rx="10"/>
+  <text class="ttl on-a" x="75" y="54" text-anchor="middle">首次渲染</text>
+  <text class="mono sm" x="75" y="74" text-anchor="middle">stories = []</text>
+  <text class="sm" x="75" y="90" text-anchor="middle">显示空列表</text>
+
+  <circle class="fill-p" cx="210" cy="130" r="7"/>
+  <rect class="bx-p" x="135" y="160" width="160" height="70" rx="10"/>
+  <text class="ttl on-p" x="215" y="184" text-anchor="middle">effect 执行</text>
+  <text class="mono sm" x="215" y="204" text-anchor="middle">getAsyncStories()</text>
+  <text class="sm" x="215" y="220" text-anchor="middle">发出“请求”</text>
+
+  <rect class="bx-d" x="290" y="112" width="250" height="36" rx="8"/>
+  <text class="sm" x="415" y="135" text-anchor="middle">⏳ 等待 2 秒（网络延迟）</text>
+
+  <circle class="fill-b" cx="560" cy="130" r="7"/>
+  <rect class="bx-b" x="490" y="160" width="140" height="70" rx="10"/>
+  <text class="ttl on-b" x="560" y="184" text-anchor="middle">Promise 兑现</text>
+  <text class="mono sm" x="560" y="204" text-anchor="middle">setStories(data)</text>
+
+  <circle class="fill-g" cx="680" cy="130" r="7"/>
+  <rect class="bx-g" x="620" y="30" width="120" height="70" rx="10"/>
+  <text class="ttl on-g" x="680" y="54" text-anchor="middle">重新渲染</text>
+  <text class="mono sm" x="680" y="74" text-anchor="middle">stories = [2 条]</text>
+  <text class="sm" x="680" y="90" text-anchor="middle">显示列表</text>
+</svg>
+<figcaption>图 19-1　异步数据：组件总是先在“没有数据”时渲染一次</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 为什么初始值是 <code>[]</code> 而不是 <code>null</code>？</div>
+  <p>
+    <code>List</code> 会对列表调用 <code>.map()</code>，<code>App</code> 会调用 <code>.filter()</code>。
+    空数组上调用它们没问题（结果还是空数组）；如果初始值是 <code>null</code>，<code>null.map()</code> 会直接报错崩溃。
+    选一个“空但类型正确”的初始值，可以省掉很多判断。
+  </p>
+</div>
+
+<h2 id="loading">显示“加载中”</h2>
+
+<div class="box tip">
+  <div class="t">&#128161; 先自己试试</div>
+  <p>
+    任务：数据加载期间显示 “Loading ...”，数据到了再隐藏。提示：新增一个布尔状态 <code>isLoading</code>；
+    开始请求时设为 <code>true</code>，数据到达后设为 <code>false</code>；在 JSX 里根据它决定显示什么。
+  </p>
+</div>
+
+<p>
+  根据状态显示不同的 JSX，叫<strong>条件渲染</strong>。异步数据是条件渲染最典型的场景：刚开始没有数据，
+  然后在加载，最后有了数据 —— 也可能失败。先加一个加载状态：
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+  const [stories, setStories] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+
+    getAsyncStories().then((result) => {
+      setStories(result.data.stories);
+      setIsLoading(false);
+    });
+  }, []);
+
+  ...
+};
+```
+
+<h3>写法一：提前 return</h3>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+
+  if (isLoading) {
+    return <p>Loading ...</p>;
+  }
+
+  return (
+    <div>
+      ...
+    </div>
+  );
+};
+```
+
+<p>
+  简单直接，但加载时<strong>整个页面</strong>只剩一行字 —— 标题和搜索框也不见了。我们只想替换列表那一块。
+</p>
+
+<h3>写法二：三元运算符</h3>
+
+<p>
+  JSX 的花括号里不能写 <code>if</code> 语句（第 4 章），但可以写<strong>三元运算符</strong> <code>条件 ? A : B</code>，它是一个表达式：
+</p>
+
+```jsx src/App.jsx
+return (
+  <div>
+    ...
+    <hr />
+
+    {isLoading ? (
+      <p>Loading ...</p>
+    ) : (
+      <List list={searchedStories} onRemoveItem={handleRemoveStory} />
+    )}
+  </div>
+);
+```
+
+<h2 id="error">处理错误</h2>
+
+<p>模拟的请求不会失败，但真实网络请求会。再加一个错误状态，在 Promise 的 <code>catch()</code> 里设置它：</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+  const [stories, setStories] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+
+    getAsyncStories()
+      .then((result) => {
+        setStories(result.data.stories);
+        setIsLoading(false);
+      })
+      .catch(() => setIsError(true));
+  }, []);
+
+  ...
+};
+```
+
+<h3>写法三：逻辑与 &amp;&amp;</h3>
+
+<p>错误提示是“要么显示、要么什么都不显示”。这种情况用 <code>&amp;&amp;</code> 比 <code>条件 ? JSX : null</code> 更简洁：</p>
+
+```jsx src/App.jsx
+return (
+  <div>
+    ...
+    <hr />
+
+    {isError && <p>Something went wrong ...</p>}
+
+    {isLoading ? (
+      <p>Loading ...</p>
+    ) : (
+      <List list={searchedStories} onRemoveItem={handleRemoveStory} />
+    )}
+  </div>
+);
+```
+
+<p>
+  JavaScript 里，<code>true &amp;&amp; 'Hello'</code> 的结果是 <code>'Hello'</code>，<code>false &amp;&amp; 'Hello'</code> 的结果是 <code>false</code>。
+  而第 4 章说过，React 渲染 <code>false</code> 时什么都不显示 —— 两者配合就成了“条件为真才显示”。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="三种状态对应三种界面">
+  <rect class="bx" x="20" y="20" width="220" height="70" rx="10"/>
+  <text class="mono sm" x="130" y="46" text-anchor="middle">isLoading: true</text>
+  <text class="mono sm" x="130" y="66" text-anchor="middle">isError: false</text>
+  <rect class="bx-b" x="20" y="110" width="220" height="130" rx="10"/>
+  <text class="ttl" x="36" y="134">My Hacker Stories</text>
+  <rect class="bx-d" x="36" y="144" width="188" height="20" rx="4"/>
+  <text class="sm on-b" x="36" y="196">Loading ...</text>
+
+  <rect class="bx" x="270" y="20" width="220" height="70" rx="10"/>
+  <text class="mono sm" x="380" y="46" text-anchor="middle">isLoading: false</text>
+  <text class="mono sm" x="380" y="66" text-anchor="middle">isError: false</text>
+  <rect class="bx-g" x="270" y="110" width="220" height="130" rx="10"/>
+  <text class="ttl" x="286" y="134">My Hacker Stories</text>
+  <rect class="bx-d" x="286" y="144" width="188" height="20" rx="4"/>
+  <text class="sm" x="286" y="188">• React  Jordan Walke  3  4</text>
+  <text class="sm" x="286" y="208">• Redux  Dan Abramov…  2  5</text>
+
+  <rect class="bx" x="520" y="20" width="220" height="70" rx="10"/>
+  <text class="mono sm" x="630" y="46" text-anchor="middle">isLoading: false</text>
+  <text class="mono sm" x="630" y="66" text-anchor="middle">isError: true</text>
+  <rect class="bx-r" x="520" y="110" width="220" height="130" rx="10"/>
+  <text class="ttl" x="536" y="134">My Hacker Stories</text>
+  <rect class="bx-d" x="536" y="144" width="188" height="20" rx="4"/>
+  <text class="sm on-r" x="536" y="196">Something went wrong ...</text>
+  <path class="ln" d="M130 92 V106" marker-end="url(#ar)"/>
+  <path class="ln" d="M380 92 V106" marker-end="url(#ar)"/>
+  <path class="ln" d="M630 92 V106" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 19-2　同一个组件，不同的状态组合渲染出不同的界面 —— 又一次 UI = f(state)</figcaption>
+</figure>
+
+<h2 id="patterns">条件渲染速查</h2>
+
+<div class="tw">
+<table>
+  <tr><th>场景</th><th>写法</th></tr>
+  <tr><td>整个组件要么显示 A、要么显示 B</td><td>提前 <code>if (x) return &lt;A /&gt;;</code></td></tr>
+  <tr><td>JSX 中某处二选一</td><td><code>{x ? &lt;A /&gt; : &lt;B /&gt;}</code></td></tr>
+  <tr><td>JSX 中某处显示或不显示</td><td><code>{x &amp;&amp; &lt;A /&gt;}</code></td></tr>
+  <tr><td>组件在某条件下什么都不渲染</td><td><code>return null;</code></td></tr>
+  <tr><td>分支很多</td><td>在 return 之前用 <code>if / switch</code> 算出一个变量，再在 JSX 里使用</td></tr>
+</table>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; <code>&amp;&amp;</code> 的经典陷阱：数字 0</div>
+  <p>
+    <code>{stories.length &amp;&amp; &lt;List … /&gt;}</code> 在列表为空时，表达式结果是数字 <code>0</code>，
+    而 React <strong>会把 0 渲染出来</strong>（只有 <code>false</code>/<code>null</code>/<code>undefined</code> 不显示）。
+    页面上会莫名其妙多出一个 “0”。左边请写成真正的布尔值：<code>stories.length &gt; 0 &amp;&amp; …</code>。
+  </p>
+</div>
+
+<h2 id="new">新旧对照：数据获取的写法</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">类组件 <span class="ver old">旧写法</span></div>
+```jsx
+class App extends React.Component {
+  state = { stories: [], isLoading: false };
+
+  componentDidMount() {
+    this.setState({ isLoading: true });
+    getAsyncStories().then((result) =>
+      this.setState({
+        stories: result.data.stories,
+        isLoading: false,
+      })
+    );
+  }
+
+  render() {
+    return this.state.isLoading
+      ? <p>Loading ...</p>
+      : <List list={this.state.stories} />;
+  }
+}
+```
+  </div>
+  <div class="new"><div class="h">函数组件 + useEffect <span class="ver">本章写法</span></div>
+```jsx
+const App = () => {
+  const [stories, setStories] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    getAsyncStories().then((result) => {
+      setStories(result.data.stories);
+      setIsLoading(false);
+    });
+  }, []);
+
+  return isLoading
+    ? <p>Loading ...</p>
+    : <List list={stories} />;
+};
+```
+  </div>
+</div>
+
+<div class="box deep">
+  <div class="t">&#128270; 深入一点：React 19 的 Suspense 与 use()</div>
+  <p>
+    手动管理 <code>isLoading</code> / <code>isError</code> 是最基础、最通用的做法，也是理解数据获取的起点。
+    React 19 还提供了另一种声明式的思路：组件用 <code>use(promise)</code> 直接“读取”一个 Promise，
+    数据没到时由外层的 <code>&lt;Suspense fallback={…}&gt;</code> 显示加载界面，出错时由错误边界（Error Boundary）接住。
+    这种写法通常要配合框架或数据请求库（它们负责缓存 Promise）才好用，第 25 章会简单介绍。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>异步数据意味着组件先以“空数据”渲染，数据到达后再重新渲染；初始状态选空数组比 <code>null</code> 更安全。</li>
+  <li>在 <code>useEffect(fn, [])</code> 里发起请求，结果用 setter 存进状态。</li>
+  <li>条件渲染：提前 return、三元 <code>? :</code>、逻辑与 <code>&amp;&amp;</code>。</li>
+  <li>用 <code>isLoading</code>、<code>isError</code> 给用户反馈；小心 <code>0 &amp;&amp;</code> 渲染出 0。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>把延迟改成 5 秒，观察加载提示。</li>
+    <li>把 <code>getAsyncStories</code> 改成 2 秒后 <code>reject</code>，看看错误提示是否显示 —— 注意观察 “Loading ...” 是否也还在？（下一章要解决的问题）</li>
+    <li>当列表为空且不在加载时，显示 “No stories found.”。</li>
+    <li>试着在 JSX 的花括号里写 <code>if</code>，读一读报错。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么在数据获取前 stories 为空数组时不需要条件渲染？</summary>
+    <div><p>对空数组调用 <code>map()</code> 返回空数组，React 什么也不渲染，不会出错。</p></div></details>
+  <details><summary>如果 stories 初始值是 null 会怎样？</summary>
+    <div><p>对 <code>null</code> 调用 <code>map()</code> 会抛出异常，需要额外的条件判断。</p></div></details>
+  <details><summary>React 中有哪些条件渲染的方式？</summary>
+    <div><p>if 提前返回、三元运算符、逻辑与 <code>&amp;&amp;</code>、返回 <code>null</code>、先用变量存放 JSX 再渲染。</p></div></details>
+  <details><summary>能在条件语句或循环中调用 useState 吗？</summary>
+    <div><p>不能。Hook 必须在组件顶层调用；条件应该写在渲染逻辑里，而不是包住 Hook。</p></div></details>
+  <details><summary>如何处理异步请求中的加载和错误状态？</summary>
+    <div><p>用状态记录加载与错误，请求开始前设置加载，成功/失败后分别更新，并据此条件渲染；也可以用 Suspense 和错误边界的声明式方案。</p></div></details>
+</div>

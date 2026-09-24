@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 14 章 · 副作用与 useEffect — React 19 入门教程</title>
+<meta name="description" content="把 localStorage、网络请求放到渲染之外">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="14">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 14 章 · Hooks 与组件模式</span>
+<h1>副作用与 useEffect</h1>
+<p class="lede">
+  组件的输出由 props 和 state 决定。但真实应用还要和“React 之外的世界”打交道：
+  读写浏览器的 localStorage、请求远程 API、设置定时器、测量元素尺寸……这些叫<strong>副作用</strong>（side-effect）。
+  这一章我们让搜索框<strong>记住</strong>上一次的搜索词 —— 即使关掉浏览器再打开。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解什么是副作用，为什么不应该在渲染过程中执行它</li>
+    <li>用 <code>useEffect</code> 把 state 同步到 localStorage</li>
+    <li>彻底搞懂依赖数组的三种写法，以及清理函数</li>
+    <li>对照类组件的生命周期方法，理解 useEffect 的思路转变</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="what">什么是副作用</h2>
+
+<p>
+  第 3 章说过：组件函数应该像一个纯函数 —— 同样的 props 和 state，永远算出同样的 JSX，而且不改动外部任何东西。
+  但应用总得做点“不纯”的事，这些就是副作用：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="渲染是纯计算，副作用和外部系统打交道">
+  <rect class="bx-a" x="250" y="60" width="260" height="110" rx="14"/>
+  <text class="ttl on-a" x="380" y="88" text-anchor="middle">渲染（纯计算）</text>
+  <text class="mono sm" x="380" y="114" text-anchor="middle">(props, state) =&gt; JSX</text>
+  <text class="sm" x="380" y="138" text-anchor="middle">只算结果，不碰外面的世界</text>
+  <text class="sm" x="380" y="156" text-anchor="middle">可能被执行很多次</text>
+
+  <rect class="bx-p" x="20" y="20" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="105" y="47" text-anchor="middle">localStorage 读写</text>
+  <rect class="bx-p" x="20" y="96" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="105" y="123" text-anchor="middle">网络请求 fetch</text>
+  <rect class="bx-p" x="20" y="172" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="105" y="199" text-anchor="middle">定时器 setInterval</text>
+  <rect class="bx-p" x="570" y="20" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="655" y="47" text-anchor="middle">修改 document.title</text>
+  <rect class="bx-p" x="570" y="96" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="655" y="123" text-anchor="middle">测量 DOM 尺寸</text>
+  <rect class="bx-p" x="570" y="172" width="170" height="44" rx="10"/>
+  <text class="sm on-p" x="655" y="199" text-anchor="middle">订阅 WebSocket</text>
+
+  <path class="ln-d" d="M192 42 L246 80"/>
+  <path class="ln-d" d="M192 118 H246"/>
+  <path class="ln-d" d="M192 194 L246 156"/>
+  <path class="ln-d" d="M568 42 L514 80"/>
+  <path class="ln-d" d="M568 118 H514"/>
+  <path class="ln-d" d="M568 194 L514 156"/>
+  <text class="sm" x="380" y="222" text-anchor="middle">四周这些都是副作用：放在事件处理函数里，或者放进 useEffect</text>
+</svg>
+<figcaption>图 14-1　渲染应该是纯的；和外部系统打交道的事情叫副作用</figcaption>
+</figure>
+
+<h2 id="first-try">第一版：在处理函数里写 localStorage</h2>
+
+<p>
+  需求：记住最近一次搜索。思路是每次输入时存进 localStorage，启动时再读出来作为初始值：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(
+    localStorage.<span class="tk-fn">getItem</span>(<span class="tk-st">'search'</span>) || <span class="tk-st">'React'</span>
+  );
+
+  <span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+
+    localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'search'</span>, event.target.value);
+  };
+
+  ...
+};</pre></div>
+
+<p>
+  <code>||</code>（逻辑或）在左边为“假值”（<code>null</code>、<code>''</code> 等）时返回右边：localStorage 里有值就用它，否则用 <code>'React'</code>。
+  刷新浏览器试试，搜索词被记住了。
+</p>
+
+<p>
+  功能能用，但有个隐患：<strong>同步 localStorage 的逻辑绑在了某一个处理函数上</strong>。
+  将来别的地方也调用 <code>setSearchTerm</code>（比如一个“清空”按钮、一个“最近搜索”按钮），就得记得每处都写一遍
+  <code>localStorage.setItem</code>，漏一处就不同步。更好的方式是：<strong>不管 searchTerm 因为什么变了，都自动同步</strong>。
+</p>
+
+<h2 id="useeffect">useEffect：状态变了就做点什么</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useState, useEffect } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(
+    localStorage.<span class="tk-fn">getItem</span>(<span class="tk-st">'search'</span>) || <span class="tk-st">'React'</span>
+  );
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'search'</span>, searchTerm);
+  }, [searchTerm]);
+
+  <span class="tk-kw">const</span> handleSearch = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  ...
+};</pre></div>
+
+<p><code>useEffect</code> 接收两个参数：</p>
+<ol>
+  <li><strong>副作用函数</strong>：要执行的操作。React 会在把界面画到屏幕<strong>之后</strong>再执行它，不阻塞渲染。</li>
+  <li><strong>依赖数组</strong>：一组值。只有当其中某个值和上一次渲染时不同，副作用才会再次执行。</li>
+</ol>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="渲染、提交 DOM 后比较依赖决定是否执行 effect">
+  <rect class="bx-a" x="20" y="70" width="150" height="70" rx="10"/>
+  <text class="ttl on-a" x="95" y="98" text-anchor="middle">① 渲染</text>
+  <text class="sm" x="95" y="120" text-anchor="middle">App() 执行</text>
+
+  <rect class="bx-g" x="210" y="70" width="150" height="70" rx="10"/>
+  <text class="ttl on-g" x="285" y="98" text-anchor="middle">② 更新 DOM</text>
+  <text class="sm" x="285" y="120" text-anchor="middle">用户看到新界面</text>
+
+  <rect class="bx-p" x="400" y="60" width="170" height="90" rx="10"/>
+  <text class="ttl on-p" x="485" y="86" text-anchor="middle">③ 比较依赖</text>
+  <text class="mono sm" x="485" y="110" text-anchor="middle">[searchTerm]</text>
+  <text class="sm" x="485" y="130" text-anchor="middle">和上次一样吗？</text>
+
+  <rect class="bx-b" x="610" y="20" width="130" height="70" rx="10"/>
+  <text class="ttl on-b" x="675" y="48" text-anchor="middle">变了</text>
+  <text class="sm" x="675" y="70" text-anchor="middle">执行副作用</text>
+  <rect class="bx" x="610" y="130" width="130" height="70" rx="10"/>
+  <text class="ttl" x="675" y="158" text-anchor="middle">没变</text>
+  <text class="sm" x="675" y="180" text-anchor="middle">跳过</text>
+
+  <path class="ln-a" d="M172 105 H206" marker-end="url(#ar-a)"/>
+  <path class="ln-g" d="M362 105 H396" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M572 90 L606 62" marker-end="url(#ar-b)"/>
+  <path class="ln" d="M572 120 L606 156" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="236" text-anchor="middle">首次渲染时没有“上一次”，所以副作用一定会执行一次</text>
+</svg>
+<figcaption>图 14-2　useEffect 在界面更新之后运行，并通过依赖数组决定“这次要不要执行”</figcaption>
+</figure>
+
+<p>
+  现在，不论 <code>searchTerm</code> 在哪里、因为什么被更新，localStorage 都会自动同步。
+  <strong>同步逻辑集中在一个地方</strong>，这就是 useEffect 比“写在处理函数里”更健壮的原因。
+</p>
+
+<h2 id="deps">依赖数组的三种写法</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="依赖数组的三种写法及其执行时机">
+  <text class="sm" x="210" y="24" text-anchor="middle">首次渲染</text>
+  <text class="sm" x="330" y="24" text-anchor="middle">重渲染 1</text>
+  <text class="sm" x="450" y="24" text-anchor="middle">重渲染 2</text>
+  <text class="sm" x="570" y="24" text-anchor="middle">重渲染 3</text>
+  <text class="sm" x="690" y="24" text-anchor="middle">…</text>
+  <text class="sm" x="330" y="40" text-anchor="middle">(a 变了)</text>
+  <text class="sm" x="450" y="40" text-anchor="middle">(b 变了)</text>
+  <text class="sm" x="570" y="40" text-anchor="middle">(a 变了)</text>
+
+  <text class="mono sm" x="20" y="84">useEffect(fn)</text>
+  <text class="sm" x="20" y="100">不写依赖</text>
+  <circle class="fill-r" cx="210" cy="86" r="9"/><circle class="fill-r" cx="330" cy="86" r="9"/>
+  <circle class="fill-r" cx="450" cy="86" r="9"/><circle class="fill-r" cx="570" cy="86" r="9"/>
+  <text class="sm on-r" x="690" y="90" text-anchor="middle">每次都跑</text>
+
+  <text class="mono sm" x="20" y="148">useEffect(fn, [])</text>
+  <text class="sm" x="20" y="164">空数组</text>
+  <circle class="fill-g" cx="210" cy="150" r="9"/>
+  <circle cx="330" cy="150" r="8" fill="none" stroke="var(--line-2)" stroke-width="1.5"/>
+  <circle cx="450" cy="150" r="8" fill="none" stroke="var(--line-2)" stroke-width="1.5"/>
+  <circle cx="570" cy="150" r="8" fill="none" stroke="var(--line-2)" stroke-width="1.5"/>
+  <text class="sm on-g" x="690" y="154" text-anchor="middle">只在挂载时</text>
+
+  <text class="mono sm" x="20" y="212">useEffect(fn, [a])</text>
+  <text class="sm" x="20" y="228">有依赖</text>
+  <circle class="fill-b" cx="210" cy="214" r="9"/><circle class="fill-b" cx="330" cy="214" r="9"/>
+  <circle cx="450" cy="214" r="8" fill="none" stroke="var(--line-2)" stroke-width="1.5"/>
+  <circle class="fill-b" cx="570" cy="214" r="9"/>
+  <text class="sm on-b" x="690" y="218" text-anchor="middle">a 变了才跑</text>
+  <path class="ln" d="M150 118 H740"/><path class="ln" d="M150 182 H740"/>
+</svg>
+<figcaption>图 14-3　● = 副作用执行，○ = 跳过。依赖数组告诉 React“副作用依赖哪些值”</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th>写法</th><th>什么时候执行</th><th>典型用途</th></tr>
+  <tr><td><code>useEffect(fn)</code></td><td>每次渲染后</td><td>很少需要，小心性能问题和死循环</td></tr>
+  <tr><td><code>useEffect(fn, [])</code></td><td>只在组件第一次出现（挂载）后</td><td>初始化时请求一次数据、订阅一次事件</td></tr>
+  <tr><td><code>useEffect(fn, [a, b])</code></td><td>挂载后 + a 或 b 变化后</td><td>把某个状态同步到外部（本章的 localStorage）</td></tr>
+</table>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 依赖要写全</div>
+  <p>
+    副作用函数里用到的所有来自组件内部的值（props、state、组件内定义的变量和函数）都应该写进依赖数组。
+    漏写会让副作用读到过期（stale）的值。Vite 模板自带的 ESLint 规则 <code>react-hooks/exhaustive-deps</code>
+    会自动提醒你 —— 请认真对待它的警告，不要随手关掉。
+  </p>
+</div>
+
+<h2 id="cleanup">清理函数</h2>
+
+<p>
+  副作用函数可以<strong>返回一个函数</strong>，React 会在下一次执行副作用之前、以及组件从页面上消失（卸载）时调用它，
+  用来撤销副作用：取消定时器、取消订阅、中止请求。
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-kw">const</span> id = <span class="tk-fn">setInterval</span>(() =&gt; {
+    console.<span class="tk-fn">log</span>(<span class="tk-st">'tick'</span>);
+  }, <span class="tk-nm">1000</span>);
+
+  <span class="tk-cm">// 清理函数：组件卸载或依赖变化时执行</span>
+  <span class="tk-kw">return</span> () =&gt; {
+    <span class="tk-fn">clearInterval</span>(id);
+  };
+}, []);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="effect 的挂载、依赖变化和卸载时序">
+  <path class="ln" d="M20 100 H740" marker-end="url(#ar)"/>
+  <rect class="bx-g" x="40" y="60" width="130" height="80" rx="10"/>
+  <text class="ttl on-g" x="105" y="88" text-anchor="middle">挂载</text>
+  <text class="sm" x="105" y="110" text-anchor="middle">运行 effect</text>
+  <text class="sm" x="105" y="126" text-anchor="middle">（第 1 次）</text>
+
+  <rect class="bx-b" x="240" y="50" width="200" height="100" rx="10"/>
+  <text class="ttl on-b" x="340" y="76" text-anchor="middle">依赖变化</text>
+  <text class="sm on-r" x="340" y="100" text-anchor="middle">① 先运行上一次的清理</text>
+  <text class="sm on-g" x="340" y="120" text-anchor="middle">② 再运行新的 effect</text>
+
+  <rect class="bx-r" x="520" y="60" width="160" height="80" rx="10"/>
+  <text class="ttl on-r" x="600" y="88" text-anchor="middle">卸载</text>
+  <text class="sm" x="600" y="110" text-anchor="middle">运行最后一次清理</text>
+  <text class="sm" x="380" y="186" text-anchor="middle">清理函数保证：每个副作用都有始有终，不会泄漏</text>
+</svg>
+<figcaption>图 14-4　effect 与清理函数的时序</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 开发环境下 effect 跑了两次？</div>
+  <p>
+    React 18 起，<code>StrictMode</code> 在开发环境会对每个组件执行一遍“挂载 → 卸载 → 再挂载”，
+    所以 effect 会运行两次（中间夹着一次清理）。这是故意的：如果你的 effect 缺少正确的清理，这样一跑就会暴露问题。
+    生产环境只运行一次。第 28 章会再次讨论这一点。
+  </p>
+</div>
+
+<h2 id="lifecycle">思路转变：从生命周期到“同步”</h2>
+
+<p>
+  类组件时代，副作用按“时间点”来写：挂载时做什么、更新时做什么、卸载时做什么。
+  同一件事（比如订阅）的逻辑被拆散在三个方法里：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">类组件生命周期 <span class="ver old">旧写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">class</span> <span class="tk-tp">App</span> <span class="tk-kw">extends</span> <span class="tk-tp">React</span>.<span class="tk-tp">Component</span> {
+  <span class="tk-fn">componentDidMount</span>() {
+    localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'search'</span>, <span class="tk-kw">this</span>.state.searchTerm);
+  }
+
+  <span class="tk-fn">componentDidUpdate</span>(prevProps, prevState) {
+    <span class="tk-cm">// 要自己比较前后值</span>
+    <span class="tk-kw">if</span> (prevState.searchTerm !== <span class="tk-kw">this</span>.state.searchTerm) {
+      localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'search'</span>, <span class="tk-kw">this</span>.state.searchTerm);
+    }
+  }
+
+  <span class="tk-fn">componentWillUnmount</span>() {
+    <span class="tk-cm">// 清理逻辑写在另一个方法里</span>
+  }
+}</pre></div>
+  </div>
+  <div class="new"><div class="h">useEffect <span class="ver">现在</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+  <span class="tk-cm">// “让 localStorage 和 searchTerm 保持同步”</span>
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'search'</span>, searchTerm);
+
+    <span class="tk-kw">return</span> () =&gt; {
+      <span class="tk-cm">// 清理逻辑和设置逻辑写在一起</span>
+    };
+  }, [searchTerm]);
+};</pre></div>
+  </div>
+</div>
+
+<p>
+  useEffect 的正确心智模型不是“在某个生命周期做某事”，而是<strong>“让某个外部系统和当前的 state 保持同步”</strong>。
+  你声明同步的逻辑和它依赖哪些值，React 负责在合适的时候执行和清理。
+</p>
+
+<div class="box tip">
+  <div class="t">&#128161; 你可能并不需要 Effect</div>
+  <p>
+    useEffect 是给“和外部系统同步”准备的。下面这些情况<strong>不应该</strong>用它：
+  </p>
+  <ul style="margin-bottom:0">
+    <li>根据 state 计算另一个值 → 直接在渲染时计算（第 11 章的派生值）。</li>
+    <li>响应用户的某个操作（点击后发请求、提交后提示）→ 写在事件处理函数里。</li>
+    <li>props 变化时重置状态 → 给组件换一个 <code>key</code>。</li>
+  </ul>
+  <p style="margin-top:8px">
+    React 19.2 还新增了 <code>useEffectEvent</code>，用来从 effect 里调用“需要读取最新值、但又不应该成为依赖”的逻辑，属于进阶话题，遇到时再查文档即可。
+  </p>
+</div>
+
+<h2 id="extras">两个小改进</h2>
+
+<h3>用 <code>??</code> 代替 <code>||</code></h3>
+<p>
+  试试把搜索框清空，然后刷新页面：显示的是 “React” 而不是空的。因为 <code>''</code> 是假值，<code>||</code> 会跳到右边。
+  <strong>空值合并运算符</strong> <code>??</code> 只在左边是 <code>null</code> 或 <code>undefined</code> 时才用右边的值：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-fn">useState</span>(localStorage.<span class="tk-fn">getItem</span>(<span class="tk-st">'search'</span>) ?? <span class="tk-st">'React'</span>);</pre></div>
+
+<h3>惰性初始值</h3>
+<p>
+  <code>useState(localStorage.getItem('search') ?? 'React')</code> 里的 <code>localStorage.getItem</code> 其实<strong>每次渲染都会执行</strong>
+  （只是结果在第一次之后被忽略）。如果初始值的计算比较昂贵，可以传一个函数，React 只在第一次渲染时调用它：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(
+  () =&gt; localStorage.<span class="tk-fn">getItem</span>(<span class="tk-st">'search'</span>) ?? <span class="tk-st">'React'</span>
+);</pre></div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>副作用是和 React 外部世界打交道的操作；渲染本身应保持纯净。</li>
+  <li><code>useEffect(fn, deps)</code> 在界面更新后执行 <code>fn</code>，依赖变化时重新执行；空数组表示只在挂载时执行。</li>
+  <li>返回的清理函数在下次执行前和卸载时调用。</li>
+  <li>把 useEffect 理解为“同步”而不是“生命周期”；派生值和用户操作的响应不需要 effect。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 effect 里加 <code>console.log</code>，分别试试不写依赖、写 <code>[]</code>、写 <code>[searchTerm]</code>，观察打印时机。</li>
+    <li>清空搜索框再刷新，确认 <code>||</code> 的问题，然后换成 <code>??</code>。</li>
+    <li>再写一个 effect：把 <code>document.title</code> 设置为 “搜索：xxx”。</li>
+    <li>写一个每秒打印一次的定时器 effect，先不写清理函数，观察 StrictMode 下的表现；再加上清理函数对比。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>useEffect 是做什么的？</summary>
+    <div><p>让函数组件执行副作用，并与外部系统（网络、存储、DOM、订阅等）保持同步。它在渲染提交到屏幕之后运行。</p></div></details>
+  <details><summary>依赖数组的作用？不写、写空数组、写值有什么区别？</summary>
+    <div><p>决定 effect 何时重新执行：不写则每次渲染后执行；空数组只在挂载后执行一次；有值则在挂载后及任一依赖变化后执行。</p></div></details>
+  <details><summary>清理函数什么时候执行？</summary>
+    <div><p>在下一次执行该 effect 之前，以及组件卸载时。</p></div></details>
+  <details><summary>为什么开发环境下 effect 执行了两次？</summary>
+    <div><p>StrictMode 会模拟“挂载-卸载-再挂载”，以检查 effect 是否正确清理；生产环境不会。</p></div></details>
+  <details><summary>useEffect 和类组件生命周期方法是什么关系？</summary>
+    <div><p>它可以覆盖 componentDidMount / DidUpdate / WillUnmount 的场景，但思路不同：按“同步什么”组织代码，而不是按“什么时间点”，相关的设置与清理逻辑写在一起。</p></div></details>
+  <details><summary>一个组件可以有多个 useEffect 吗？</summary>
+    <div><p>可以，而且推荐按关注点拆分：每个 effect 只负责一件事。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

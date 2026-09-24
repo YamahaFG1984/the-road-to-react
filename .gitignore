@@ -1,0 +1,5 @@
+# 原书 PDF 有版权，不纳入版本库
+*.pdf
+
+# Python 缓存
+__pycache__/

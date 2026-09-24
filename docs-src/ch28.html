@@ -1,0 +1,433 @@
+<p class="lede">
+  React 默认就很快，绝大多数应用根本不需要做性能优化。这一章的目的是<strong>理解</strong>：
+  React 什么时候会重新渲染、哪些渲染是多余的、<code>memo</code> / <code>useCallback</code> / <code>useMemo</code> 各自解决什么问题 ——
+  以及 React 19 时代的 <strong>React Compiler</strong> 如何让你几乎不必手写这些。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解 StrictMode 在开发环境下的双重执行</li>
+    <li>让 effect 跳过首次渲染（以及这个技巧的局限）</li>
+    <li>用 <code>memo</code> + <code>useCallback</code> 避免不必要的重新渲染</li>
+    <li>用 <code>useMemo</code> 避免重复的昂贵计算</li>
+    <li>了解并启用 React Compiler</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="strict">先说 StrictMode</h2>
+
+<p>在请求数据的 effect 里加一行日志：</p>
+
+```jsx src/App.jsx
+useEffect(() => {
+  console.log('How many times do I log?');
+  handleFetchStories();
+}, [handleFetchStories]);
+```
+
+<p>
+  很多人以为只会打印一次，实际会打印<strong>两次</strong> —— 连资深开发者都常被吓一跳。原因是 <code>main.jsx</code> 里的
+  <code>&lt;StrictMode&gt;</code>：从 React 18 起，它在开发环境下会把每个组件<strong>挂载 → 卸载 → 再挂载</strong>一次，
+  用来暴露缺少清理的 effect（第 14 章）。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 170" role="img" aria-label="StrictMode 下 effect 的执行顺序">
+  <rect class="bx-g" x="20" y="50" width="150" height="60" rx="10"/>
+  <text class="ttl on-g" x="95" y="76" text-anchor="middle">挂载</text>
+  <text class="sm" x="95" y="96" text-anchor="middle">effect 第 1 次</text>
+  <rect class="bx-r" x="220" y="50" width="150" height="60" rx="10"/>
+  <text class="ttl on-r" x="295" y="76" text-anchor="middle">模拟卸载</text>
+  <text class="sm" x="295" y="96" text-anchor="middle">运行清理函数</text>
+  <rect class="bx-g" x="420" y="50" width="150" height="60" rx="10"/>
+  <text class="ttl on-g" x="495" y="76" text-anchor="middle">再次挂载</text>
+  <text class="sm" x="495" y="96" text-anchor="middle">effect 第 2 次</text>
+  <rect class="bx-b" x="620" y="50" width="120" height="60" rx="10"/>
+  <text class="ttl on-b" x="680" y="76" text-anchor="middle">正常运行</text>
+  <path class="ln" d="M172 80 H216" marker-end="url(#ar)"/>
+  <path class="ln" d="M372 80 H416" marker-end="url(#ar)"/>
+  <path class="ln" d="M572 80 H616" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="30" text-anchor="middle">仅开发环境（npm run dev）· 生产构建中不会发生</text>
+  <text class="sm" x="380" y="150" text-anchor="middle">如果你的 effect 有正确的清理，用户根本感觉不到区别；如果没有，这里就会暴露问题</text>
+</svg>
+<figcaption>图 28-1　StrictMode 在开发环境下故意让 effect 执行两次</figcaption>
+</figure>
+
+<p>
+  对我们的数据请求来说，请求两次只是多了一个网络请求，结果一样（这种操作叫<strong>幂等</strong>的），不会造成 bug。
+  为了让本章的日志和生产环境一致，<strong>先暂时去掉 StrictMode</strong>，学完再加回来：
+</p>
+
+```jsx src/main.jsx
+createRoot(document.getElementById('root')).render(<App />);
+```
+
+<h2 id="first-render">让 effect 跳过首次渲染</h2>
+
+<p>看看自定义 Hook <code>useStorageState</code>：</p>
+
+```jsx src/App.jsx
+const useStorageState = (key, initialState) => {
+  const [value, setValue] = useState(
+    localStorage.getItem(key) ?? initialState
+  );
+
+  useEffect(() => {
+    console.log('A');
+    localStorage.setItem(key, value);
+  }, [value, key]);
+
+  return [value, setValue];
+};
+```
+
+<p>
+  首次渲染时 effect 也会执行，把刚从 localStorage 读出来的值原样写回去 —— 这一次是多余的。
+  React 没有“只在更新时运行”的 Hook，但可以用 ref（第 17 章）记住“是否已经挂载过”，因为改 ref 不会触发渲染：
+</p>
+
+```jsx src/App.jsx
+const useStorageState = (key, initialState) => {
+  const isMounted = useRef(false);
+
+  const [value, setValue] = useState(
+    localStorage.getItem(key) ?? initialState
+  );
+
+  useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+    } else {
+      console.log('A');
+      localStorage.setItem(key, value);
+    }
+  }, [value, key]);
+
+  return [value, setValue];
+};
+```
+
+<div class="box warn">
+  <div class="t">&#9888; 这个技巧在 StrictMode 下会失效</div>
+  <p>
+    StrictMode 模拟“卸载再挂载”时，ref 会被保留（仍然是 <code>true</code>），第二次挂载就不会被跳过。
+    这正说明它依赖了“effect 只会运行一次”这个不可靠的假设。本例中多写一次 localStorage 几乎没有成本，
+    所以现实中通常<strong>根本不需要</strong>这种优化 —— 把它当作理解 ref 的练习即可。
+  </p>
+</div>
+
+<h2 id="rerender">不需要的重新渲染</h2>
+
+<p>给 <code>App</code> 和 <code>List</code> 加上日志（<code>List</code> 用了一个小技巧：<code>console.log()</code> 返回 <code>undefined</code>，所以 <code>||</code> 右边总会执行）：</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+  console.log('B:App');
+  return ( ... );
+};
+
+const List = ({ list, onRemoveItem }) =>
+  console.log('B:List') || (
+    <ul>
+      {list.map((item) => (
+        <Item key={item.objectID} item={item} onRemoveItem={onRemoveItem} />
+      ))}
+    </ul>
+  );
+```
+
+```console
+// 首次渲染
+B:App
+B:List
+// 请求数据中，List 被 Loading 替换
+B:App
+// 数据到达
+B:App
+B:List
+```
+
+<p>这些都合理。但在搜索框里<strong>打字</strong>时（还没点 Submit），每敲一个键都会输出：</p>
+
+```console
+B:App
+B:List
+```
+
+<p>
+  <code>List</code> 收到的列表根本没变，却还是重新渲染了。这是 React 的<strong>默认行为：父组件重新渲染，所有子组件都跟着重新渲染</strong>，
+  不管 props 变没变。React 这样设计是因为“跳过渲染”判断错了会导致 bug，而重新渲染通常足够快。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="父组件重新渲染导致子树全部重新渲染">
+  <rect class="bx-a" x="300" y="20" width="160" height="50" rx="10"/>
+  <text class="ttl on-a" x="380" y="42" text-anchor="middle">App &#128260;</text>
+  <text class="sm" x="380" y="60" text-anchor="middle">searchTerm 变了</text>
+  <rect class="bx-a" x="120" y="110" width="170" height="50" rx="10"/>
+  <text class="ttl on-a" x="205" y="132" text-anchor="middle">SearchForm &#128260;</text>
+  <text class="sm" x="205" y="150" text-anchor="middle">props 变了，应该渲染</text>
+  <rect class="bx-r" x="470" y="110" width="170" height="50" rx="10"/>
+  <text class="ttl on-r" x="555" y="132" text-anchor="middle">List &#128260;</text>
+  <text class="sm" x="555" y="150" text-anchor="middle">props 没变，也渲染了</text>
+  <rect class="bx-r" x="410" y="200" width="100" height="40" rx="8"/>
+  <text class="sm on-r" x="460" y="225" text-anchor="middle">Item &#128260;</text>
+  <rect class="bx-r" x="530" y="200" width="100" height="40" rx="8"/>
+  <text class="sm on-r" x="580" y="225" text-anchor="middle">Item &#128260;</text>
+  <rect class="bx-r" x="650" y="200" width="90" height="40" rx="8"/>
+  <text class="sm on-r" x="695" y="225" text-anchor="middle">… &#128260;</text>
+  <path class="ln" d="M340 72 L220 108"/><path class="ln" d="M420 72 L540 108"/>
+  <path class="ln" d="M530 162 L470 198"/><path class="ln" d="M555 162 L575 198"/><path class="ln" d="M580 162 L690 198"/>
+  <text class="sm" x="20" y="220">列表有 1000 项时，</text>
+  <text class="sm" x="20" y="238">每次按键都重渲染 1000 个 Item</text>
+</svg>
+<figcaption>图 28-2　默认情况下，父组件重新渲染会带动整棵子树重新渲染</figcaption>
+</figure>
+
+<h3>memo：props 没变就跳过</h3>
+
+<p>用 <code>memo</code> 包裹组件，React 会在渲染前<strong>浅比较</strong>新旧 props，全都相同就跳过：</p>
+
+```jsx src/App.jsx
+import { memo } from 'react';
+
+const List = memo(
+  ({ list, onRemoveItem }) =>
+    console.log('B:List') || (
+      <ul>
+        {list.map((item) => (
+          <Item key={item.objectID} item={item} onRemoveItem={onRemoveItem} />
+        ))}
+      </ul>
+    )
+);
+```
+
+<p>
+  再打字试试 —— <code>B:List</code> 还在打印！<code>list</code> 确实没变，但 <code>onRemoveItem</code> 变了：
+  <code>App</code> 每次渲染都会创建一个新的 <code>handleRemoveStory</code> 函数（第 22 章讲过的“函数身份”问题）。
+</p>
+
+<h3>useCallback：让回调保持同一个引用</h3>
+
+```jsx src/App.jsx
+const handleRemoveStory = useCallback((item) => {
+  dispatchStories({
+    type: 'REMOVE_STORY',
+    payload: item,
+  });
+}, []);
+```
+
+<p>
+  这个函数不依赖任何会变的值（要删的 item 是作为参数传进来的，<code>dispatchStories</code> 由 React 保证稳定），所以依赖数组为空，
+  只在首次渲染时创建一次。现在打字时只有 <code>B:App</code>，<code>B:List</code> 不再出现了。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="memo 浅比较 props，函数 props 需要 useCallback 才能相等">
+  <rect class="bx-p" x="20" y="30" width="330" height="170" rx="12"/>
+  <text class="ttl on-p" x="185" y="56" text-anchor="middle">只用 memo</text>
+  <text class="mono sm" x="40" y="88">list:         旧 === 新  ✓</text>
+  <text class="mono sm on-r" x="40" y="112">onRemoveItem: fn1 !== fn2 ✗</text>
+  <text class="sm" x="40" y="146">每次渲染都创建了新函数</text>
+  <text class="ttl on-r" x="185" y="180" text-anchor="middle">→ 仍然重新渲染</text>
+
+  <rect class="bx-g" x="410" y="30" width="330" height="170" rx="12"/>
+  <text class="ttl on-g" x="575" y="56" text-anchor="middle">memo + useCallback</text>
+  <text class="mono sm" x="430" y="88">list:         旧 === 新  ✓</text>
+  <text class="mono sm on-g" x="430" y="112">onRemoveItem: fn1 === fn1 ✓</text>
+  <text class="sm" x="430" y="146">useCallback 返回同一个函数</text>
+  <text class="ttl on-g" x="575" y="180" text-anchor="middle">→ 跳过渲染</text>
+</svg>
+<figcaption>图 28-3　memo 需要“所有 props 都相等”才会跳过，函数和对象 props 要保持引用稳定</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 什么是浅比较</div>
+  <p>
+    React 用 <code>Object.is</code> 逐个比较 props：数字、字符串比较值；对象、数组、函数比较<strong>引用</strong>。
+    所以 <code>&lt;List style={{ color: 'red' }} /&gt;</code> 这样每次都写一个新对象字面量，也会让 memo 失效。
+  </p>
+</div>
+
+<h2 id="usememo">useMemo：避免重复的昂贵计算</h2>
+
+<p>假设标题要显示所有文章的评论总数：</p>
+
+```jsx src/App.jsx
+const getSumComments = (stories) => {
+  console.log('C');
+
+  return stories.data.reduce(
+    (result, value) => result + value.num_comments,
+    0
+  );
+};
+
+const App = () => {
+  ...
+
+  const sumComments = getSumComments(stories);
+
+  return (
+    <div>
+      <h1>My Hacker Stories with {sumComments} comments.</h1>
+      ...
+    </div>
+  );
+};
+```
+
+<p>
+  函数放在组件外面，不会被重复创建；但<strong>计算本身</strong>每次渲染都会执行 —— 打字时每按一个键都输出 “C”。
+  这里的计算很便宜，但如果它要 500 毫秒，每次按键都会卡顿半秒。<code>useMemo</code> 缓存计算结果，只在依赖变化时重新计算：
+</p>
+
+```jsx src/App.jsx
+import { useMemo } from 'react';
+
+const sumComments = useMemo(
+  () => getSumComments(stories),
+  [stories]
+);
+```
+
+<div class="tw">
+<table>
+  <tr><th>API</th><th>缓存的是什么</th><th>典型用途</th></tr>
+  <tr><td><code>memo(Component)</code></td><td>组件的渲染结果</td><td>props 不变时跳过子组件渲染</td></tr>
+  <tr><td><code>useCallback(fn, deps)</code></td><td>函数本身（引用）</td><td>传给 memo 组件的回调；effect 依赖中的函数</td></tr>
+  <tr><td><code>useMemo(() =&gt; value, deps)</code></td><td>函数的<strong>返回值</strong></td><td>昂贵的计算；需要保持引用稳定的对象/数组</td></tr>
+</table>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 别过早优化</div>
+  <p>
+    这三个工具都不应该“默认到处用”。比较 props、维护缓存本身也有成本，有时甚至比直接重新渲染还贵，
+    而且依赖数组写错还会引入 bug。<strong>先测量，确认真的有性能瓶颈，再有针对性地优化。</strong>
+    我们的应用没有任何性能问题 —— 学完这一节，建议把这些优化都删掉。
+  </p>
+</div>
+
+<h2 id="devtools">用工具测量</h2>
+
+<p>
+  安装浏览器扩展 <strong>React Developer Tools</strong>。它会在开发者工具里增加两个面板：
+  <strong>Components</strong>（查看组件树、props、state、Hooks）和 <strong>Profiler</strong>（录制一段交互，看每个组件渲染了几次、花了多久）。
+  在设置里勾选 “Highlight updates when components render”，页面上每次重新渲染的组件都会闪一下边框 —— 非常直观。
+</p>
+
+<h2 id="compiler">React Compiler：自动记忆化</h2>
+
+<p>
+  手写 <code>memo</code> / <code>useCallback</code> / <code>useMemo</code> 很繁琐，也容易写错依赖。
+  <strong>React Compiler</strong>（2025 年 10 月发布稳定版 1.0）是一个构建时插件：它分析你的组件，自动在合适的地方插入等价的记忆化，
+  你照常写最朴素的代码就行。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">手动优化 <span class="ver old">无编译器</span></div>
+```jsx
+const List = memo(({ list, onRemoveItem }) => ( ... ));
+
+const App = () => {
+  const handleRemoveStory = useCallback((item) => {
+    dispatchStories({ type: 'REMOVE_STORY', payload: item });
+  }, []);
+
+  const sumComments = useMemo(
+    () => getSumComments(stories),
+    [stories]
+  );
+  ...
+};
+```
+  </div>
+  <div class="new"><div class="h">启用 React Compiler <span class="ver">React 19</span></div>
+```jsx
+const List = ({ list, onRemoveItem }) => ( ... );
+
+const App = () => {
+  const handleRemoveStory = (item) => {
+    dispatchStories({ type: 'REMOVE_STORY', payload: item });
+  };
+
+  const sumComments = getSumComments(stories);
+  ...
+};
+// 编译器自动实现与左边等价（甚至更细粒度）的缓存
+```
+  </div>
+</div>
+
+<p>在 Vite 项目中启用：</p>
+
+```bash
+npm install --save-dev babel-plugin-react-compiler
+```
+
+```js vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
+  ],
+});
+```
+
+<ul>
+  <li>编译器要求代码遵守 React 的规则（组件和 Hook 是纯的、不修改 props 和 state 等）。不符合规则的组件会被自动跳过，不会出错。</li>
+  <li>新版 <code>eslint-plugin-react-hooks</code> 的推荐配置包含了编译器相关的检查规则，能帮你找出违反规则的代码。</li>
+  <li>启用编译器后，已有的 <code>memo</code> / <code>useCallback</code> / <code>useMemo</code> 可以保留，也可以逐步删掉。新代码通常不需要再写。</li>
+</ul>
+
+<div class="box tip">
+  <div class="t">&#128161; 记得把 StrictMode 加回来</div>
+  <p>它是来帮你的。本章的实验做完后，把 <code>main.jsx</code> 恢复成用 <code>&lt;StrictMode&gt;</code> 包裹的版本。</p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>StrictMode 在开发环境下双重执行渲染和 effect，用于暴露问题；生产环境不会。</li>
+  <li>父组件重新渲染会带动所有子组件重新渲染；<code>memo</code> 在 props 浅相等时跳过渲染。</li>
+  <li>函数、对象 props 每次渲染都是新引用，需要 <code>useCallback</code> / <code>useMemo</code> 保持稳定，memo 才有效。</li>
+  <li><code>useMemo</code> 缓存昂贵计算的结果。</li>
+  <li>不要过早优化，先用 React DevTools Profiler 测量；React Compiler 可以自动完成大部分记忆化。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>点击 “Dismiss” 删除文章时，<code>SearchForm</code> 会重新渲染吗？如果会，用 <code>memo</code> 和 <code>useCallback</code> 阻止它。</li>
+    <li>删除一篇文章时，其他每个 <code>Item</code> 都会重新渲染吗？试着优化。</li>
+    <li>用 React DevTools 的 Profiler 录制一次打字过程，找到渲染次数最多的组件。</li>
+    <li>去掉所有手动优化，启用 React Compiler，再用 Profiler 对比结果。</li>
+    <li>最后，把一切恢复成最简单的版本，并加回 StrictMode。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>React 组件什么时候会重新渲染？</summary>
+    <div><p>自身 state 变化、父组件重新渲染、或使用的 Context 值变化时。默认情况下，父组件渲染会导致所有子组件渲染，与 props 是否变化无关。</p></div></details>
+  <details><summary>memo、useCallback、useMemo 分别做什么？</summary>
+    <div><p>memo 在 props 浅相等时跳过组件渲染；useCallback 缓存函数引用；useMemo 缓存计算结果。</p></div></details>
+  <details><summary>为什么只用 memo 有时不起作用？</summary>
+    <div><p>如果父组件每次渲染都传入新的函数或对象（引用不同），浅比较会认为 props 变了。需要配合 useCallback / useMemo 或 React Compiler。</p></div></details>
+  <details><summary>是否应该给所有组件都加上 memo？</summary>
+    <div><p>不应该。比较 props 有成本，多数渲染很便宜。应先测量，只在确有瓶颈的地方优化。</p></div></details>
+  <details><summary>React Compiler 是什么？</summary>
+    <div><p>一个构建时工具，自动分析组件并插入记忆化逻辑，使开发者大多不必手写 memo、useCallback、useMemo；要求代码遵守 React 规则。</p></div></details>
+</div>

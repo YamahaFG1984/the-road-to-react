@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 17 章 · 命令式 React 与 ref — React 19 入门教程</title>
+<meta name="description" content="useRef 操作 DOM，React 19 的 ref 新变化">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="17">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 17 章 · Hooks 与组件模式</span>
+<h1>命令式 React 与 ref</h1>
+<p class="lede">
+  React 是声明式的：你描述界面应该是什么样，React 负责让 DOM 变成那样。
+  但总有少数事情只能“命令”DOM 去做：让输入框获得焦点、测量一个元素有多宽、调用第三方图表库。
+  这一章学习 React 提供的“逃生舱”—— <strong>ref</strong>，以及 React 19 在 ref 上的几处重要变化。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清声明式和命令式，知道什么时候需要命令式</li>
+    <li>用 <code>useRef</code> + <code>useEffect</code> 让输入框自动聚焦</li>
+    <li>理解 ref 和 state 的区别</li>
+    <li>掌握 React 19 的 ref 新写法：<code>ref</code> 作为普通 prop、不再需要 <code>forwardRef</code></li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="declarative">声明式 vs 命令式</h2>
+
+<p>
+  <strong>命令式</strong>编程是一步步告诉计算机怎么做；<strong>声明式</strong>编程是描述想要的结果。
+  你已经在用 React 的声明式写法了：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">命令式：JavaScript + DOM API</div>
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre>element.<span class="tk-fn">addEventListener</span>(<span class="tk-st">'click'</span>, () =&gt; {
+  <span class="tk-cm">// do something</span>
+});</pre></div>
+  </div>
+  <div class="new"><div class="h">声明式：React</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> handleClick = () =&gt; {
+    <span class="tk-cm">// do something</span>
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={handleClick}&gt;
+      <span class="tk-tp">Click</span>
+    <span class="tk-tg">&lt;/button</span>&gt;
+  );
+};</pre></div>
+  </div>
+</div>
+
+<p>但有些场景只能用命令式，最常见的有：</p>
+<ul>
+  <li><strong>读写 DOM</strong>：测量元素的宽高（读）、设置输入框焦点（写）、滚动到某个位置；</li>
+  <li><strong>复杂动画</strong>：设置和编排过渡动画；</li>
+  <li><strong>集成第三方库</strong>：比如 D3 这样的命令式图表库，需要你把一个真实 DOM 节点交给它。</li>
+</ul>
+
+<h2 id="autofocus">先用声明式的办法</h2>
+
+<p>
+  需求：页面加载后，搜索框自动获得焦点。HTML 本身就有 <code>autoFocus</code> 属性：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;input</span>
+  id={id}
+  <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+  value={value}
+  autoFocus
+  onChange={onInputChange}
+<span class="tk-tg">/&gt;</span>
+<span class="tk-cm">// autoFocus 等价于 autoFocus={true}</span>
+<span class="tk-cm">// 任何值为 true 的属性都可以这样简写</span></pre></div>
+
+<p>
+  但 <code>InputWithLabel</code> 是可复用组件，如果页面上有两个，只有最后渲染的那个会获得焦点。
+  更好的做法是让使用者决定：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;InputWithLabel</span>
+        id=<span class="tk-st">"search"</span>
+        value={searchTerm}
+        isFocused
+        onInputChange={handleSearch}
+      &gt;
+        <span class="tk-tg">&lt;strong</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/strong</span>&gt;
+      <span class="tk-tg">&lt;/InputWithLabel</span>&gt;
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({
+  id,
+  value,
+  <span class="tk-kw">type</span> = <span class="tk-st">'text'</span>,
+  onInputChange,
+  isFocused,
+  children,
+}) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{children}<span class="tk-tg">&lt;/label</span>&gt;
+    &amp;nbsp;
+    <span class="tk-tg">&lt;input</span>
+      id={id}
+      <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+      value={value}
+      autoFocus={isFocused}
+      onChange={onInputChange}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<p>这已经能用了，而且这是<strong>推荐</strong>的写法。不过为了学习，我们把它改成命令式的版本。</p>
+
+<h2 id="useref">useRef：拿到真实的 DOM 节点</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useState, useEffect, useRef } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({
+  id,
+  value,
+  <span class="tk-kw">type</span> = <span class="tk-st">'text'</span>,
+  onInputChange,
+  isFocused,
+  children,
+}) =&gt; {
+  <span class="tk-cm">// A：创建一个 ref</span>
+  <span class="tk-kw">const</span> inputRef = <span class="tk-fn">useRef</span>(<span class="tk-kw">null</span>);
+
+  <span class="tk-cm">// C：渲染完成后执行副作用</span>
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-kw">if</span> (isFocused &amp;&amp; inputRef.current) {
+      <span class="tk-cm">// D：命令式地调用 DOM 方法</span>
+      inputRef.current.<span class="tk-fn">focus</span>();
+    }
+  }, [isFocused]);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{children}<span class="tk-tg">&lt;/label</span>&gt;
+      &amp;nbsp;
+      <span class="tk-cm">{/* B：把 ref 交给 JSX 元素 */}</span>
+      <span class="tk-tg">&lt;input</span>
+        ref={inputRef}
+        id={id}
+        <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+        value={value}
+        onChange={onInputChange}
+      <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="useRef 获取 DOM 节点并在 effect 中调用 focus 的四个步骤">
+  <rect class="bx-a" x="20" y="30" width="220" height="90" rx="12"/>
+  <text class="ttl on-a" x="130" y="54" text-anchor="middle">A  useRef(null)</text>
+  <text class="sm" x="130" y="78" text-anchor="middle">得到一个盒子</text>
+  <text class="mono sm" x="130" y="100" text-anchor="middle">{ current: null }</text>
+
+  <rect class="bx-b" x="270" y="30" width="220" height="90" rx="12"/>
+  <text class="ttl on-b" x="380" y="54" text-anchor="middle">B  ref={inputRef}</text>
+  <text class="sm" x="380" y="78" text-anchor="middle">React 创建 &lt;input&gt; DOM 后</text>
+  <text class="sm" x="380" y="98" text-anchor="middle">把节点放进盒子</text>
+
+  <rect class="bx-g" x="520" y="30" width="220" height="90" rx="12"/>
+  <text class="ttl on-g" x="630" y="54" text-anchor="middle">盒子里有了节点</text>
+  <text class="mono sm" x="630" y="80" text-anchor="middle">{ current: &lt;input&gt; }</text>
+  <text class="sm" x="630" y="100" text-anchor="middle">整个组件生命周期内不变</text>
+
+  <path class="ln-a" d="M242 75 H266" marker-end="url(#ar-a)"/>
+  <path class="ln-b" d="M492 75 H516" marker-end="url(#ar-b)"/>
+
+  <rect class="bx-p" x="150" y="170" width="460" height="100" rx="12"/>
+  <text class="ttl on-p" x="380" y="196" text-anchor="middle">C  useEffect（在 DOM 已经存在之后才运行）</text>
+  <text class="mono sm" x="380" y="224" text-anchor="middle">if (isFocused &amp;&amp; inputRef.current)</text>
+  <text class="mono sm on-p" x="380" y="248" text-anchor="middle">D  inputRef.current.focus();</text>
+  <path class="ln-g" d="M630 122 V150 H500 V166" marker-end="url(#ar-g)"/>
+  <text class="sm" x="20" y="290">为什么要放进 useEffect？渲染函数执行时 DOM 还没创建（current 还是 null），effect 在 DOM 更新之后才运行。</text>
+</svg>
+<figcaption>图 17-1　useRef 取 DOM 节点的四个步骤</figcaption>
+</figure>
+
+<ol>
+  <li><strong>A</strong>：<code>useRef(null)</code> 返回一个 ref 对象 <code>{ current: null }</code>。这个对象在组件的整个生命周期里是<strong>同一个</strong>，它的 <code>current</code> 属性可以随意修改。</li>
+  <li><strong>B</strong>：把 ref 传给元素的 <code>ref</code> 属性。React 创建出真实的 DOM 节点后，会把节点赋给 <code>ref.current</code>。</li>
+  <li><strong>C</strong>：用 <code>useEffect</code> 进入“渲染之后”的阶段。</li>
+  <li><strong>D</strong>：此时 <code>ref.current</code> 就是真实的 <code>&lt;input&gt;</code>，可以调用它的 <code>focus()</code> 方法。</li>
+</ol>
+
+<h2 id="ref-vs-state">ref 和 state 的区别</h2>
+
+<p>
+  ref 不只能存 DOM 节点，它可以存<strong>任何值</strong>。它和 state 都能“跨渲染保留数据”，区别在于：
+</p>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>state（<code>useState</code>）</th><th>ref（<code>useRef</code>）</th></tr>
+  <tr><td>改变时</td><td><strong>触发</strong>重新渲染</td><td><strong>不</strong>触发重新渲染</td></tr>
+  <tr><td>怎么改</td><td>调用 setter，下次渲染才生效</td><td>直接赋值 <code>ref.current = x</code>，立即生效</td></tr>
+  <tr><td>能否在渲染时读取</td><td>可以，这就是它的用途</td><td>不建议（渲染结果不应依赖它）</td></tr>
+  <tr><td>适合存</td><td>会影响界面显示的数据</td><td>DOM 节点、定时器 id、上一次的值等“幕后”数据</td></tr>
+</table>
+</div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 170" role="img" aria-label="ref 是一个跨渲染保持不变的盒子">
+  <rect class="bx" x="20" y="60" width="130" height="60" rx="10"/>
+  <text class="sm" x="85" y="86" text-anchor="middle">第 1 次渲染</text>
+  <text class="sm" x="85" y="104" text-anchor="middle">变量都是新的</text>
+  <rect class="bx" x="200" y="60" width="130" height="60" rx="10"/>
+  <text class="sm" x="265" y="86" text-anchor="middle">第 2 次渲染</text>
+  <text class="sm" x="265" y="104" text-anchor="middle">变量都是新的</text>
+  <rect class="bx" x="380" y="60" width="130" height="60" rx="10"/>
+  <text class="sm" x="445" y="86" text-anchor="middle">第 3 次渲染</text>
+  <text class="sm" x="445" y="104" text-anchor="middle">变量都是新的</text>
+  <rect class="bx-a" x="560" y="40" width="180" height="100" rx="12"/>
+  <text class="ttl on-a" x="650" y="66" text-anchor="middle">ref 盒子</text>
+  <text class="mono sm" x="650" y="90" text-anchor="middle">{ current: … }</text>
+  <text class="sm" x="650" y="112" text-anchor="middle">一直是同一个对象</text>
+  <text class="sm" x="650" y="128" text-anchor="middle">改它不会触发渲染</text>
+  <path class="ln-a" d="M85 122 V150 H650 V142"/>
+  <path class="ln-a" d="M265 122 V150"/>
+  <path class="ln-a" d="M445 122 V150"/>
+  <text class="sm on-a" x="380" y="30" text-anchor="middle">每次渲染拿到的都是同一个盒子</text>
+</svg>
+<figcaption>图 17-2　ref 是组件实例上一个“不受渲染影响”的储物格</figcaption>
+</figure>
+
+<h2 id="react19">React 19 的 ref 变化</h2>
+
+<h3>1. ref 可以作为普通 prop 传给函数组件</h3>
+
+<p>
+  如果父组件想拿到子组件<strong>内部</strong>的 DOM 节点（比如 <code>App</code> 想直接控制 <code>InputWithLabel</code> 里的 input），
+  以前必须用 <code>forwardRef</code> 把组件包一层，因为 <code>ref</code> 是一个特殊属性，不会出现在 props 里。
+  React 19 起，<code>ref</code> 对函数组件来说就是一个普通 prop：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">forwardRef <span class="ver old">React ≤ 18</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { forwardRef } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">MyInput</span> = <span class="tk-fn">forwardRef</span>((props, ref) =&gt; (
+  <span class="tk-tg">&lt;input</span> ref={ref} {...props} <span class="tk-tg">/&gt;</span>
+));
+
+<span class="tk-cm">// 父组件</span>
+<span class="tk-kw">const</span> inputRef = <span class="tk-fn">useRef</span>(<span class="tk-kw">null</span>);
+<span class="tk-tg">&lt;MyInput</span> ref={inputRef} <span class="tk-tg">/&gt;</span>;</pre></div>
+  </div>
+  <div class="new"><div class="h">ref 作为 prop <span class="ver">React 19</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">MyInput</span> = ({ ref, ...props }) =&gt; (
+  <span class="tk-tg">&lt;input</span> ref={ref} {...props} <span class="tk-tg">/&gt;</span>
+);
+
+<span class="tk-cm">// 父组件（写法不变）</span>
+<span class="tk-kw">const</span> inputRef = <span class="tk-fn">useRef</span>(<span class="tk-kw">null</span>);
+<span class="tk-tg">&lt;MyInput</span> ref={inputRef} <span class="tk-tg">/&gt;</span>;</pre></div>
+  </div>
+</div>
+
+<p><code>forwardRef</code> 仍然可用，但已不再需要，未来版本会被废弃。</p>
+
+<h3>2. ref 回调可以返回清理函数</h3>
+
+<p>
+  除了 ref 对象，<code>ref</code> 也可以接收一个函数，React 会在节点创建时用节点调用它。
+  React 19 起，这个函数可以<strong>返回清理函数</strong>，在节点被移除时调用 —— 和 useEffect 的清理如出一辙：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;input</span>
+  ref={(node) =&gt; {
+    <span class="tk-cm">// 节点挂载时</span>
+    node.<span class="tk-fn">focus</span>();
+
+    <span class="tk-kw">return</span> () =&gt; {
+      <span class="tk-cm">// 节点卸载时（React 19 新增）</span>
+    };
+  }}
+<span class="tk-tg">/&gt;</span></pre></div>
+
+<div class="box warn">
+  <div class="t">&#9888; 箭头函数的隐式返回会“意外”变成清理函数</div>
+  <p>
+    <code>ref={(node) =&gt; (instance = node)}</code> 这种写法会隐式返回 <code>node</code>，
+    React 19 会以为你返回了一个清理函数而报错（TypeScript 也会拒绝）。改成块体：<code>ref={(node) =&gt; { instance = node; }}</code>。
+  </p>
+</div>
+
+<h3>3. 更早以前的写法</h3>
+
+<div class="tw">
+<table>
+  <tr><th>写法</th><th>年代</th><th>现状</th></tr>
+  <tr><td>字符串 ref：<code>ref="myInput"</code> + <code>this.refs.myInput</code></td><td>类组件早期</td><td>React 19 已<strong>移除</strong></td></tr>
+  <tr><td><code>React.createRef()</code></td><td>类组件（React 16.3+）</td><td>遗留 API，函数组件请用 <code>useRef</code></td></tr>
+  <tr><td><code>forwardRef</code></td><td>React 16.3 – 18</td><td>React 19 中不再需要</td></tr>
+  <tr><td><code>useRef</code> / ref 回调</td><td>现在</td><td>推荐</td></tr>
+</table>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 能声明式就别命令式</div>
+  <p>
+    ref 是逃生舱，不是日常工具。能用 props 和 state 解决的问题（比如本章的 <code>autoFocus</code>），
+    就不要去直接操作 DOM。只有当声明式确实做不到时，才打开这个舱门。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>React 默认是声明式的；聚焦、测量、第三方库集成等场景需要命令式地访问 DOM。</li>
+  <li><code>useRef(null)</code> + <code>ref={inputRef}</code> 拿到 DOM 节点，在 <code>useEffect</code> 里访问 <code>inputRef.current</code>。</li>
+  <li>ref 可以存任何值，修改不会触发重新渲染；影响界面的数据应该用 state。</li>
+  <li>React 19：<code>ref</code> 是函数组件的普通 prop，不需要 <code>forwardRef</code>；ref 回调可返回清理函数；字符串 ref 已移除。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>App</code> 里加一个按钮“聚焦搜索框”，点击后让输入框获得焦点。提示：在 <code>App</code> 里创建 ref，用 React 19 的方式作为 prop 传给 <code>InputWithLabel</code>。</li>
+    <li>用 ref 统计组件渲染了多少次：<code>const renders = useRef(0); renders.current++;</code>，在 effect 里打印。想一想为什么不能用 state 来做这件事。</li>
+    <li>（选读）用 ref 测量 <code>&lt;h1&gt;</code> 的宽度并打印出来。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>useRef 是什么？有哪些用途？</summary>
+    <div><p>返回一个在组件生命周期内保持不变的可变对象 <code>{ current }</code>。常用于引用 DOM 节点，或保存不需要触发渲染的可变值（定时器 id、上一次的值等）。</p></div></details>
+  <details><summary>useRef 和 useState 的区别？</summary>
+    <div><p>修改 state 会触发重新渲染；修改 ref.current 不会，且立即生效。影响 UI 的数据用 state，幕后数据用 ref。</p></div></details>
+  <details><summary>为什么要在 useEffect 里访问 ref.current？</summary>
+    <div><p>渲染阶段 DOM 尚未创建或更新，ref.current 可能为 null；effect 在 DOM 提交之后执行，此时可以安全访问。</p></div></details>
+  <details><summary>React 19 中 forwardRef 还需要吗？</summary>
+    <div><p>不需要。函数组件可以直接通过 props 接收 <code>ref</code>，<code>forwardRef</code> 将在未来被废弃。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

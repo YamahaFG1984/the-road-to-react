@@ -1,0 +1,523 @@
+<p class="lede">
+  测试是专业开发者的必修课：它让你在代码上线之前就确认它按预期工作，也让你以后敢放心地重构。
+  这一章搭建 <strong>Vitest</strong> + <strong>React Testing Library</strong> 测试环境，先测试一个普通函数（reducer），
+  再测试单个组件。下一章再做完整的集成测试。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解测试金字塔：单元测试、集成测试、端到端测试</li>
+    <li>用 Vitest 写测试套件、测试用例和断言</li>
+    <li>为 reducer 编写单元测试，分清 <code>toBe</code> 和 <code>toStrictEqual</code></li>
+    <li>用 React Testing Library 渲染组件、查找元素、模拟用户操作</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="pyramid">测试金字塔</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 280" role="img" aria-label="测试金字塔">
+  <path d="M380 20 L620 250 L140 250 Z" fill="var(--panel)" stroke="var(--line-2)" stroke-width="1.5"/>
+  <path d="M380 20 L460 97 L300 97 Z" fill="var(--red-bg)" stroke="var(--red)" stroke-width="1.5"/>
+  <path d="M300 97 L460 97 L540 173 L220 173 Z" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="1.5"/>
+  <path d="M220 173 L540 173 L620 250 L140 250 Z" fill="var(--green-bg)" stroke="var(--green)" stroke-width="1.5"/>
+  <text class="ttl on-r" x="380" y="78" text-anchor="middle">E2E</text>
+  <text class="ttl on-b" x="380" y="140" text-anchor="middle">集成测试</text>
+  <text class="ttl on-g" x="380" y="218" text-anchor="middle">单元测试</text>
+
+  <text class="sm" x="480" y="56">端到端：在真实浏览器里模拟用户</text>
+  <text class="sm" x="480" y="72">完整流程（如登录）· Playwright</text>
+  <text class="sm" x="560" y="130">多个单元协同工作</text>
+  <text class="sm" x="560" y="146">（第 31 章）</text>
+  <text class="sm" x="630" y="206">单个函数 / 组件</text>
+  <text class="sm" x="630" y="222">（本章）</text>
+
+  <path class="ln" d="M60 240 V40" marker-end="url(#ar)"/>
+  <text class="sm" x="70" y="50">慢、贵、少</text>
+  <text class="sm" x="70" y="236">快、便宜、多</text>
+</svg>
+<figcaption>图 30-1　测试金字塔：大量快速的单元测试打底，少量集成测试和端到端测试兜住关键流程</figcaption>
+</figure>
+
+<p>
+  工具选择上，我们用社区最流行的组合：<strong>Vitest</strong> 是测试框架（运行测试、组织用例、断言、mock），
+  <strong>React Testing Library</strong>（RTL）负责渲染组件、查找元素、触发事件。
+</p>
+
+<h2 id="setup">安装 Vitest</h2>
+
+```bash
+npm install vitest --save-dev
+```
+
+<p>在 <code>package.json</code> 里加一个 test 脚本：</p>
+
+```json package.json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  }
+}
+```
+
+<p>在 <code>src/App.jsx</code> 旁边新建 <code>src/App.test.jsx</code>。Vitest 会自动找到所有 <code>.test.jsx</code>（以及 <code>.spec.jsx</code> 等）文件。</p>
+
+<h2 id="basics">测试套件、测试用例与断言</h2>
+
+```jsx src/App.test.jsx
+import { describe, it, expect } from 'vitest';
+
+describe('something truthy and falsy', () => {
+  it('true to be true', () => {
+    expect(true).toBe(true);
+  });
+
+  it('false to be false', () => {
+    expect(false).toBe(false);
+  });
+});
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="describe、it、expect 的层级关系">
+  <rect class="bx-b" x="20" y="20" width="720" height="160" rx="12"/>
+  <text class="ttl on-b" x="36" y="44">describe(…) —— 测试套件：把相关的用例归为一组</text>
+  <rect class="bx-g" x="40" y="58" width="330" height="106" rx="10"/>
+  <text class="ttl on-g" x="56" y="82">it(…) —— 测试用例</text>
+  <text class="sm" x="56" y="102">一个具体的行为</text>
+  <rect class="bx-a" x="56" y="114" width="298" height="36" rx="6"/>
+  <text class="mono sm on-a" x="205" y="137" text-anchor="middle">expect(实际值).toBe(期望值)</text>
+  <rect class="bx-g" x="390" y="58" width="330" height="106" rx="10"/>
+  <text class="ttl on-g" x="406" y="82">it(…) —— 测试用例</text>
+  <text class="sm" x="406" y="102">另一个行为</text>
+  <rect class="bx-a" x="406" y="114" width="298" height="36" rx="6"/>
+  <text class="mono sm on-a" x="555" y="137" text-anchor="middle">断言：左边的值应该满足右边的条件</text>
+</svg>
+<figcaption>图 30-2　测试的三层结构</figcaption>
+</figure>
+
+<p>运行 <code>npm run test</code>：</p>
+
+```console
+ ✓ src/App.test.jsx (2)
+   ✓ something truthy and falsy (2)
+     ✓ true to be true
+     ✓ false to be false
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+```
+
+<p>把第二个断言改成 <code>expect(false).toBe(true)</code>，测试会变红，并告诉你期望什么、实际得到了什么、在哪一行：</p>
+
+```console
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/App.test.jsx:9:19
+      8|   it('false to be false', () => {
+      9|     expect(false).toBe(true);
+       |                   ^
+```
+
+<div class="box tip">
+  <div class="t">&#128161; 开两个终端</div>
+  <p>
+    <code>npm run test</code> 默认是<strong>监听模式</strong>：你改代码或测试，它自动重跑（按 <kbd>h</kbd> 看快捷键，<kbd>a</kbd> 全部重跑，<kbd>f</kbd> 只跑失败的）。
+    建议一个终端开着 <code>npm run dev</code>，另一个开着 <code>npm run test</code>。
+  </p>
+</div>
+
+<h2 id="unit-fn">单元测试：函数</h2>
+
+<p>要测试 <code>App.jsx</code> 里的东西，先用具名导出把它们导出来：</p>
+
+```jsx src/App.jsx
+...
+
+export default App;
+
+export { storiesReducer, SearchForm, InputWithLabel, List, Item };
+```
+
+```jsx src/App.test.jsx
+import { describe, it, expect } from 'vitest';
+
+import App, {
+  storiesReducer,
+  Item,
+  List,
+  SearchForm,
+  InputWithLabel,
+} from './App';
+
+const storyOne = {
+  title: 'React',
+  url: 'https://react.dev/',
+  author: 'Jordan Walke',
+  num_comments: 3,
+  points: 4,
+  objectID: 0,
+};
+
+const storyTwo = {
+  title: 'Redux',
+  url: 'https://redux.js.org/',
+  author: 'Dan Abramov, Andrew Clark',
+  num_comments: 2,
+  points: 5,
+  objectID: 1,
+};
+
+const stories = [storyOne, storyTwo];
+```
+
+<p>reducer 是最适合单元测试的对象：纯函数，给定输入，检查输出。所有 reducer 测试都是同一个模式 ——<strong>给定状态和动作，期望得到某个新状态</strong>：</p>
+
+```jsx src/App.test.jsx
+describe('storiesReducer', () => {
+  it('removes a story from all stories', () => {
+    const action = { type: 'REMOVE_STORY', payload: storyOne };
+    const state = { data: stories, isLoading: false, isError: false };
+
+    const newState = storiesReducer(state, action);
+
+    const expectedState = {
+      data: [storyTwo],
+      isLoading: false,
+      isError: false,
+    };
+
+    expect(newState).toStrictEqual(expectedState);
+  });
+});
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 190" role="img" aria-label="toBe 比较引用，toStrictEqual 比较内容">
+  <rect class="bx-r" x="20" y="20" width="350" height="150" rx="12"/>
+  <text class="ttl on-r" x="195" y="46" text-anchor="middle">toBe：是不是同一个对象（===）</text>
+  <rect class="bx" x="50" y="66" width="120" height="50" rx="8"/>
+  <text class="mono sm" x="110" y="95" text-anchor="middle">{ a: 1 }</text>
+  <rect class="bx" x="220" y="66" width="120" height="50" rx="8"/>
+  <text class="mono sm" x="280" y="95" text-anchor="middle">{ a: 1 }</text>
+  <text class="ttl on-r" x="195" y="96" text-anchor="middle">≠</text>
+  <text class="sm" x="195" y="148" text-anchor="middle">内容一样，但内存里是两个对象 → 失败</text>
+
+  <rect class="bx-g" x="390" y="20" width="350" height="150" rx="12"/>
+  <text class="ttl on-g" x="565" y="46" text-anchor="middle">toStrictEqual：内容是否相同</text>
+  <rect class="bx" x="420" y="66" width="120" height="50" rx="8"/>
+  <text class="mono sm" x="480" y="95" text-anchor="middle">{ a: 1 }</text>
+  <rect class="bx" x="590" y="66" width="120" height="50" rx="8"/>
+  <text class="mono sm" x="650" y="95" text-anchor="middle">{ a: 1 }</text>
+  <text class="ttl on-g" x="565" y="96" text-anchor="middle">=</text>
+  <text class="sm" x="565" y="148" text-anchor="middle">逐层比较每个属性 → 通过</text>
+</svg>
+<figcaption>图 30-3　对象和数组用 toStrictEqual，字符串、数字、布尔值用 toBe</figcaption>
+</figure>
+
+<p>
+  如果写成 <code>toBe</code>，测试会失败：reducer 返回的是一个<strong>新对象</strong>（这正是不可变更新该有的样子），
+  它和 <code>expectedState</code> 内容相同但不是同一个对象。<code>toEqual</code> 也比较内容，但会忽略 <code>undefined</code> 属性等差异，
+  <code>toStrictEqual</code> 更严格。
+</p>
+
+<h2 id="setup-rtl">为组件测试做准备</h2>
+
+<p>
+  测试不会打开真正的浏览器，但组件渲染出的 HTML 总得有个地方放。<strong>jsdom</strong> 用 JavaScript 模拟了一个浏览器 DOM 环境。
+  再装上 React Testing Library：
+</p>
+
+```bash
+npm install jsdom --save-dev
+npm install @testing-library/react @testing-library/jest-dom --save-dev
+```
+
+```js vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: './tests/setup.js',
+  },
+});
+```
+
+```js tests/setup.js
+import { afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+
+// 每个测试结束后卸载渲染的组件，避免互相影响
+afterEach(() => {
+  cleanup();
+});
+```
+
+<p>
+  <code>@testing-library/jest-dom/vitest</code> 给 <code>expect</code> 增加了一批 DOM 专用断言，比如 <code>toBeInTheDocument()</code>、<code>toHaveAttribute()</code>。
+  （原书用的是 <code>expect.extend(matchers)</code> 的手动写法，效果相同。）
+</p>
+
+<h2 id="unit-component">单元测试：组件</h2>
+
+<p>从 <code>Item</code> 开始：给它 props（输入），检查渲染出的 HTML（输出）。第一步永远是先看看渲染出了什么：</p>
+
+```jsx src/App.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+
+...
+
+describe('Item', () => {
+  it('renders all properties', () => {
+    render(<Item item={storyOne} />);
+
+    screen.debug();
+  });
+});
+```
+
+```console
+<body>
+  <div>
+    <li>
+      <span>
+        <a href="https://react.dev/">React</a>
+      </span>
+      <span>Jordan Walke</span>
+      <span>3</span>
+      <span>4</span>
+      <span>
+        <button type="button">Dismiss</button>
+      </span>
+    </li>
+  </div>
+</body>
+```
+
+<p>养成习惯：每渲染一个新组件，先 <code>screen.debug()</code> 看一眼，再决定查找什么、断言什么。</p>
+
+```jsx src/App.test.jsx
+describe('Item', () => {
+  it('renders all properties', () => {
+    render(<Item item={storyOne} />);
+
+    expect(screen.getByText('Jordan Walke')).toBeInTheDocument();
+    expect(screen.getByText('React')).toHaveAttribute(
+      'href',
+      'https://react.dev/'
+    );
+  });
+
+  it('renders a clickable dismiss button', () => {
+    render(<Item item={storyOne} />);
+
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+```
+
+<h3>查找元素的方式</h3>
+
+<p>
+  RTL 的核心理念是：<strong>像用户一样使用组件</strong>。用户看不到组件树和类名，只看到文字、按钮、输入框。
+  所以查找方法也是按“用户能感知到的东西”来的，推荐的优先级如下：
+</p>
+
+<div class="tw">
+<table>
+  <tr><th>查询</th><th>按什么找</th><th>例子</th></tr>
+  <tr><td><code>getByRole</code> <span class="ver">首选</span></td><td>可访问性角色 + 名字</td><td><code>getByRole('button', { name: 'Dismiss' })</code></td></tr>
+  <tr><td><code>getByLabelText</code></td><td>表单控件的 label</td><td><code>getByLabelText(/Search/)</code></td></tr>
+  <tr><td><code>getByPlaceholderText</code></td><td>placeholder</td><td><code>getByPlaceholderText('Search…')</code></td></tr>
+  <tr><td><code>getByText</code></td><td>可见文字</td><td><code>getByText('Jordan Walke')</code></td></tr>
+  <tr><td><code>getByDisplayValue</code></td><td>输入框当前的值</td><td><code>getByDisplayValue('React')</code></td></tr>
+  <tr><td><code>getByTestId</code></td><td><code>data-testid</code> 属性</td><td>最后的手段</td></tr>
+</table>
+</div>
+
+<p>
+  每种查询都有几个变体：<code>getBy</code>（找一个，找不到就报错）、<code>getAllBy</code>（找多个）、
+  <code>queryBy</code>（找不到返回 <code>null</code>，用于断言“不存在”）、<code>findBy</code>（异步等待出现）。
+  写 <code>getByRole('')</code> 这种不存在的角色时，RTL 会贴心地列出页面上所有可用的角色。
+</p>
+
+<h3>测试回调：mock 函数</h3>
+
+<p>
+  点击 Dismiss 应该调用 <code>onRemoveItem</code>。我们不关心它具体做什么，只关心它<strong>被调用了</strong>。
+  用 <code>vi.fn()</code> 创建一个 mock 函数，它会记录自己被调用的次数和参数：
+</p>
+
+```jsx src/App.test.jsx
+it('clicking the dismiss button calls the callback handler', () => {
+  const handleRemoveItem = vi.fn();
+
+  render(<Item item={storyOne} onRemoveItem={handleRemoveItem} />);
+
+  fireEvent.click(screen.getByRole('button'));
+
+  expect(handleRemoveItem).toHaveBeenCalledTimes(1);
+  expect(handleRemoveItem).toHaveBeenCalledWith(storyOne);
+});
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="组件单元测试的输入与输出">
+  <rect class="bx-b" x="20" y="60" width="180" height="100" rx="12"/>
+  <text class="ttl on-b" x="110" y="86" text-anchor="middle">输入：props</text>
+  <text class="mono sm" x="110" y="112" text-anchor="middle">item={storyOne}</text>
+  <text class="mono sm" x="110" y="132" text-anchor="middle" style="font-size:10.5px">onRemoveItem={vi.fn()}</text>
+
+  <rect class="bx-a" x="290" y="50" width="180" height="120" rx="12"/>
+  <text class="ttl on-a" x="380" y="78" text-anchor="middle">Item 组件</text>
+  <text class="sm" x="380" y="104" text-anchor="middle">render() 到 jsdom</text>
+  <text class="sm" x="380" y="124" text-anchor="middle">fireEvent.click(按钮)</text>
+
+  <rect class="bx-g" x="560" y="30" width="180" height="70" rx="10"/>
+  <text class="ttl on-g" x="650" y="56" text-anchor="middle">输出 ①：DOM</text>
+  <text class="sm" x="650" y="78" text-anchor="middle">getByText / getByRole</text>
+  <rect class="bx-p" x="560" y="120" width="180" height="70" rx="10"/>
+  <text class="ttl on-p" x="650" y="146" text-anchor="middle">输出 ②：回调</text>
+  <text class="sm" x="650" y="168" text-anchor="middle">toHaveBeenCalledWith</text>
+
+  <path class="ln-b" d="M202 110 H286" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M472 90 L556 66" marker-end="url(#ar-g)"/>
+  <path class="ln-p" d="M472 130 L556 154" marker-end="url(#ar-p)"/>
+</svg>
+<figcaption>图 30-4　组件单元测试：控制输入（props），检查输出（渲染结果和对外的回调调用）</figcaption>
+</figure>
+
+<p>
+  注意这里并没有测试“文章真的从列表里消失了” —— 删除逻辑在 <code>App</code> 里，<code>Item</code> 只负责通知。
+  单元测试只关心这一块积木本身是否正常；把积木拼在一起的测试留给下一章。
+</p>
+
+<h3>测试 SearchForm</h3>
+
+```jsx src/App.test.jsx
+describe('SearchForm', () => {
+  const searchFormProps = {
+    searchTerm: 'React',
+    onSearchInput: vi.fn(),
+    searchAction: vi.fn(),
+  };
+
+  it('renders the input field with its value', () => {
+    render(<SearchForm {...searchFormProps} />);
+
+    expect(screen.getByDisplayValue('React')).toBeInTheDocument();
+  });
+
+  it('renders the correct label', () => {
+    render(<SearchForm {...searchFormProps} />);
+
+    expect(screen.getByLabelText(/Search/)).toBeInTheDocument();
+  });
+
+  it('calls onSearchInput on input field change', () => {
+    render(<SearchForm {...searchFormProps} />);
+
+    fireEvent.change(screen.getByDisplayValue('React'), {
+      target: { value: 'Redux' },
+    });
+
+    expect(searchFormProps.onSearchInput).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls searchAction on button submit click', () => {
+    render(<SearchForm {...searchFormProps} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(searchFormProps.searchAction).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+<p>
+  <code>/Search/</code> 是正则表达式，匹配“包含 Search”的文字 —— 用字符串就得写全 <code>'Search:'</code>。
+  另外注意，虽然 <code>SearchForm</code> 内部还渲染了 <code>InputWithLabel</code>，RTL 渲染的是完整的 HTML，
+  测试并不关心组件是怎么拆分的 —— 用户也不关心。
+</p>
+
+<h2 id="modern">新旧对照</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">fireEvent <span class="ver old">原书写法</span></div>
+```jsx
+import { fireEvent } from '@testing-library/react';
+
+fireEvent.change(input, { target: { value: 'Redux' } });
+fireEvent.click(button);
+```
+  </div>
+  <div class="new"><div class="h">user-event <span class="ver">官方更推荐</span></div>
+```jsx
+import userEvent from '@testing-library/user-event';
+
+const user = userEvent.setup();
+await user.clear(input);
+await user.type(input, 'Redux'); // 逐个字符，像真人打字
+await user.click(button);        // 包含 hover、focus 等完整过程
+```
+  </div>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th>过去</th><th>现在</th></tr>
+  <tr><td>Create React App 自带 <strong>Jest</strong></td><td>Vite 项目多用 <strong>Vitest</strong>（与 Jest API 几乎一致，配置复用 Vite）</td></tr>
+  <tr><td><strong>Enzyme</strong>：测试组件内部 state、实例方法</td><td>Enzyme 已停止维护，没有支持 React 18+ 的官方适配器；改用 RTL，测试用户看得到的行为</td></tr>
+  <tr><td><code>react-test-renderer</code></td><td>React 19 中已废弃，官方建议迁移到 RTL</td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>测试金字塔：大量单元测试、适量集成测试、少量端到端测试。</li>
+  <li>Vitest：<code>describe</code> 组织套件，<code>it</code> 写用例，<code>expect(…).toXxx()</code> 断言；对象用 <code>toStrictEqual</code>。</li>
+  <li>reducer 测试模式：给定 state 和 action，断言新 state。</li>
+  <li>RTL：<code>render</code> 渲染、<code>screen.debug</code> 查看、<code>getByRole</code> 等按用户视角查找、<code>fireEvent</code> / <code>user-event</code> 触发交互、<code>vi.fn()</code> 验证回调。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>为 reducer 的每一个 action 各写一个测试用例。</li>
+    <li>给 <code>List</code> 和 <code>InputWithLabel</code> 写测试。</li>
+    <li>把 <code>SearchForm</code> 的测试改成使用 <code>@testing-library/user-event</code>（需要先安装，测试函数要改成 async）。</li>
+    <li>在 <code>getByRole('button')</code> 中加上 <code>{ name: 'Dismiss' }</code>，让查询更精确。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>单元测试、集成测试、端到端测试有什么区别？</summary>
+    <div><p>单元测试验证单个函数或组件；集成测试验证多个单元协同工作；端到端测试在真实浏览器中模拟完整的用户流程。越往上越接近真实、越慢越贵。</p></div></details>
+  <details><summary>toBe 和 toStrictEqual 的区别？</summary>
+    <div><p>toBe 用 Object.is 比较（对象比较引用）；toStrictEqual 递归比较内容与结构，适合对象和数组。</p></div></details>
+  <details><summary>React Testing Library 的核心理念是什么？</summary>
+    <div><p>测试用户看到和使用的行为，而不是组件的实现细节；因此按角色、标签、文字等用户可感知的方式查询元素。</p></div></details>
+  <details><summary>getBy、queryBy、findBy 有什么区别？</summary>
+    <div><p>getBy 找不到时抛错；queryBy 找不到返回 null，适合断言元素不存在；findBy 返回 Promise，等待元素异步出现。</p></div></details>
+  <details><summary>什么是 mock 函数？</summary>
+    <div><p>用于替代真实函数的测试替身（如 vi.fn()），记录调用次数和参数，便于断言组件是否正确调用了回调。</p></div></details>
+</div>

@@ -1,0 +1,195 @@
+<p class="lede">
+  函数组件就是函数，而 JavaScript 里声明函数的方式不止一种。
+  这一章把组件改写成<strong>箭头函数</strong>，并认识“块体”和“简洁体（隐式返回）”两种形式 ——
+  从下一章开始，书中代码会在这两种形式之间频繁切换，提前熟悉可以少很多困惑。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>会用函数声明和箭头函数两种方式写组件</li>
+    <li>理解箭头函数的块体（显式 return）和简洁体（隐式 return）</li>
+    <li>知道什么时候必须用块体</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="arrow">函数声明 vs 箭头函数</h2>
+
+```jsx
+// 函数声明
+function App() { ... }
+
+// 箭头函数表达式
+const App = () => { ... };
+```
+
+<p>
+  两种写法对函数组件来说效果一样。把项目里的三个组件都改成箭头函数：
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  return ( ... );
+};
+
+const Search = () => {
+  return ( ... );
+};
+
+const List = () => {
+  return ( ... );
+};
+```
+
+<p>不只是组件，<code>map()</code> 里的回调函数也可以改：</p>
+
+```jsx src/App.jsx
+const List = () => {
+  return (
+    <ul>
+      {list.map((item) => {
+        return (
+          <li key={item.objectID}>
+            ...
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+```
+
+<h2 id="concise">块体与简洁体</h2>
+
+<p>
+  如果一个箭头函数<strong>只是返回一个值</strong>，中间没有别的逻辑，就可以去掉花括号和 <code>return</code>，
+  这叫<strong>简洁体</strong>（concise body），返回是隐式的：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="箭头函数的三种写法：块体、多行简洁体、单行简洁体">
+  <rect class="bx-b" x="20" y="30" width="230" height="140" rx="10"/>
+  <text class="ttl on-b" x="135" y="54" text-anchor="middle">块体（block body）</text>
+  <text class="mono sm" x="36" y="84">const addOne = (count) =&gt; <tspan class="fill-a" style="font-weight:700">{</tspan></text>
+  <text class="mono sm" x="52" y="104">// 可以先做别的事</text>
+  <text class="mono sm" x="52" y="124"><tspan class="fill-a" style="font-weight:700">return</tspan> count + 1;</text>
+  <text class="mono sm" x="36" y="144"><tspan class="fill-a" style="font-weight:700">}</tspan>;</text>
+
+  <rect class="bx-g" x="265" y="30" width="230" height="140" rx="10"/>
+  <text class="ttl on-g" x="380" y="54" text-anchor="middle">简洁体 · 多行</text>
+  <text class="mono sm" x="281" y="84">const addOne = (count) =&gt;</text>
+  <text class="mono sm" x="297" y="104">count + 1;</text>
+  <text class="sm" x="281" y="140">没有花括号 = 自动返回</text>
+
+  <rect class="bx-g" x="510" y="30" width="230" height="140" rx="10"/>
+  <text class="ttl on-g" x="625" y="54" text-anchor="middle">简洁体 · 单行</text>
+  <text class="mono sm" x="526" y="84">const addOne =</text>
+  <text class="mono sm" x="542" y="104">(count) =&gt; count + 1;</text>
+  <text class="sm" x="526" y="140">最短，适合一句话的函数</text>
+
+  <path class="ln-d" d="M252 100 H262" />
+  <path class="ln-d" d="M497 100 H507" />
+
+  <rect class="bx-a" x="20" y="186" width="720" height="50" rx="10"/>
+  <text class="ttl on-a" x="380" y="208" text-anchor="middle">返回 JSX 时，用圆括号代替花括号：const Search = () =&gt; ( &lt;div&gt;…&lt;/div&gt; );</text>
+  <text class="sm" x="380" y="226" text-anchor="middle">花括号 { } = 函数体，需要写 return；圆括号 ( ) = 一个表达式，自动返回</text>
+</svg>
+<figcaption>图 7-1　箭头函数：有花括号就要写 return；没有花括号，箭头后面的表达式就是返回值</figcaption>
+</figure>
+
+<p>把 <code>Search</code> 改成简洁体：</p>
+
+```jsx src/App.jsx
+const Search = () => (
+  <div>
+    <label htmlFor="search">Search: </label>
+    <input id="search" type="text" />
+  </div>
+);
+```
+
+<p><code>App</code>、<code>List</code> 以及 <code>map()</code> 里的回调也都只是返回 JSX，同样可以精简：</p>
+
+```jsx src/App.jsx
+const App = () => (
+  <div>
+    ...
+  </div>
+);
+
+const List = () => (
+  <ul>
+    {list.map((item) => (
+      <li key={item.objectID}>
+        ...
+      </li>
+    ))}
+  </ul>
+);
+```
+
+<div class="box warn">
+  <div class="t">&#9888; 最常见的错误：花括号里忘了 return</div>
+  <p>
+    <code>list.map((item) =&gt; { &lt;li&gt;{item.title}&lt;/li&gt; })</code> 用了花括号却没写 <code>return</code>，
+    每一项都返回 <code>undefined</code>，列表什么也不显示，而且<strong>不会报错</strong>。
+    看到列表莫名其妙是空的，先检查这里。
+  </p>
+</div>
+
+<h2 id="when">什么时候用哪种</h2>
+
+<p>
+  一旦需要在 <code>return</code> 之前做点事（定义变量、写处理函数、调用 Hook），就必须用块体。
+  这在后面会非常频繁：
+</p>
+
+```jsx
+const App = () => {
+  // 在返回之前执行一些逻辑
+  const title = 'React';
+
+  return (
+    <div>
+      ...
+    </div>
+  );
+};
+```
+
+<div class="box key">
+  <div class="t">&#9733; 经验法则</div>
+  <ul style="margin:0">
+    <li>函数声明和箭头函数<strong>都可以</strong>，团队里统一一种即可。react.dev 官方文档多用函数声明，本书（和本教程）多用箭头函数。</li>
+    <li>简洁体更短，但组件一旦需要逻辑就得改回块体，来回改很烦。所以很多人<strong>组件一律用块体</strong>，只在 <code>map()</code> 之类的小回调里用简洁体。</li>
+    <li>本教程接下来会根据需要在两者间切换：看到 <code>=&gt; (</code> 是简洁体，看到 <code>=&gt; {</code> 是块体。</li>
+  </ul>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>组件可以用 <code>function Name() {}</code> 或 <code>const Name = () =&gt; {}</code> 声明。</li>
+  <li>箭头函数块体 <code>=&gt; { return … }</code> 需要显式 return；简洁体 <code>=&gt; (…)</code> 隐式返回。</li>
+  <li>需要在返回前写逻辑时必须用块体。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>把项目里所有组件和回调都改成箭头函数，并尽量使用简洁体。</li>
+    <li>故意写一个“花括号但没 return”的 <code>map()</code>，观察现象并修复。</li>
+    <li>（选读）复习 MDN 上的“箭头函数”文档，特别是“返回对象字面量要用圆括号包裹”这一条：<code>() =&gt; ({ a: 1 })</code>。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>如何用函数声明和箭头函数分别定义函数组件？</summary>
+    <div><p><code>function MyComponent() { ... }</code> 或 <code>const MyComponent = () =&gt; { ... };</code>。</p></div></details>
+  <details><summary>箭头函数的隐式返回是什么？</summary>
+    <div><p>省略花括号时，箭头后的单个表达式会自动作为返回值；多行 JSX 通常用圆括号包裹。</p></div></details>
+  <details><summary>两种声明方式在组件上有功能差异吗？</summary>
+    <div><p>对函数组件没有实质差别（组件不用 <code>this</code>）。区别在于函数声明会被提升，可以先使用后定义；箭头函数赋给 const 后必须先定义再在运行时使用。</p></div></details>
+</div>

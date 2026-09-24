@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 26 章 · CSS 与 CSS Modules — React 19 入门教程</title>
+<meta name="description" content="全局样式、行内样式与作用域样式">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="26">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 26 章 · 样式</span>
+<h1>CSS 与 CSS Modules</h1>
+<p class="lede">
+  React 本身不关心样式怎么写，所以社区里出现了很多方案，争论也从没停过。
+  这一章和下一章各介绍几种有代表性的方案。它们是<strong>互相替代</strong>的路径：读的时候可以都试一遍，
+  但项目里最终只选一种。先从最基础的<strong>普通 CSS</strong>开始，再升级到带作用域的 <strong>CSS Modules</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>认识 React 的几大样式策略</li>
+    <li>用 <code>className</code> + CSS 文件、以及 <code>style</code> 对象给组件加样式</li>
+    <li>理解全局 CSS 的命名冲突问题，用 CSS Modules 解决它</li>
+    <li>用 <code>clsx</code> 组合多个类名</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="strategies">样式策略全景</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="React 样式策略的分类">
+  <rect class="bx-b" x="20" y="20" width="230" height="210" rx="12"/>
+  <text class="ttl on-b" x="135" y="46" text-anchor="middle">CSS-in-CSS</text>
+  <text class="sm" x="135" y="66" text-anchor="middle">样式写在 .css 文件里</text>
+  <rect class="bx" x="40" y="82" width="190" height="36" rx="6"/>
+  <text class="sm" x="135" y="105" text-anchor="middle">普通 CSS（本章）</text>
+  <rect class="bx" x="40" y="126" width="190" height="36" rx="6"/>
+  <text class="sm" x="135" y="149" text-anchor="middle">CSS Modules（本章）</text>
+  <rect class="bx" x="40" y="170" width="190" height="36" rx="6"/>
+  <text class="sm" x="135" y="193" text-anchor="middle">Sass / Less 预处理器</text>
+
+  <rect class="bx-p" x="265" y="20" width="230" height="210" rx="12"/>
+  <text class="ttl on-p" x="380" y="46" text-anchor="middle">CSS-in-JS</text>
+  <text class="sm" x="380" y="66" text-anchor="middle">样式写在 JS 文件里</text>
+  <rect class="bx" x="285" y="82" width="190" height="36" rx="6"/>
+  <text class="sm" x="380" y="105" text-anchor="middle">styled-components（第 27 章）</text>
+  <rect class="bx" x="285" y="126" width="190" height="36" rx="6"/>
+  <text class="sm" x="380" y="149" text-anchor="middle">Emotion</text>
+  <rect class="bx" x="285" y="170" width="190" height="36" rx="6"/>
+  <text class="sm" x="380" y="193" text-anchor="middle">零运行时：vanilla-extract 等</text>
+
+  <rect class="bx-g" x="510" y="20" width="230" height="210" rx="12"/>
+  <text class="ttl on-g" x="625" y="46" text-anchor="middle">Utility-first</text>
+  <text class="sm" x="625" y="66" text-anchor="middle">直接在 className 里组合工具类</text>
+  <rect class="bx" x="530" y="82" width="190" height="36" rx="6"/>
+  <text class="sm" x="625" y="105" text-anchor="middle">Tailwind CSS（第 27 章）</text>
+  <rect class="bx" x="530" y="126" width="190" height="36" rx="6"/>
+  <text class="sm" x="625" y="149" text-anchor="middle">UnoCSS</text>
+  <text class="sm" x="625" y="196" text-anchor="middle">近几年最流行的新选择</text>
+</svg>
+<figcaption>图 26-1　React 样式方案的三大流派</figcaption>
+</figure>
+
+<p>
+  如果不想从零写按钮、对话框、下拉菜单，也可以用现成的 UI 组件库。但学习阶段建议先自己写一遍，再去用库。
+</p>
+
+<h2 id="global">全局样式</h2>
+
+<p>Vite 已经配置好了 CSS 导入，直接 <code>import</code> 一个 CSS 文件就能生效。<code>src/main.jsx</code> 里本来就导入了 <code>index.css</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/main.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StrictMode</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+<span class="tk-kw">import</span> <span class="tk-st">'./index.css'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">App</span> <span class="tk-kw">from</span> <span class="tk-st">'./App.jsx'</span>;
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<p>在 <code>src/index.css</code> 里写全局样式，比如去掉 body 的外边距、统一字体：</p>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/index.css</span></div><pre>body {
+  <span class="tk-pr">margin</span>: <span class="tk-nm">0</span>;
+  <span class="tk-pr">font-family</span>: -apple-system, BlinkMacSystemFont, <span class="tk-st">'Segoe UI'</span>, <span class="tk-st">'Roboto'</span>,
+    <span class="tk-st">'Oxygen'</span>, <span class="tk-st">'Ubuntu'</span>, <span class="tk-st">'Cantarell'</span>, <span class="tk-st">'Fira Sans'</span>, <span class="tk-st">'Droid Sans'</span>,
+    <span class="tk-st">'Helvetica Neue'</span>, sans-serif;
+  <span class="tk-pr">-webkit-font-smoothing</span>: antialiased;
+  <span class="tk-pr">-moz-osx-font-smoothing</span>: grayscale;
+}</pre></div>
+
+<h2 id="css">普通 CSS + className</h2>
+
+<p>给元素加 <code>className</code>（第 4 章说过，JSX 里不能用 <code>class</code>）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> <span class="tk-st">'./App.css'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span> className=<span class="tk-st">"container"</span>&gt;
+      <span class="tk-tg">&lt;h1</span> className=<span class="tk-st">"headline-primary"</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;SearchForm</span>
+        searchTerm={searchTerm}
+        onSearchInput={handleSearchInput}
+        searchAction={searchAction}
+      <span class="tk-tg">/&gt;</span>
+
+      {stories.isError &amp;&amp; <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Something</span> went wrong ...<span class="tk-tg">&lt;/p</span>&gt;}
+
+      {stories.isLoading ? (
+        <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> ...<span class="tk-tg">&lt;/p</span>&gt;
+      ) : (
+        <span class="tk-tg">&lt;List</span> list={stories.data} onRemoveItem={handleRemoveStory} <span class="tk-tg">/&gt;</span>
+      )}
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p><code>&lt;hr /&gt;</code> 去掉了，分隔效果交给 CSS。在 <code>src/App.css</code> 里定义这两个类：</p>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/App.css</span></div><pre>.container {
+  <span class="tk-pr">height</span>: <span class="tk-nm">100vw</span>;
+  <span class="tk-pr">padding</span>: <span class="tk-nm">20px</span>;
+
+  <span class="tk-pr">background</span>: <span class="tk-nm">#83a4d4</span>; <span class="tk-cm">/* 老浏览器的后备色 */</span>
+  <span class="tk-pr">background</span>: linear-gradient(to left, <span class="tk-nm">#b6fbff</span>, <span class="tk-nm">#83a4d4</span>);
+
+  <span class="tk-pr">color</span>: <span class="tk-nm">#171212</span>;
+}
+
+.headline-primary {
+  <span class="tk-pr">font-size</span>: <span class="tk-nm">48px</span>;
+  <span class="tk-pr">font-weight</span>: <span class="tk-nm">300</span>;
+  <span class="tk-pr">letter-spacing</span>: <span class="tk-nm">2px</span>;
+}</pre></div>
+
+<h3>行内样式 style</h3>
+
+<p><code>Item</code> 用到另一种写法 —— <code>style</code> 属性。在 JSX 里它是一个 JavaScript <strong>对象</strong>（外层花括号表示“这里是 JS”，内层是对象字面量）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span> className=<span class="tk-st">"item"</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'40%'</span> }}&gt;
+      <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'30%'</span> }}&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;
+      <span class="tk-tg">&lt;button</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}
+        className=<span class="tk-st">"button button_small"</span>
+      &gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);</pre></div>
+
+<p>
+  行内样式适合“由数据动态决定”的值和快速原型，但不宜多用：它让 JSX 变长，也不支持 <code>:hover</code>、媒体查询等。
+  属性名用驼峰（<code>fontSize</code>），数字值默认单位是 px（<code>{ fontSize: 14 }</code>）。
+</p>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/App.css</span></div><pre>.item {
+  <span class="tk-pr">display</span>: flex;
+  <span class="tk-pr">align-items</span>: center;
+  <span class="tk-pr">padding-bottom</span>: <span class="tk-nm">5px</span>;
+}
+
+.item &gt; span {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">0</span> <span class="tk-nm">5px</span>;
+  <span class="tk-pr">white-space</span>: nowrap;
+  <span class="tk-pr">overflow</span>: hidden;
+  <span class="tk-pr">text-overflow</span>: ellipsis;
+}
+
+.item &gt; span &gt; a {
+  <span class="tk-pr">color</span>: inherit;
+}
+
+.button {
+  <span class="tk-pr">background</span>: transparent;
+  <span class="tk-pr">border</span>: <span class="tk-nm">1px</span> solid <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">padding</span>: <span class="tk-nm">5px</span>;
+  <span class="tk-pr">cursor</span>: pointer;
+
+  <span class="tk-pr">transition</span>: all <span class="tk-nm">0.1s</span> ease-in;
+}
+
+.button:hover {
+  <span class="tk-pr">background</span>: <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">color</span>: <span class="tk-nm">#ffffff</span>;
+}
+
+.button_small {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">5px</span>;
+}
+
+.button_large {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">10px</span>;
+}</pre></div>
+
+<p>
+  <code>button_small</code> 这种“基础类 + 修饰类”的命名来自 <strong>BEM</strong> 约定的思路。命名规范有很多，团队统一一种即可。
+  最后给表单和输入框加上类名：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">SearchForm</span> = ({ ... }) =&gt; (
+  <span class="tk-tg">&lt;form</span> action={searchAction} className=<span class="tk-st">"search-form"</span>&gt;
+    <span class="tk-tg">&lt;InputWithLabel</span> ... &gt;
+      <span class="tk-tg">&lt;strong</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/strong</span>&gt;
+    <span class="tk-tg">&lt;/InputWithLabel</span>&gt;
+
+    <span class="tk-tg">&lt;button</span>
+      <span class="tk-kw">type</span>=<span class="tk-st">"submit"</span>
+      disabled={!searchTerm}
+      className=<span class="tk-st">"button button_large"</span>
+    &gt;
+      <span class="tk-tp">Submit</span>
+    <span class="tk-tg">&lt;/button</span>&gt;
+  <span class="tk-tg">&lt;/form</span>&gt;
+);
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({ ... }) =&gt; {
+  ...
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;label</span> htmlFor={id} className=<span class="tk-st">"label"</span>&gt;
+        {children}
+      <span class="tk-tg">&lt;/label</span>&gt;
+      &amp;nbsp;
+      <span class="tk-tg">&lt;input</span>
+        ref={inputRef}
+        id={id}
+        <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+        value={value}
+        onChange={onInputChange}
+        className=<span class="tk-st">"input"</span>
+      <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/App.css</span></div><pre>.search-form {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">10px</span> <span class="tk-nm">0</span> <span class="tk-nm">20px</span> <span class="tk-nm">0</span>;
+  <span class="tk-pr">display</span>: flex;
+  <span class="tk-pr">align-items</span>: baseline;
+}
+
+.label {
+  <span class="tk-pr">border-top</span>: <span class="tk-nm">1px</span> solid <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">border-left</span>: <span class="tk-nm">1px</span> solid <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">padding-left</span>: <span class="tk-nm">5px</span>;
+  <span class="tk-pr">font-size</span>: <span class="tk-nm">24px</span>;
+}
+
+.input {
+  <span class="tk-pr">border</span>: none;
+  <span class="tk-pr">border-bottom</span>: <span class="tk-nm">1px</span> solid <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">background-color</span>: transparent;
+
+  <span class="tk-pr">font-size</span>: <span class="tk-nm">24px</span>;
+}</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 新旧对照：CSS 嵌套</div>
+  <p>
+    以前想写 <code>.item { &amp; > span { … } }</code> 这样的嵌套，必须引入 Sass。
+    从 2023 年起，所有主流浏览器都已原生支持 <strong>CSS 嵌套</strong>，普通 CSS 文件里也能直接写了。
+    CSS 变量（<code>--color: …</code>）、<code>:has()</code> 选择器等也都已普及，“不用预处理器”比以前容易得多。
+  </p>
+</div>
+
+<h2 id="problem">全局 CSS 的问题</h2>
+
+<p>
+  普通 CSS 的类名是<strong>全局</strong>的。组件一多、文件一多，两个人各自写了个 <code>.button</code>，
+  谁后加载谁就覆盖谁 —— 而且不会有任何报错。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="全局类名冲突与 CSS Modules 的哈希类名">
+  <text class="ttl" x="190" y="22" text-anchor="middle">普通 CSS：类名全局共享</text>
+  <rect class="bx" x="20" y="36" width="160" height="60" rx="8"/>
+  <text class="sm" x="100" y="58" text-anchor="middle">List.css</text>
+  <text class="mono sm" x="100" y="80" text-anchor="middle">.button { red }</text>
+  <rect class="bx" x="200" y="36" width="160" height="60" rx="8"/>
+  <text class="sm" x="280" y="58" text-anchor="middle">Form.css</text>
+  <text class="mono sm" x="280" y="80" text-anchor="middle">.button { blue }</text>
+  <rect class="bx-r" x="80" y="130" width="220" height="70" rx="10"/>
+  <text class="ttl on-r" x="190" y="156" text-anchor="middle">同一个 .button</text>
+  <text class="sm" x="190" y="178" text-anchor="middle">后加载的覆盖先加载的 ✗</text>
+  <path class="ln-r" d="M100 98 L160 126" marker-end="url(#ar-r)"/>
+  <path class="ln-r" d="M280 98 L220 126" marker-end="url(#ar-r)"/>
+
+  <text class="ttl" x="570" y="22" text-anchor="middle">CSS Modules：类名自动加哈希</text>
+  <rect class="bx-b" x="400" y="36" width="160" height="60" rx="8"/>
+  <text class="sm" x="480" y="58" text-anchor="middle">List.module.css</text>
+  <text class="mono sm" x="480" y="80" text-anchor="middle">.button { red }</text>
+  <rect class="bx-b" x="580" y="36" width="160" height="60" rx="8"/>
+  <text class="sm" x="660" y="58" text-anchor="middle">Form.module.css</text>
+  <text class="mono sm" x="660" y="80" text-anchor="middle">.button { blue }</text>
+  <rect class="bx-g" x="400" y="130" width="160" height="70" rx="10"/>
+  <text class="mono sm on-g" x="480" y="160" text-anchor="middle">_button_x7k2a</text>
+  <text class="sm" x="480" y="182" text-anchor="middle">只属于 List</text>
+  <rect class="bx-g" x="580" y="130" width="160" height="70" rx="10"/>
+  <text class="mono sm on-g" x="660" y="160" text-anchor="middle">_button_9fq1c</text>
+  <text class="sm" x="660" y="182" text-anchor="middle">只属于 Form</text>
+  <path class="ln-g" d="M480 98 V126" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M660 98 V126" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 26-2　CSS Modules 在构建时把类名改成唯一的名字，样式只作用于导入它的组件</figcaption>
+</figure>
+
+<h2 id="modules">CSS Modules</h2>
+
+<p>
+  CSS Modules 的 CSS 写法完全不变，变的是在组件里怎么使用它。Vite 内置支持，只需要把文件名改成 <code>.module.css</code>：
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">mv</span> src/App.css src/App.module.css</pre></div>
+
+<p>然后<strong>把它作为一个 JavaScript 对象导入</strong>（名字随意，惯例叫 <code>styles</code>）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> axios <span class="tk-kw">from</span> <span class="tk-st">'axios'</span>;
+
+<span class="tk-kw">import</span> styles <span class="tk-kw">from</span> <span class="tk-st">'./App.module.css'</span>;</pre></div>
+
+<p><code>styles</code> 的每个属性对应一个类名，值是构建时生成的唯一类名：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span> className={styles.container}&gt;
+      <span class="tk-tg">&lt;h1</span> className={styles.headlinePrimary}&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<div class="box warn">
+  <div class="t">&#9888; 类名改用驼峰</div>
+  <p>
+    <code>styles.headline-primary</code> 在 JavaScript 里会被解析成减法，<code>styles.button_small</code> 也不美观。
+    所以 CSS Modules 里的类名一般改用驼峰：<code>.headlinePrimary</code>、<code>.buttonSmall</code>，才能写成 <code>styles.buttonSmall</code>。
+    否则只能写 <code>styles['headline-primary']</code>。
+  </p>
+</div>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/App.module.css</span></div><pre>.container { ... }
+
+.headlinePrimary {
+  <span class="tk-pr">font-size</span>: <span class="tk-nm">48px</span>;
+  <span class="tk-pr">font-weight</span>: <span class="tk-nm">300</span>;
+  <span class="tk-pr">letter-spacing</span>: <span class="tk-nm">2px</span>;
+}
+
+.item { ... }
+.item &gt; span { ... }
+.item &gt; span &gt; a { ... }
+
+.button { ... }
+.button:hover { ... }
+
+.buttonSmall {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">5px</span>;
+}
+
+.buttonLarge {
+  <span class="tk-pr">padding</span>: <span class="tk-nm">10px</span>;
+}
+
+.searchForm { ... }
+.label { ... }
+.input { ... }</pre></div>
+
+<h3>组合多个类名</h3>
+
+<p>一个元素要同时使用两个类时，用模板字符串拼起来：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span> className={styles.item}&gt;
+    ...
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;
+      <span class="tk-tg">&lt;button</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}
+        className={<span class="tk-st">`${styles.button} ${styles.buttonSmall}`</span>}
+      &gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);
+
+<span class="tk-kw">const</span> <span class="tk-tp">SearchForm</span> = ({ ... }) =&gt; (
+  <span class="tk-tg">&lt;form</span> action={searchAction} className={styles.searchForm}&gt;
+    ...
+    <span class="tk-tg">&lt;button</span>
+      <span class="tk-kw">type</span>=<span class="tk-st">"submit"</span>
+      disabled={!searchTerm}
+      className={<span class="tk-st">`${styles.button} ${styles.buttonLarge}`</span>}
+    &gt;
+      <span class="tk-tp">Submit</span>
+    <span class="tk-tg">&lt;/button</span>&gt;
+  <span class="tk-tg">&lt;/form</span>&gt;
+);</pre></div>
+
+<p>更方便的是小工具库 <code>clsx</code>（<code>npm install clsx</code>），它还支持按条件加类名：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> clsx <span class="tk-kw">from</span> <span class="tk-st">'clsx'</span>;
+
+<span class="tk-cm">// 组合</span>
+className={<span class="tk-fn">clsx</span>(styles.button, styles.buttonLarge)}
+
+<span class="tk-cm">// 条件：isLarge 为 true 时才加 buttonLarge</span>
+className={<span class="tk-fn">clsx</span>(styles.button, { [styles.buttonLarge]: isLarge })}</pre></div>
+
+<p>
+  <code>{ [styles.buttonLarge]: isLarge }</code> 里的方括号是 JavaScript 的<strong>计算属性名</strong>：用变量的值作为对象的键。
+  <code>InputWithLabel</code> 里的 <code>label</code> 和 <code>input</code> 也照此改成 <code>styles.label</code>、<code>styles.input</code>。
+</p>
+
+<div class="box tip">
+  <div class="t">&#128161; 全局样式放哪里</div>
+  <p>
+    像 <code>label</code>、<code>input</code> 这种全站统一的基础样式，更适合放在全局的 <code>index.css</code> 里，而不是每个组件的 module 里各写一遍。
+    CSS Modules 负责“组件自己的样式”，全局 CSS 负责“全站基调”，两者可以共存。
+  </p>
+</div>
+
+<h2 id="compare">怎么选</h2>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>普通 CSS</th><th>CSS Modules</th></tr>
+  <tr><td>使用方式</td><td><code>className="button"</code></td><td><code>className={styles.button}</code></td></tr>
+  <tr><td>作用域</td><td>全局，可能冲突</td><td>局部，自动唯一</td></tr>
+  <tr><td>类名写错</td><td>静默失效</td><td>得到 <code>undefined</code>，配合 TypeScript 插件可在编辑器中报错</td></tr>
+  <tr><td>未使用的样式</td><td>难以发现</td><td>编辑器可提示</td></tr>
+  <tr><td>适合</td><td>小项目、全局基础样式</td><td>中大型项目的组件样式</td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>React 样式大致分为 CSS-in-CSS、CSS-in-JS、utility-first 三派；学习阶段可以都试试，项目里选一种。</li>
+  <li>普通 CSS：<code>import './App.css'</code> + <code>className</code>；行内样式 <code>style={{ … }}</code> 适合动态值。</li>
+  <li>普通 CSS 的类名是全局的，容易冲突；CSS Modules 通过 <code>.module.css</code> 让类名局部化。</li>
+  <li>用模板字符串或 <code>clsx</code> 组合多个类名。原生 CSS 已支持嵌套，不一定需要 Sass。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>给 <code>SearchForm</code> 加一个 <code>buttonClassName</code> prop，让调用方决定用 <code>button_small</code> 还是 <code>button_large</code>。</li>
+    <li>改用 CSS Modules 后，打开开发者工具看看元素上的类名变成了什么样。</li>
+    <li>用 <code>clsx</code> 实现：列表中点数（points）大于 100 的文章标题加粗。</li>
+    <li>试试原生 CSS 嵌套：把 <code>.item &gt; span</code> 写进 <code>.item { … }</code> 内部。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>React 中给组件加样式有哪些方式？</summary>
+    <div><p>全局 CSS + className、行内 style 对象、CSS Modules、Sass 等预处理器、CSS-in-JS（styled-components 等）、utility-first（Tailwind）以及 UI 组件库。</p></div></details>
+  <details><summary>JSX 中的 style 属性和 HTML 有什么不同？</summary>
+    <div><p>JSX 中 style 接收一个 JavaScript 对象，属性名用驼峰命名，数值默认单位为 px。</p></div></details>
+  <details><summary>CSS Modules 解决了什么问题？</summary>
+    <div><p>全局类名冲突。构建时为每个类生成唯一名称，使样式只作用于导入它的组件。</p></div></details>
+  <details><summary>如何按条件组合多个 className？</summary>
+    <div><p>用模板字符串、数组 join，或 clsx / classnames 等工具库：<code>clsx('a', { b: cond })</code>。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

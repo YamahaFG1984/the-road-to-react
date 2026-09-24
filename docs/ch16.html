@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 16 章 · Fragment、复用与组合 — React 19 入门教程</title>
+<meta name="description" content="&lt;&gt;…&lt;/&gt;、通用组件与 children">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="16">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 16 章 · Hooks 与组件模式</span>
+<h1>Fragment、复用与组合</h1>
+<p class="lede">
+  这一章把三个互相关联的话题放在一起：用 <strong>Fragment</strong> 去掉多余的包裹元素；
+  把专门的 <code>Search</code> 组件改造成<strong>可复用</strong>的 <code>InputWithLabel</code>；
+  再用 <strong>组合</strong>（<code>children</code>）让组件像 HTML 标签一样可以在开闭标签之间放内容。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 <code>&lt;&gt;…&lt;/&gt;</code> 返回多个并列元素而不产生多余的 DOM</li>
+    <li>把业务专用组件改造成通用组件，理解“通用 vs 专用”的取舍</li>
+    <li>用 <code>children</code> prop 实现组件组合</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="fragment">Fragment：不产生 DOM 的包裹</h2>
+
+<p>
+  第 4 章说过，组件只能返回一个根元素。所以 <code>Search</code> 里的 <code>label</code> 和 <code>input</code> 外面包了个 <code>&lt;div&gt;</code>。
+  可这个 div 只是为了满足 React 的语法要求，对页面结构和样式毫无用处，有时还会破坏 flex / grid 布局。
+</p>
+
+<p>一种很少用的办法是返回数组（每项都得加 key，很啰嗦）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Search</span> = ({ search, onSearch }) =&gt; [
+  <span class="tk-tg">&lt;label</span> key=<span class="tk-st">"1"</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;,
+  <span class="tk-tg">&lt;input</span> key=<span class="tk-st">"2"</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> value={search} onChange={onSearch} <span class="tk-tg">/&gt;</span>,
+];</pre></div>
+
+<p>更好的办法是 <strong>Fragment</strong>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Fragment</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Search</span> = ({ search, onSearch }) =&gt; (
+  <span class="tk-tg">&lt;Fragment</span>&gt;
+    <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+    <span class="tk-tg">&lt;input</span>
+      id=<span class="tk-st">"search"</span>
+      <span class="tk-kw">type</span>=<span class="tk-st">"text"</span>
+      value={search}
+      onChange={onSearch}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/Fragment</span>&gt;
+);</pre></div>
+
+<p>它还有一个更常用的简写形式：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Search</span> = ({ search, onSearch }) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+    <span class="tk-tg">&lt;input</span>
+      id=<span class="tk-st">"search"</span>
+      <span class="tk-kw">type</span>=<span class="tk-st">"text"</span>
+      value={search}
+      onChange={onSearch}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="用 div 包裹和用 Fragment 包裹产生的 DOM 对比">
+  <text class="ttl" x="190" y="24" text-anchor="middle">用 &lt;div&gt; 包裹</text>
+  <rect class="bx" x="40" y="40" width="300" height="170" rx="10"/>
+  <text class="mono sm" x="56" y="66">&lt;div id="root"&gt;</text>
+  <text class="mono sm" x="72" y="88">&lt;h1&gt;…&lt;/h1&gt;</text>
+  <rect class="bx-r" x="66" y="98" width="250" height="68" rx="6"/>
+  <text class="mono sm on-r" x="76" y="116">&lt;div&gt;  ← 多余的一层</text>
+  <text class="mono sm" x="92" y="136">&lt;label&gt;…&lt;/label&gt;</text>
+  <text class="mono sm" x="92" y="156">&lt;input&gt;</text>
+  <text class="mono sm" x="72" y="186">&lt;hr&gt; …</text>
+
+  <text class="ttl" x="570" y="24" text-anchor="middle">用 &lt;&gt;…&lt;/&gt; 包裹</text>
+  <rect class="bx-g" x="420" y="40" width="300" height="170" rx="10"/>
+  <text class="mono sm" x="436" y="66">&lt;div id="root"&gt;</text>
+  <text class="mono sm" x="452" y="88">&lt;h1&gt;…&lt;/h1&gt;</text>
+  <text class="mono sm on-g" x="452" y="116">&lt;label&gt;…&lt;/label&gt;</text>
+  <text class="mono sm on-g" x="452" y="136">&lt;input&gt;</text>
+  <text class="mono sm" x="452" y="160">&lt;hr&gt; …</text>
+  <text class="sm on-g" x="570" y="192" text-anchor="middle">label 和 input 直接成为兄弟节点</text>
+</svg>
+<figcaption>图 16-1　Fragment 在 JSX 里包裹元素，但不会出现在最终的 DOM 中（可以用开发者工具验证）</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 什么时候必须写完整的 <code>&lt;Fragment&gt;</code></div>
+  <p>
+    简写 <code>&lt;&gt;</code> 不能带任何属性。在列表里需要给 Fragment 加 <code>key</code> 时，要写完整形式：
+    <code>&lt;Fragment key={item.id}&gt;…&lt;/Fragment&gt;</code>。
+    旧代码里常见的 <code>&lt;React.Fragment&gt;</code> 就是同一个东西。
+  </p>
+</div>
+
+<h2 id="reusable">可复用组件</h2>
+
+<p>
+  仔细看 <code>Search</code>：它其实就是“一个标签 + 一个输入框”，没有任何真正的“搜索”功能。
+  可名字、<code>id</code>、文字全都写死成了 search。这带来两个问题：
+</p>
+<ul>
+  <li>想在别处放一个“带标签的输入框”（比如输入用户名），没法复用它。</li>
+  <li>如果页面上放两个 <code>Search</code>，它们的 <code>id="search"</code> 重复了 —— 点击第二个标签，焦点会跳到第一个输入框。</li>
+</ul>
+
+<p>把写死的部分都变成 props，名字也换成通用的：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;InputWithLabel</span>
+        id=<span class="tk-st">"search"</span>
+        label=<span class="tk-st">"Search"</span>
+        value={searchTerm}
+        onInputChange={handleSearch}
+      <span class="tk-tg">/&gt;</span>
+
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({ id, label, value, onInputChange }) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{label}<span class="tk-tg">&lt;/label</span>&gt;
+    &amp;nbsp;
+    <span class="tk-tg">&lt;input</span>
+      id={id}
+      <span class="tk-kw">type</span>=<span class="tk-st">"text"</span>
+      value={value}
+      onChange={onInputChange}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<p>
+  它还只能输入文本。再把 <code>type</code> 也开放出来，默认值用 <code>'text'</code>：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({
+  id,
+  label,
+  value,
+  <span class="tk-kw">type</span> = <span class="tk-st">'text'</span>,
+  onInputChange,
+}) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{label}<span class="tk-tg">&lt;/label</span>&gt;
+    &amp;nbsp;
+    <span class="tk-tg">&lt;input</span>
+      id={id}
+      <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+      value={value}
+      onChange={onInputChange}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="通用组件与专用组件的光谱">
+  <defs>
+    <linearGradient id="spec" x1="0" x2="1">
+      <stop offset="0" stop-color="var(--blue)"/>
+      <stop offset="1" stop-color="var(--accent)"/>
+    </linearGradient>
+  </defs>
+  <rect x="40" y="90" width="680" height="10" rx="5" fill="url(#spec)"/>
+  <text class="ttl on-b" x="40" y="70">通用（generic）</text>
+  <text class="ttl on-a" x="720" y="70" text-anchor="end">专用（specialized）</text>
+
+  <circle class="fill-b" cx="110" cy="95" r="9"/>
+  <text class="mono sm" x="110" y="130" text-anchor="middle">&lt;input&gt;</text>
+  <circle class="fill-b" cx="290" cy="95" r="9"/>
+  <text class="mono sm" x="290" y="130" text-anchor="middle">&lt;InputWithLabel&gt;</text>
+  <text class="sm" x="290" y="148" text-anchor="middle">API 更大，处处可用</text>
+  <circle class="fill-a" cx="480" cy="95" r="9"/>
+  <text class="mono sm" x="480" y="130" text-anchor="middle">&lt;Search&gt;</text>
+  <text class="sm" x="480" y="148" text-anchor="middle">只用于搜索</text>
+  <circle class="fill-a" cx="650" cy="95" r="9"/>
+  <text class="mono sm" x="650" y="130" text-anchor="middle">&lt;SearchForm&gt;</text>
+  <text class="sm" x="650" y="148" text-anchor="middle">带业务逻辑，几乎不复用</text>
+  <text class="sm" x="380" y="190" text-anchor="middle">越往左越容易复用，但使用时要传的 props 越多；越往右用起来越省事，但只适合一个场景</text>
+</svg>
+<figcaption>图 16-2　组件设计总是在“通用”和“专用”之间取舍，两种都有存在的价值</figcaption>
+</figure>
+
+<h2 id="composition">组件组合与 children</h2>
+
+<p>
+  到目前为止，我们的组件都是自闭合的：<code>&lt;List /&gt;</code>。可 HTML 元素是可以有开闭标签、在中间放内容的：
+  <code>&lt;button&gt;点我&lt;/button&gt;</code>。React 组件也可以：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;InputWithLabel</span>
+        id=<span class="tk-st">"search"</span>
+        value={searchTerm}
+        onInputChange={handleSearch}
+      &gt;
+        <span class="tk-tp">Search</span>:
+      <span class="tk-tg">&lt;/InputWithLabel</span>&gt;
+
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>
+  写在开闭标签之间的内容，会作为一个特殊的 prop —— <code>children</code> —— 传给组件。用它取代原来的 <code>label</code> prop：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({
+  id,
+  value,
+  <span class="tk-kw">type</span> = <span class="tk-st">'text'</span>,
+  onInputChange,
+  children,
+}) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{children}<span class="tk-tg">&lt;/label</span>&gt;
+    &amp;nbsp;
+    <span class="tk-tg">&lt;input</span>
+      id={id}
+      <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+      value={value}
+      onChange={onInputChange}
+    <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<p>
+  <code>children</code> 可以是字符串，也可以是任意 JSX。比如想让标签加粗，调用方直接这样写，组件本身一行都不用改：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;InputWithLabel</span>
+  id=<span class="tk-st">"search"</span>
+  value={searchTerm}
+  onInputChange={handleSearch}
+&gt;
+  <span class="tk-tg">&lt;strong</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/strong</span>&gt;
+<span class="tk-tg">&lt;/InputWithLabel</span>&gt;</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="children 把调用方的内容放进组件预留的位置">
+  <rect class="bx-b" x="20" y="30" width="300" height="190" rx="12"/>
+  <text class="ttl on-b" x="170" y="54" text-anchor="middle">调用方（App）</text>
+  <text class="mono sm" x="36" y="86">&lt;InputWithLabel id="search" …&gt;</text>
+  <rect class="bx-a" x="50" y="100" width="240" height="40" rx="6"/>
+  <text class="mono sm on-a" x="170" y="125" text-anchor="middle">&lt;strong&gt;Search:&lt;/strong&gt;</text>
+  <text class="mono sm" x="36" y="164">&lt;/InputWithLabel&gt;</text>
+  <text class="sm" x="36" y="198">决定“标签里放什么”</text>
+
+  <rect class="bx-g" x="440" y="30" width="300" height="190" rx="12"/>
+  <text class="ttl on-g" x="590" y="54" text-anchor="middle">组件（InputWithLabel）</text>
+  <text class="mono sm" x="456" y="86">&lt;label htmlFor={id}&gt;</text>
+  <rect class="bx-a" x="470" y="100" width="240" height="40" rx="6" stroke-dasharray="5 4"/>
+  <text class="mono sm on-a" x="590" y="125" text-anchor="middle">{children}</text>
+  <text class="mono sm" x="456" y="164">&lt;/label&gt; &lt;input … /&gt;</text>
+  <text class="sm" x="456" y="198">决定“内容放在哪里”</text>
+
+  <path class="ln-a flow" d="M292 120 H466" marker-end="url(#ar-a)"/>
+  <text class="sm on-a" x="380" y="112" text-anchor="middle">作为 props.children</text>
+</svg>
+<figcaption>图 16-3　children 就像组件里预留的一个插槽：内容由外部决定，位置由组件决定</figcaption>
+</figure>
+
+<div class="box deep">
+  <div class="t">&#128270; 深入一点：不止一个“插槽”</div>
+  <p>
+    <code>children</code> 只有一个。需要多个插槽时，直接用普通 prop 传 JSX 就行：
+    <code>&lt;Layout sidebar={&lt;Nav /&gt;} content={&lt;List /&gt;} /&gt;</code>。
+    组合还有一个重要用途：<strong>减少 prop drilling</strong>。与其把数据穿过好几层中间组件，
+    不如在上层直接把渲染好的子组件作为 children 传进去，中间组件只负责“摆放”。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li><code>&lt;&gt;…&lt;/&gt;</code>（或 <code>&lt;Fragment&gt;</code>）可以包裹多个元素而不产生多余的 DOM；需要 key 时用完整写法。</li>
+  <li>把写死的值改成 props、把业务名字改成通用名字，专用组件就变成了可复用组件；组件设计是通用与专用之间的取舍。</li>
+  <li>写在组件开闭标签之间的内容会作为 <code>children</code> prop 传入，这就是组件组合。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用浏览器开发者工具的 Elements 面板对比使用 <code>&lt;div&gt;</code> 和 <code>&lt;&gt;</code> 时的 DOM 结构。</li>
+    <li>在 <code>App</code> 里再放一个 <code>InputWithLabel</code>，用 <code>type="number"</code> 做一个“最少评论数”的输入框（先不用接上过滤逻辑）。</li>
+    <li>写一个 <code>Card</code> 组件：<code>({ title, children }) =&gt; …</code>，把 <code>List</code> 包在里面。</li>
+    <li>试着自己写一个可复用的 <code>Button</code>、<code>Checkbox</code> 或 <code>Dropdown</code> 组件。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 Fragment？为什么使用它？</summary>
+    <div><p>一种不渲染任何 DOM 节点的包裹组件，用于在满足“单一根元素”要求的同时，不引入多余的 DOM 元素。</p></div></details>
+  <details><summary>Fragment 可以有属性吗？</summary>
+    <div><p>只能有 <code>key</code>（且必须使用 <code>&lt;Fragment&gt;</code> 完整写法），不能有 className、style 等。</p></div></details>
+  <details><summary>什么是 children prop？</summary>
+    <div><p>写在组件开闭标签之间的内容，React 会以 <code>props.children</code> 的形式传给组件。</p></div></details>
+  <details><summary>如何让一个组件更可复用？</summary>
+    <div><p>用 props 参数化可变部分，使用通用命名，不耦合具体业务；需要自定义内容的地方用 children 或 JSX 类型的 props。</p></div></details>
+  <details><summary>是不是所有组件都应该做成可复用的？</summary>
+    <div><p>不是。很多组件只在一个地方使用，承载具体业务，做成专用组件更简单。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 22 章 · useCallback 与显式获取 — React 19 入门教程</title>
+<meta name="description" content="记忆化函数、依赖链与按钮触发请求">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="22">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 22 章 · 异步数据与表单</span>
+<h1>useCallback 与显式获取</h1>
+<p class="lede">
+  这一章做两件事。第一，把数据请求逻辑从 effect 里提取成一个函数，借此认识 <code>useCallback</code> ——
+  以及如果不用它，为什么会陷入无限循环。第二，解决“每敲一个键就请求一次”的问题：改为<strong>点击按钮才搜索</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解“每次渲染都会创建新函数”对 effect 依赖的影响</li>
+    <li>用 <code>useCallback</code> 记忆化函数，看懂依赖链</li>
+    <li>把“输入中的搜索词”和“确认后的请求地址”拆成两个状态，实现显式获取</li>
+    <li>了解 React Compiler 对 <code>useCallback</code> 的影响</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="extract">把请求逻辑提取出来</h2>
+
+<p>
+  先做一个看起来很普通的重构：把 effect 里的请求代码搬到一个独立的函数 <code>handleFetchStories</code> 里（A），
+  用 <code>useCallback</code> 包起来（B），然后在 effect 里调用它（C）：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useState, useEffect, useRef, useReducer, useCallback } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-cm">// A</span>
+  <span class="tk-kw">const</span> handleFetchStories = <span class="tk-fn">useCallback</span>(() =&gt; { <span class="tk-cm">// B</span>
+    <span class="tk-kw">if</span> (!searchTerm) <span class="tk-kw">return</span>;
+
+    <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+    <span class="tk-fn">fetch</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>)
+      .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>())
+      .<span class="tk-fn">then</span>((result) =&gt; {
+        <span class="tk-fn">dispatchStories</span>({
+          <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+          payload: result.hits,
+        });
+      })
+      .<span class="tk-kw">catch</span>(() =&gt;
+        <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> })
+      );
+  }, [searchTerm]); <span class="tk-cm">// E</span>
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-fn">handleFetchStories</span>(); <span class="tk-cm">// C</span>
+  }, [handleFetchStories]); <span class="tk-cm">// D</span>
+
+  ...
+};</pre></div>
+
+<p>
+  应用的行为没有变化。好处是请求逻辑变成了一个可以在别处调用的函数（虽然暂时还没用上）。
+  关键在于那个 <code>useCallback</code> —— 它为什么是必须的？
+</p>
+
+<h2 id="loop">不用 useCallback 会怎样</h2>
+
+<p>
+  第 3 章说过：<strong>组件每次渲染，函数体从头执行，里面定义的函数也都是全新的</strong>。
+  两次渲染中的 <code>handleFetchStories</code> 虽然代码一样，却是两个不同的函数对象（<code>fn1 !== fn2</code>）。
+  而 effect 依赖了它（D），于是：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="没有 useCallback 时的无限循环">
+  <rect class="bx-a" x="290" y="16" width="180" height="50" rx="10"/>
+  <text class="ttl on-a" x="380" y="38" text-anchor="middle">① App 渲染</text>
+  <text class="sm" x="380" y="56" text-anchor="middle">创建新的 handleFetchStories</text>
+
+  <rect class="bx-p" x="560" y="110" width="180" height="60" rx="10"/>
+  <text class="ttl on-p" x="650" y="134" text-anchor="middle">② effect 比较依赖</text>
+  <text class="sm" x="650" y="154" text-anchor="middle">函数变了 → 执行 effect</text>
+
+  <rect class="bx-b" x="290" y="224" width="180" height="56" rx="10"/>
+  <text class="ttl on-b" x="380" y="248" text-anchor="middle">③ 请求数据</text>
+  <text class="sm" x="380" y="266" text-anchor="middle">dispatch(INIT / SUCCESS)</text>
+
+  <rect class="bx-r" x="20" y="110" width="180" height="60" rx="10"/>
+  <text class="ttl on-r" x="110" y="134" text-anchor="middle">④ 状态变了</text>
+  <text class="sm" x="110" y="154" text-anchor="middle">→ App 重新渲染</text>
+
+  <path class="ln-a" d="M472 42 C560 42 650 60 650 106" marker-end="url(#ar-a)"/>
+  <path class="ln-p" d="M650 172 C650 240 560 252 474 252" marker-end="url(#ar-p)"/>
+  <path class="ln-b" d="M286 252 C180 252 110 230 110 174" marker-end="url(#ar-b)"/>
+  <path class="ln-r" d="M110 106 C110 60 200 42 286 42" marker-end="url(#ar-r)"/>
+  <text class="ttl on-r" x="380" y="140" text-anchor="middle">&#8734; 无限循环</text>
+  <text class="sm" x="380" y="162" text-anchor="middle">浏览器不停发请求，直到卡死</text>
+</svg>
+<figcaption>图 22-1　每次渲染都生成新函数 → effect 每次都认为依赖变了 → 请求 → 更新状态 → 再渲染……</figcaption>
+</figure>
+
+<h2 id="usecallback">useCallback：记住一个函数</h2>
+
+<p>
+  <code>useCallback(fn, deps)</code> 让 React 在多次渲染之间<strong>返回同一个函数对象</strong>，只有当依赖数组（E）里的值变化时，才换成新创建的函数。
+  这样依赖链就变成了：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="useCallback 形成的依赖链">
+  <rect class="bx-b" x="20" y="60" width="200" height="80" rx="12"/>
+  <text class="ttl on-b" x="120" y="88" text-anchor="middle">1. searchTerm 变了</text>
+  <text class="sm" x="120" y="110" text-anchor="middle">原因：用户输入</text>
+
+  <rect class="bx-a" x="280" y="60" width="200" height="80" rx="12"/>
+  <text class="ttl on-a" x="380" y="88" text-anchor="middle">2. handleFetchStories 变了</text>
+  <text class="sm" x="380" y="110" text-anchor="middle">原因：它依赖 searchTerm（E）</text>
+
+  <rect class="bx-g" x="540" y="60" width="200" height="80" rx="12"/>
+  <text class="ttl on-g" x="640" y="88" text-anchor="middle">3. effect 重新执行</text>
+  <text class="sm" x="640" y="110" text-anchor="middle">原因：它依赖该函数（D）</text>
+
+  <path class="ln-b" d="M222 100 H276" marker-end="url(#ar-b)"/>
+  <path class="ln-a" d="M482 100 H536" marker-end="url(#ar-a)"/>
+
+  <rect class="bx-d" x="120" y="164" width="520" height="40" rx="8"/>
+  <text class="sm" x="380" y="189" text-anchor="middle">其他原因导致的重新渲染（比如请求返回、状态变化）：searchTerm 没变 → 函数没变 → effect 不执行</text>
+</svg>
+<figcaption>图 22-2　useCallback 让函数的“身份”只随真正的依赖而变化</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 更简单的替代写法</div>
+  <p>
+    如果请求函数只在 effect 里用，最简单的办法是<strong>把函数定义在 effect 内部</strong>，
+    这样它就不是依赖，也就不需要 <code>useCallback</code>。只有当函数需要在 effect 之外复用（比如“刷新”按钮也要调用它）时，才需要本章的写法。
+  </p>
+</div>
+
+<h2 id="explicit">显式获取：点按钮才搜索</h2>
+
+<p>
+  回到限流问题：现在每次输入都会发请求。改成用户点 “Submit” 按钮时才请求。
+</p>
+
+<div class="box tip">
+  <div class="t">&#128161; 先自己试试</div>
+  <p>
+    提示：加一个按钮；新增一个状态表示“已确认的搜索”；按钮的处理函数用当前搜索词设置这个状态；
+    只有这个新状态变化时才执行请求。
+  </p>
+</div>
+
+<p>关键点是要有<strong>两个</strong>状态：一个随输入不断变化的 <code>searchTerm</code>，一个只在确认时才变的 <code>url</code>。先加按钮：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;InputWithLabel</span>
+        id=<span class="tk-st">"search"</span>
+        value={searchTerm}
+        isFocused
+        onInputChange={handleSearchInput}
+      &gt;
+        <span class="tk-tg">&lt;strong</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/strong</span>&gt;
+      <span class="tk-tg">&lt;/InputWithLabel</span>&gt;
+
+      <span class="tk-tg">&lt;button</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        disabled={!searchTerm}
+        onClick={handleSearchSubmit}
+      &gt;
+        <span class="tk-tp">Submit</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>输入框的处理函数改名为 <code>handleSearchInput</code>，照旧更新 <code>searchTerm</code>；按钮的处理函数用它拼出 <code>url</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useStorageState</span>(<span class="tk-st">'search'</span>, <span class="tk-st">'React'</span>);
+
+  <span class="tk-kw">const</span> [url, setUrl] = <span class="tk-fn">useState</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>);
+
+  ...
+
+  <span class="tk-kw">const</span> handleSearchInput = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  <span class="tk-kw">const</span> handleSearchSubmit = () =&gt; {
+    <span class="tk-fn">setUrl</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>);
+  };
+
+  ...
+};</pre></div>
+
+<p>最后，请求函数改为依赖 <code>url</code> 而不是 <code>searchTerm</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> handleFetchStories = <span class="tk-fn">useCallback</span>(() =&gt; {
+  <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+  <span class="tk-fn">fetch</span>(url)
+    .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>())
+    .<span class="tk-fn">then</span>((result) =&gt; {
+      <span class="tk-fn">dispatchStories</span>({
+        <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+        payload: result.hits,
+      });
+    })
+    .<span class="tk-kw">catch</span>(() =&gt;
+      <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> })
+    );
+}, [url]);
+
+<span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">handleFetchStories</span>();
+}, [handleFetchStories]);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="searchTerm 负责输入，url 负责触发请求">
+  <rect class="bx-b" x="20" y="30" width="200" height="70" rx="10"/>
+  <text class="ttl on-b" x="120" y="56" text-anchor="middle">输入框 onChange</text>
+  <text class="sm" x="120" y="78" text-anchor="middle">每敲一个键</text>
+  <rect class="bx-b" x="280" y="30" width="200" height="70" rx="10"/>
+  <text class="mono sm on-b" x="380" y="58" text-anchor="middle">searchTerm</text>
+  <text class="sm" x="380" y="80" text-anchor="middle">只用于显示输入框</text>
+  <path class="ln-b" d="M222 65 H276" marker-end="url(#ar-b)"/>
+  <text class="sm on-b" x="560" y="60">频繁变化，不触发请求</text>
+
+  <rect class="bx-a" x="20" y="150" width="200" height="70" rx="10"/>
+  <text class="ttl on-a" x="120" y="176" text-anchor="middle">Submit 按钮 onClick</text>
+  <text class="sm" x="120" y="198" text-anchor="middle">用户确认</text>
+  <rect class="bx-a" x="280" y="150" width="200" height="70" rx="10"/>
+  <text class="mono sm on-a" x="380" y="178" text-anchor="middle">url</text>
+  <text class="sm" x="380" y="200" text-anchor="middle">API 地址 + searchTerm</text>
+  <path class="ln-a" d="M222 185 H276" marker-end="url(#ar-a)"/>
+  <rect class="bx-g" x="540" y="150" width="200" height="70" rx="10"/>
+  <text class="ttl on-g" x="640" y="176" text-anchor="middle">effect → fetch(url)</text>
+  <text class="sm" x="640" y="198" text-anchor="middle">只在 url 变化时请求</text>
+  <path class="ln-g" d="M482 185 H536" marker-end="url(#ar-g)"/>
+  <path class="ln-d" d="M380 102 V146" marker-end="url(#ar)"/>
+  <text class="sm" x="390" y="130">点击时读取</text>
+</svg>
+<figcaption>图 22-3　一个状态负责“正在输入什么”，另一个负责“要请求什么”</figcaption>
+</figure>
+
+<p>
+  现在输入时只更新输入框；点击 Submit 才会请求。按钮在搜索词为空时是禁用的（<code>disabled={!searchTerm}</code>），
+  所以请求函数里也不需要再检查空字符串了。
+</p>
+
+<div class="box note">
+  <div class="t">&#9432; 为什么 url 用 useState 而不是 useStorageState？</div>
+  <p>
+    <code>url</code> 完全由常量 <code>API_ENDPOINT</code> 和 <code>searchTerm</code> 拼成，而 <code>searchTerm</code> 已经存进了 localStorage，
+    初始 <code>url</code> 可以从它推出来，没必要再存一份。
+  </p>
+</div>
+
+<h2 id="compiler">新旧对照：React Compiler 与 useCallback</h2>
+
+<p>
+  在 React 19 时代，<strong>React Compiler</strong>（2025 年 10 月发布 1.0）可以在构建时自动分析组件，
+  给需要的函数和值加上记忆化 —— 效果相当于自动帮你写 <code>useCallback</code> 和 <code>useMemo</code>：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">手动记忆化 <span class="ver old">无编译器</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> handleFetchStories = <span class="tk-fn">useCallback</span>(() =&gt; {
+  <span class="tk-fn">fetch</span>(url)...
+}, [url]);
+
+<span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">handleFetchStories</span>();
+}, [handleFetchStories]);</pre></div>
+  </div>
+  <div class="new"><div class="h">启用 React Compiler <span class="ver">React 19</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 编译器会自动让这个函数在 url 不变时保持同一引用</span>
+<span class="tk-kw">const</span> handleFetchStories = () =&gt; {
+  <span class="tk-fn">fetch</span>(url)...
+};
+
+<span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">handleFetchStories</span>();
+}, [handleFetchStories]);</pre></div>
+  </div>
+</div>
+
+<p>
+  不过要注意两点：第一，编译器需要额外配置（第 28 章），默认的 Vite 模板没有开启；
+  第二，<code>useCallback</code> 并没有被废弃，理解它“为什么需要”才能看懂大量现有代码。
+  本教程在没有编译器的前提下继续手动使用它。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>每次渲染都会创建新的函数对象；把这样的函数作为 effect 依赖会导致 effect 每次都执行，甚至无限循环。</li>
+  <li><code>useCallback(fn, deps)</code> 在依赖不变时返回同一个函数，依赖链：状态 → 函数 → effect。</li>
+  <li>函数只在 effect 内使用时，直接定义在 effect 里面更简单。</li>
+  <li>显式获取：<code>searchTerm</code> 管输入，<code>url</code> 管请求，点击按钮时用前者设置后者。</li>
+  <li>React Compiler 可以自动完成记忆化，但需要单独启用。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>（小心，浏览器可能卡住）去掉 <code>useCallback</code>，观察 Network 面板里的请求；然后马上改回来。</li>
+    <li>把请求函数改写为定义在 effect 内部的版本，确认不再需要 <code>useCallback</code>。</li>
+    <li>加一个 “Refresh” 按钮，点击时直接调用 <code>handleFetchStories()</code> 重新请求当前结果 —— 这正是把函数提取到 effect 外面的意义。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>useCallback 的作用是什么？</summary>
+    <div><p>在依赖不变时，跨渲染返回同一个函数引用，避免因函数“身份”变化而导致的 effect 重复执行或子组件无谓的重新渲染。</p></div></details>
+  <details><summary>useCallback 的参数是什么？依赖为空数组时会怎样？</summary>
+    <div><p>第一个参数是要记忆化的函数，第二个是依赖数组；空数组表示函数只在首次渲染时创建，之后一直不变（注意它读到的状态也会停留在首次渲染时）。</p></div></details>
+  <details><summary>为什么把普通函数作为 useEffect 依赖可能导致无限循环？</summary>
+    <div><p>每次渲染都创建新函数，effect 认为依赖变化而执行；若 effect 内更新了状态，就会引发新的渲染，循环往复。</p></div></details>
+  <details><summary>为什么 url 状态用 useState 而不是 useStorageState？</summary>
+    <div><p>url 由常量和已持久化的 searchTerm 派生，不需要再单独持久化。</p></div></details>
+  <details><summary>React Compiler 会让 useCallback 过时吗？</summary>
+    <div><p>启用编译器后大多数手动记忆化可以省略，但 useCallback 仍是有效 API，在未启用编译器的项目和需要精确控制的场景中依然使用。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 21 章 · 获取真实数据 — React 19 入门教程</title>
+<meta name="description" content="接入 Hacker News API，从客户端搜索到服务端搜索">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="21">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 21 章 · 异步数据与表单</span>
+<h1>获取真实数据</h1>
+<p class="lede">
+  前面所有关于异步数据和 reducer 的准备，都是为了这一刻：换掉假数据，从真实的 <strong>Hacker News API</strong> 获取热门技术文章。
+  接着我们还会把“在已有数据里筛选”的客户端搜索，升级为“拿搜索词去服务器查”的服务端搜索。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用浏览器原生的 <code>fetch</code> 请求远程 API</li>
+    <li>理解客户端搜索和服务端搜索的区别</li>
+    <li>让 effect 在搜索词变化时重新请求数据</li>
+    <li>认识“竞态条件”并学会用清理函数避免它</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="api">认识 Hacker News API</h2>
+
+<p>
+  <a href="https://news.ycombinator.com">Hacker News</a> 是一个技术新闻社区，Algolia 为它提供了一个免费、无需密钥的搜索 API。
+  在浏览器地址栏里直接打开下面这个地址看看：
+</p>
+
+<div class="code" data-lang="text"><div class="bar"><span class="tag">输出</span></div><pre>https://hn.algolia.com/api/v1/search?query=react</pre></div>
+
+<p>返回的是 JSON，结构大致如下（省略了很多字段）：</p>
+
+<div class="code" data-lang="json"><div class="bar"><span class="tag">JSON</span></div><pre>{
+  <span class="tk-pr">"hits"</span>: [
+    {
+      <span class="tk-pr">"title"</span>: <span class="tk-st">"React 19 is now stable"</span>,
+      <span class="tk-pr">"url"</span>: <span class="tk-st">"https://react.dev/blog/..."</span>,
+      <span class="tk-pr">"author"</span>: <span class="tk-st">"someone"</span>,
+      <span class="tk-pr">"num_comments"</span>: <span class="tk-nm">312</span>,
+      <span class="tk-pr">"points"</span>: <span class="tk-nm">1024</span>,
+      <span class="tk-pr">"objectID"</span>: <span class="tk-st">"42345678"</span>
+    }
+  ],
+  <span class="tk-pr">"page"</span>: <span class="tk-nm">0</span>,
+  <span class="tk-pr">"nbPages"</span>: <span class="tk-nm">50</span>,
+  <span class="tk-pr">"hitsPerPage"</span>: <span class="tk-nm">20</span>
+}</pre></div>
+
+<p>
+  文章在 <code>hits</code> 数组里，每一项的字段和我们的示例数据一模一样 —— 这就是为什么一开始示例数据要用
+  <code>num_comments</code>、<code>objectID</code> 这种命名。
+</p>
+
+<h2 id="fetch">用 fetch 获取数据</h2>
+
+<div class="box tip">
+  <div class="t">&#128161; 先自己试试</div>
+  <p>
+    任务：删除 <code>initialStories</code> 和 <code>getAsyncStories</code>，改用浏览器的 <code>fetch</code> 请求上面的地址。
+    成功和失败的处理逻辑和之前完全一样。
+  </p>
+</div>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-cm">// A</span>
+<span class="tk-kw">const</span> <span class="tk-tp">API_ENDPOINT</span> = <span class="tk-st">'https://hn.algolia.com/api/v1/search?query='</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+    <span class="tk-fn">fetch</span>(<span class="tk-st">`${API_ENDPOINT}react`</span>) <span class="tk-cm">// B</span>
+      .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>()) <span class="tk-cm">// C</span>
+      .<span class="tk-fn">then</span>((result) =&gt; {
+        <span class="tk-fn">dispatchStories</span>({
+          <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+          payload: result.hits, <span class="tk-cm">// D</span>
+        });
+      })
+      .<span class="tk-kw">catch</span>(() =&gt;
+        <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> })
+      );
+  }, []);
+
+  ...
+};</pre></div>
+
+<ul>
+  <li><strong>A</strong>：API 地址存成常量，放在组件外面（它不依赖组件里的任何东西）。</li>
+  <li><strong>B</strong>：<code>fetch(url)</code> 发起请求，返回一个 Promise。这里用<strong>模板字符串</strong>拼接地址。</li>
+  <li><strong>C</strong>：<code>fetch</code> 得到的是一个 Response 对象，要调用 <code>response.json()</code> 把响应体解析成 JavaScript 对象（这也是异步的）。</li>
+  <li><strong>D</strong>：真实数据的结构不一样，文章在 <code>result.hits</code> 里。</li>
+</ul>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="fetch 请求 Hacker News API 并更新 reducer 状态的流程">
+  <rect class="bx-a" x="20" y="80" width="150" height="80" rx="12"/>
+  <text class="ttl on-a" x="95" y="106" text-anchor="middle">App 的 effect</text>
+  <text class="mono sm" x="95" y="128" text-anchor="middle">dispatch(INIT)</text>
+  <text class="mono sm" x="95" y="146" text-anchor="middle">fetch(url)</text>
+
+  <rect class="bx-g" x="560" y="80" width="180" height="80" rx="12"/>
+  <text class="ttl on-g" x="650" y="106" text-anchor="middle">hn.algolia.com</text>
+  <text class="sm" x="650" y="128" text-anchor="middle">/api/v1/search</text>
+  <text class="sm" x="650" y="146" text-anchor="middle">?query=react</text>
+
+  <path class="ln-b" d="M172 100 H556" marker-end="url(#ar-b)"/>
+  <text class="sm on-b" x="364" y="92" text-anchor="middle">① HTTP GET 请求</text>
+  <path class="ln-g" d="M556 140 H172" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="364" y="160" text-anchor="middle">② Response（JSON 文本）</text>
+
+  <rect class="bx-p" x="190" y="190" width="160" height="44" rx="8"/>
+  <text class="mono sm on-p" x="270" y="217" text-anchor="middle">③ response.json()</text>
+  <rect class="bx-b" x="380" y="190" width="200" height="44" rx="8"/>
+  <text class="mono sm on-b" x="480" y="210" text-anchor="middle">④ dispatch(SUCCESS,</text>
+  <text class="mono sm on-b" x="480" y="226" text-anchor="middle">result.hits)</text>
+  <path class="ln-p" d="M352 212 H376" marker-end="url(#ar-p)"/>
+  <path class="ln" d="M190 162 L230 188"/>
+  <text class="sm on-r" x="364" y="40" text-anchor="middle">网络出错或解析失败 → .catch() → dispatch(FAILURE)</text>
+</svg>
+<figcaption>图 21-1　一次完整的数据请求：发请求 → 拿响应 → 解析 JSON → 派发成功动作</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 模板字符串</div>
+  <p>
+    <code>&#96;${API_ENDPOINT}react&#96;</code> 是 ES6 的模板字符串，用反引号包裹，<code>${}</code> 里放表达式。
+    它等价于老式的 <code>API_ENDPOINT + 'react'</code>，但拼接多个变量时可读性好得多。
+  </p>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; fetch 的一个坑：HTTP 错误不会进 catch</div>
+  <p>
+    <code>fetch</code> 只有在<strong>网络失败</strong>时才会 reject。服务器返回 404 或 500 时，Promise 照样 resolve！
+    严谨的写法要检查 <code>response.ok</code>：
+    <code>.then((r) =&gt; { if (!r.ok) throw new Error(r.status); return r.json(); })</code>。
+    第 23 章换成 axios 后，它会自动把非 2xx 状态当作错误。
+  </p>
+</div>
+
+<p>
+  刷新页面，你会看到来自 Hacker News 的真实 React 相关文章。因为数据结构没变，<code>Item</code> 组件一行都不用改，
+  搜索框也照样能在这些文章里筛选标题。
+</p>
+
+<h2 id="server-search">从客户端搜索到服务端搜索</h2>
+
+<p>
+  不过有个明显的问题：数据永远是用 “react” 查来的。在搜索框里输入 “vue”，只会在这 20 条 React 文章里找标题含 “vue” 的 ——
+  几乎总是空的。这叫<strong>客户端搜索</strong>：只在已经下载到浏览器的数据里过滤。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="客户端搜索与服务端搜索的对比">
+  <text class="ttl" x="190" y="24" text-anchor="middle">客户端搜索</text>
+  <rect class="bx-g" x="20" y="40" width="130" height="80" rx="10"/>
+  <text class="ttl on-g" x="85" y="66" text-anchor="middle">服务器</text>
+  <text class="sm" x="85" y="86" text-anchor="middle">百万篇文章</text>
+  <rect class="bx-b" x="220" y="40" width="140" height="180" rx="10"/>
+  <text class="ttl on-b" x="290" y="66" text-anchor="middle">浏览器</text>
+  <text class="sm" x="290" y="90" text-anchor="middle">已下载的 20 篇</text>
+  <rect class="bx-a" x="236" y="104" width="108" height="40" rx="6"/>
+  <text class="mono sm on-a" x="290" y="128" text-anchor="middle">.filter(…)</text>
+  <text class="sm" x="290" y="170" text-anchor="middle">只能在这 20 篇</text>
+  <text class="sm" x="290" y="186" text-anchor="middle">里面找</text>
+  <path class="ln-g" d="M152 80 H216" marker-end="url(#ar-g)"/>
+  <text class="sm" x="184" y="72" text-anchor="middle">只请求一次</text>
+  <text class="sm on-g" x="190" y="248" text-anchor="middle">✓ 瞬间响应  ✗ 找不到没下载的数据</text>
+
+  <text class="ttl" x="570" y="24" text-anchor="middle">服务端搜索</text>
+  <rect class="bx-g" x="400" y="40" width="130" height="180" rx="10"/>
+  <text class="ttl on-g" x="465" y="66" text-anchor="middle">服务器</text>
+  <text class="sm" x="465" y="86" text-anchor="middle">百万篇文章</text>
+  <rect class="bx-a" x="414" y="104" width="102" height="40" rx="6"/>
+  <text class="sm on-a" x="465" y="128" text-anchor="middle">按搜索词查询</text>
+  <rect class="bx-b" x="600" y="40" width="140" height="180" rx="10"/>
+  <text class="ttl on-b" x="670" y="66" text-anchor="middle">浏览器</text>
+  <text class="sm" x="670" y="90" text-anchor="middle">显示返回的结果</text>
+  <path class="ln-b" d="M596 120 H534" marker-end="url(#ar-b)"/>
+  <text class="sm on-b" x="565" y="112" text-anchor="middle">?query=vue</text>
+  <path class="ln-g" d="M534 160 H596" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="565" y="180" text-anchor="middle">20 篇 vue</text>
+  <text class="sm on-g" x="570" y="248" text-anchor="middle">✓ 搜索全部数据  ✗ 每次都要等网络</text>
+</svg>
+<figcaption>图 21-2　两种搜索的区别在于“过滤发生在哪里”</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>客户端搜索</th><th>服务端搜索</th></tr>
+  <tr><td>在哪里过滤</td><td>浏览器</td><td>服务器</td></tr>
+  <tr><td>速度</td><td>即时</td><td>要等一次网络往返</td></tr>
+  <tr><td>数据量</td><td>只适合小数据集</td><td>适合海量数据</td></tr>
+  <tr><td>服务器压力</td><td>几乎没有</td><td>每次搜索一个请求</td></tr>
+</table>
+</div>
+
+<div class="box tip">
+  <div class="t">&#128161; 先自己试试</div>
+  <p>
+    任务：把搜索改成服务端搜索。提示：<code>searchedStories</code> 不再需要（API 返回的就是过滤好的结果）；
+    请求地址里的 <code>react</code> 换成 <code>searchTerm</code>；处理 <code>searchTerm</code> 为空的情况。
+  </p>
+</div>
+
+<p>第一步，去掉客户端过滤，直接把 <code>stories.data</code> 交给 <code>List</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre>{stories.isLoading ? (
+  <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> ...<span class="tk-tg">&lt;/p</span>&gt;
+) : (
+  <span class="tk-tg">&lt;List</span> list={stories.data} onRemoveItem={handleRemoveStory} <span class="tk-tg">/&gt;</span>
+)}</pre></div>
+
+<p>第二步，用 <code>searchTerm</code> 拼接地址，并把它加进依赖数组 —— 这样搜索词每次变化，effect 都会重新执行，发起新请求：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-cm">// searchTerm 为空（'', null, undefined）时什么也不做</span>
+  <span class="tk-kw">if</span> (!searchTerm) <span class="tk-kw">return</span>;
+
+  <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+  <span class="tk-fn">fetch</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>)
+    .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>())
+    .<span class="tk-fn">then</span>((result) =&gt; {
+      <span class="tk-fn">dispatchStories</span>({
+        <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+        payload: result.hits,
+      });
+    })
+    .<span class="tk-kw">catch</span>(() =&gt;
+      <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> })
+    );
+}, [searchTerm]);</pre></div>
+
+<p>
+  现在输入 “vue”，就会看到真正的 Vue 相关文章。如果依赖数组还是 <code>[]</code>，effect 只会在第一次渲染时用初始搜索词请求一次 ——
+  这正是第 14 章“依赖要写全”的意义所在，ESLint 也会提醒你。
+</p>
+
+<div class="box warn">
+  <div class="t">&#9888; 每敲一个键就发一次请求</div>
+  <p>
+    输入 “javascript” 会依次请求 j、ja、jav、java……共 10 次。这既浪费，也可能触发 API 的<strong>限流</strong>（rate limiting：
+    比如每分钟最多 N 次请求，超出就返回错误）。第 22 章会改成“点按钮才搜索”。
+  </p>
+</div>
+
+<h2 id="race">竞态条件：后发的请求先回来</h2>
+
+<p>
+  服务端搜索还埋着一个更隐蔽的 bug。快速输入 “re” 再改成 “vue”：两个请求几乎同时发出，但网络的快慢不可预测 ——
+  如果 “re” 的响应比 “vue” <strong>晚</strong>到，它会覆盖掉正确的结果，搜索框里写着 vue，列表却是 re 的内容。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="竞态条件：旧请求的响应晚到，覆盖了新结果">
+  <path class="ln" d="M60 190 H740" marker-end="url(#ar)"/>
+  <text class="sm" x="730" y="212" text-anchor="end">时间 →</text>
+  <text class="ttl" x="20" y="60">"re"</text>
+  <text class="ttl" x="20" y="130">"vue"</text>
+  <path class="ln-r" d="M80 55 C200 55 500 60 600 150" marker-end="url(#ar-r)"/>
+  <text class="sm on-r" x="330" y="46">请求 re ………………………… 响应很慢</text>
+  <path class="ln-g" d="M180 125 C260 125 330 130 380 150" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="200" y="116">请求 vue → 响应很快</text>
+  <circle class="fill-g" cx="386" cy="160" r="6"/>
+  <text class="sm on-g" x="386" y="180" text-anchor="middle">显示 vue ✓</text>
+  <circle class="fill-r" cx="606" cy="160" r="6"/>
+  <text class="sm on-r" x="606" y="180" text-anchor="middle">被 re 覆盖 ✗</text>
+</svg>
+<figcaption>图 21-3　竞态条件：最后到达的响应不一定是最后发出的请求</figcaption>
+</figure>
+
+<p>
+  解决办法是 effect 的<strong>清理函数</strong>（第 14 章）。搜索词一变，React 会先运行上一次 effect 的清理函数 ——
+  我们在里面把上一次请求标记为“作废”，甚至直接取消它：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-kw">if</span> (!searchTerm) <span class="tk-kw">return</span>;
+
+  <span class="tk-kw">const</span> controller = <span class="tk-kw">new</span> <span class="tk-tp">AbortController</span>();
+
+  <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+  <span class="tk-fn">fetch</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>, { signal: controller.signal })
+    .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>())
+    .<span class="tk-fn">then</span>((result) =&gt; {
+      <span class="tk-fn">dispatchStories</span>({
+        <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+        payload: result.hits,
+      });
+    })
+    .<span class="tk-kw">catch</span>((error) =&gt; {
+      <span class="tk-cm">// 被主动取消的请求不算失败</span>
+      <span class="tk-kw">if</span> (error.name === <span class="tk-st">'AbortError'</span>) <span class="tk-kw">return</span>;
+      <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> });
+    });
+
+  <span class="tk-cm">// 搜索词变化或组件卸载时，取消还没完成的旧请求</span>
+  <span class="tk-kw">return</span> () =&gt; controller.<span class="tk-fn">abort</span>();
+}, [searchTerm]);</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 原书没有讲这一步</div>
+  <p>
+    为了保持简单，原书的代码没有处理竞态条件，后续章节也会继续在此基础上演进。
+    本教程在这里补充它，是因为这是“在 useEffect 里请求数据”最常见的真实 bug；
+    React 官方文档也把它作为 effect 需要清理的典型例子。接下来的章节为了和原书保持一致，代码里会省略这部分，但你心里要知道它的存在。
+  </p>
+</div>
+
+<h2 id="modern">现代应用怎么获取数据？</h2>
+
+<p>
+  在 <code>useEffect</code> 里手写 <code>fetch</code> 是理解原理的最佳方式，但真实项目里你还需要处理缓存、去重、重试、竞态、后台刷新……
+  所以今天的主流做法是：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">手写 effect <span class="ver old">学习用 / 小项目</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'INIT'</span> });
+  <span class="tk-fn">fetch</span>(url)
+    .<span class="tk-fn">then</span>((r) =&gt; r.<span class="tk-fn">json</span>())
+    .<span class="tk-fn">then</span>((data) =&gt; <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'SUCCESS'</span>, payload: data }))
+    .<span class="tk-kw">catch</span>(() =&gt; <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'FAILURE'</span> }));
+}, [url]);</pre></div>
+  </div>
+  <div class="new"><div class="h">数据请求库 <span class="ver">生产项目</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">const</span> { data, isPending, isError } = <span class="tk-fn">useQuery</span>({
+  queryKey: [<span class="tk-st">'stories'</span>, searchTerm],
+  queryFn: () =&gt;
+    <span class="tk-fn">fetch</span>(<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>).<span class="tk-fn">then</span>((r) =&gt; r.<span class="tk-fn">json</span>()),
+});
+<span class="tk-cm">// 缓存、去重、竞态、重试都已处理</span></pre></div>
+  </div>
+</div>
+
+<p>
+  使用 Next.js、React Router 等框架时，数据通常在路由层（loader / 服务端组件）获取，更不需要 useEffect。
+  本教程继续手写，因为理解底层机制之后，你才知道这些库替你做了什么。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li><code>fetch(url).then(r =&gt; r.json())</code> 获取远程 JSON；Hacker News 的文章在 <code>result.hits</code> 里。</li>
+  <li>客户端搜索在浏览器过滤已有数据；服务端搜索把搜索词发给服务器，返回过滤后的结果。</li>
+  <li>把 <code>searchTerm</code> 放进 effect 的依赖数组，搜索词变化时就会重新请求。</li>
+  <li>并发请求可能乱序返回（竞态条件），用清理函数 + <code>AbortController</code> 取消过期的请求。</li>
+  <li>生产项目通常用 TanStack Query 等库或框架的数据加载机制。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>打开浏览器开发者工具的 Network 面板，边输入边观察发出了多少请求。</li>
+    <li>把 API 地址故意写错一个字母，确认错误提示能正常显示；再试试一个会返回 404 的地址，观察 <code>fetch</code> 的行为，并加上 <code>response.ok</code> 检查。</li>
+    <li>在 Network 面板里把网速限制为 “Slow 3G”，快速修改搜索词，观察有无 <code>AbortController</code> 时的区别（被取消的请求会显示为 canceled）。</li>
+    <li>浏览 Hacker News API 文档，看看还支持哪些查询参数。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>在 React 中如何从 API 获取数据？</summary>
+    <div><p>基础做法是在 useEffect 中调用 fetch/axios，把结果、加载与错误状态存进 state；生产中常用 TanStack Query 等库或框架提供的数据加载机制。</p></div></details>
+  <details><summary>客户端搜索和服务端搜索有什么区别？</summary>
+    <div><p>客户端搜索在浏览器中过滤已加载的数据，快但受限于数据量；服务端搜索把查询发给服务器，适合大数据集但每次需要网络往返。</p></div></details>
+  <details><summary>useEffect 的依赖数组在数据获取中起什么作用？</summary>
+    <div><p>决定何时重新请求：依赖（如搜索词、URL）变化时 effect 重新执行，从而获取新数据。</p></div></details>
+  <details><summary>什么是竞态条件？如何避免？</summary>
+    <div><p>多个异步请求的响应顺序与发出顺序不一致，导致旧数据覆盖新数据。可在 effect 清理函数中用 AbortController 取消旧请求，或设置 ignore 标志忽略过期响应。</p></div></details>
+  <details><summary>如何减少频繁的 API 请求？</summary>
+    <div><p>防抖（debounce）、节流（throttle），或改为用户显式提交时才请求。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

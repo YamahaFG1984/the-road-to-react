@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 34 章 · 记住最近的搜索 — React 19 入门教程</title>
+<meta name="description" content="用 URL 数组记录搜索历史">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="34">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 34 章 · 实战进阶</span>
+<h1>记住最近的搜索</h1>
+<p class="lede">
+  这一章的任务：记住最近的 5 次搜索，把它们显示成按钮，点一下就能重新搜索。
+  有趣的是，我们<strong>不需要新增任何状态</strong> —— 只要把“当前请求的 URL”升级成“所有请求过的 URL 列表”，
+  最近搜索就可以从中派生出来。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>把单个 <code>url</code> 状态重构为 <code>urls</code> 数组</li>
+    <li>从状态派生出“最近搜索”列表，用 <code>slice</code>、<code>map</code>、<code>reduce</code> 处理数组</li>
+    <li>提取重复逻辑为工具函数和通用处理函数</li>
+    <li>把新功能提取成独立组件</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<div class="box tip">
+  <div class="t">&#128161; 任务</div>
+  <p>
+    记住最近 5 个请求过 API 的搜索词，为每个显示一个按钮，点击时重新获取该搜索词的文章。
+    提示：不要新建状态，而是把 <code>url</code> / <code>setUrl</code> 改成 <code>urls</code> / <code>setUrls</code>；
+    最后一个 URL 用来请求数据，最后 5 个用来显示按钮。
+  </p>
+</div>
+
+<h2 id="urls">从 url 到 urls</h2>
+
+<p>初始值从一个字符串变成只含一个元素的数组：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> [urls, setUrls] = <span class="tk-fn">useState</span>([<span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>]);
+
+  ...
+};</pre></div>
+
+<p>请求数据时，用数组里的<strong>最后一个</strong> URL：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> handleFetchStories = <span class="tk-fn">useCallback</span>(<span class="tk-kw">async</span> () =&gt; {
+  <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+  <span class="tk-kw">try</span> {
+    <span class="tk-kw">const</span> lastUrl = urls[urls.length - <span class="tk-nm">1</span>];
+    <span class="tk-kw">const</span> result = <span class="tk-kw">await</span> axios.<span class="tk-fn">get</span>(lastUrl);
+
+    <span class="tk-fn">dispatchStories</span>({
+      <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+      payload: result.data.hits,
+    });
+  } <span class="tk-kw">catch</span> {
+    <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> });
+  }
+}, [urls]);</pre></div>
+
+<p>提交搜索时，不再替换 URL，而是把新 URL <strong>追加</strong>到数组末尾（<code>concat</code> 返回新数组，不修改原数组）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> searchAction = () =&gt; {
+  <span class="tk-kw">const</span> url = <span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>;
+  <span class="tk-fn">setUrls</span>(urls.<span class="tk-fn">concat</span>(url));
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="urls 数组记录所有搜索，最后一个用于请求，最后五个用于显示按钮">
+  <text class="ttl" x="20" y="24">urls 状态（每次搜索追加一个）</text>
+  <g>
+    <rect class="bx" x="20" y="40" width="90" height="40" rx="6"/><text class="mono sm" x="65" y="65" text-anchor="middle">react</text>
+    <rect class="bx" x="115" y="40" width="90" height="40" rx="6"/><text class="mono sm" x="160" y="65" text-anchor="middle">vue</text>
+    <rect class="bx-b" x="210" y="40" width="90" height="40" rx="6"/><text class="mono sm on-b" x="255" y="65" text-anchor="middle">svelte</text>
+    <rect class="bx-b" x="305" y="40" width="90" height="40" rx="6"/><text class="mono sm on-b" x="350" y="65" text-anchor="middle">solid</text>
+    <rect class="bx-b" x="400" y="40" width="90" height="40" rx="6"/><text class="mono sm on-b" x="445" y="65" text-anchor="middle">angular</text>
+    <rect class="bx-b" x="495" y="40" width="90" height="40" rx="6"/><text class="mono sm on-b" x="540" y="65" text-anchor="middle">qwik</text>
+    <rect class="bx-b" x="590" y="40" width="90" height="40" rx="6"/><text class="mono sm on-b" x="635" y="65" text-anchor="middle">preact</text>
+    <rect class="bx-a" x="685" y="40" width="65" height="40" rx="6"/><text class="mono sm on-a" x="717" y="65" text-anchor="middle">astro</text>
+  </g>
+  <text class="sm" x="385" y="100" text-anchor="middle">（图中只写了搜索词，实际存的是完整 URL）</text>
+
+  <path class="ln-b" d="M210 118 H680"/>
+  <path class="ln-b" d="M210 112 V124"/><path class="ln-b" d="M680 112 V124"/>
+  <text class="sm on-b" x="445" y="144" text-anchor="middle">slice(-6).slice(0, -1)：当前搜索之前的 5 个 → 显示成按钮</text>
+
+  <path class="ln-a" d="M717 84 V180" marker-end="url(#ar-a)"/>
+  <rect class="bx-a" x="540" y="184" width="210" height="36" rx="8"/>
+  <text class="mono sm on-a" x="645" y="207" text-anchor="middle" style="font-size:10.5px">urls[urls.length - 1] → 请求</text>
+
+  <rect class="bx-b" x="20" y="170" width="480" height="50" rx="8"/>
+  <text class="sm" x="36" y="192">Last searches:</text>
+  <text class="mono sm on-b" x="140" y="192">[svelte] [solid] [angular] [qwik] [preact]</text>
+  <text class="sm" x="36" y="210">点击任一按钮 = 再追加一次该 URL</text>
+</svg>
+<figcaption>图 34-1　一个数组状态同时承担两个角色：最后一项决定请求什么，前面的几项组成搜索历史</figcaption>
+</figure>
+
+<h2 id="buttons">渲染最近搜索按钮</h2>
+
+<p>写一个工具函数取出最后 5 个 URL，并为每个渲染一个按钮：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> getLastSearches = (urls) =&gt; urls.<span class="tk-fn">slice</span>(-<span class="tk-nm">5</span>);
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> handleLastSearch = (url) =&gt; {
+    <span class="tk-cm">// 稍后实现</span>
+  };
+
+  <span class="tk-kw">const</span> lastSearches = <span class="tk-fn">getLastSearches</span>(urls);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;SearchForm</span> ... <span class="tk-tg">/&gt;</span>
+
+      {lastSearches.<span class="tk-fn">map</span>((url) =&gt; (
+        <span class="tk-tg">&lt;button</span>
+          key={url}
+          <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+          onClick={() =&gt; <span class="tk-fn">handleLastSearch</span>(url)}
+        &gt;
+          {url}
+        <span class="tk-tg">&lt;/button</span>&gt;
+      ))}
+
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>按钮上显示完整 URL 太长了。只显示搜索词，把 API 前缀去掉：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> extractSearchTerm = (url) =&gt; url.<span class="tk-fn">replace</span>(<span class="tk-tp">API_ENDPOINT</span>, <span class="tk-st">''</span>);
+
+<span class="tk-kw">const</span> getLastSearches = (urls) =&gt;
+  urls.<span class="tk-fn">slice</span>(-<span class="tk-nm">5</span>).<span class="tk-fn">map</span>(extractSearchTerm);
+
+...
+
+{lastSearches.<span class="tk-fn">map</span>((searchTerm) =&gt; (
+  <span class="tk-tg">&lt;button</span>
+    key={searchTerm}
+    <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+    onClick={() =&gt; <span class="tk-fn">handleLastSearch</span>(searchTerm)}
+  &gt;
+    {searchTerm}
+  <span class="tk-tg">&lt;/button</span>&gt;
+))}</pre></div>
+
+<p>
+  <code>.map(extractSearchTerm)</code> 是 <code>.map((url) =&gt; extractSearchTerm(url))</code> 的简写 —— 直接把函数本身交给 <code>map</code>。
+</p>
+
+<h2 id="handler">点击按钮重新搜索</h2>
+
+<p>既然请求总是用最后一个 URL，那么“重新搜索”就是再追加一次这个 URL：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> handleLastSearch = (searchTerm) =&gt; {
+  <span class="tk-kw">const</span> url = <span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>;
+  <span class="tk-fn">setUrls</span>(urls.<span class="tk-fn">concat</span>(url));
+};</pre></div>
+
+<p>这和 <code>searchAction</code> 几乎一样。把共同逻辑提取出来，URL 的拼接也提取成一个工具函数：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> getUrl = (searchTerm) =&gt; <span class="tk-st">`${API_ENDPOINT}${searchTerm}`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-cm">// 注意：依然要包在 [] 里</span>
+  <span class="tk-kw">const</span> [urls, setUrls] = <span class="tk-fn">useState</span>([<span class="tk-fn">getUrl</span>(searchTerm)]);
+
+  <span class="tk-kw">const</span> handleSearch = (searchTerm) =&gt; {
+    <span class="tk-kw">const</span> url = <span class="tk-fn">getUrl</span>(searchTerm);
+    <span class="tk-fn">setUrls</span>(urls.<span class="tk-fn">concat</span>(url));
+  };
+
+  <span class="tk-kw">const</span> searchAction = () =&gt; {
+    <span class="tk-fn">handleSearch</span>(searchTerm);
+  };
+
+  <span class="tk-kw">const</span> handleLastSearch = (searchTerm) =&gt; {
+    <span class="tk-fn">handleSearch</span>(searchTerm);
+  };
+
+  ...
+};</pre></div>
+
+<div class="box key">
+  <div class="t">&#9733; 提取之后，再找找第三个使用者</div>
+  <p>
+    把两处共同的逻辑提取成函数后，顺手检查一下别处还有没有同样的代码 —— 比如 <code>useState</code> 的初始值也可以用 <code>getUrl</code>。
+  </p>
+</div>
+
+<h3>key 冲突</h3>
+
+<p>
+  同一个词搜两次，就会出现两个 key 相同的按钮，React 会警告。把下标拼进去让 key 唯一：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre>{lastSearches.<span class="tk-fn">map</span>((searchTerm, index) =&gt; (
+  <span class="tk-tg">&lt;button</span>
+    key={searchTerm + index}
+    <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+    onClick={() =&gt; <span class="tk-fn">handleLastSearch</span>(searchTerm)}
+  &gt;
+    {searchTerm}
+  <span class="tk-tg">&lt;/button</span>&gt;
+))}</pre></div>
+
+<p>第 5 章说过下标不是理想的 key；但这些按钮没有输入框之类的内部状态，这里不会造成实际问题。</p>
+
+<h2 id="polish">三个体验改进</h2>
+
+<div class="box tip">
+  <div class="t">&#128161; 更多任务</div>
+  <ol style="margin-bottom:0">
+    <li>不要把<strong>当前</strong>搜索显示成按钮，只显示它之前的 5 个。</li>
+    <li>不要显示<strong>连续重复</strong>的搜索：连搜两次 React 只显示一个按钮。</li>
+    <li>点击历史按钮时，搜索框里的文字也要变成那个搜索词。</li>
+  </ol>
+</div>
+
+<p><strong>改进 1</strong>：取最后 6 个，再去掉最后一个（当前搜索）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> getLastSearches = (urls) =&gt;
+  urls
+    .<span class="tk-fn">slice</span>(-<span class="tk-nm">6</span>)
+    .<span class="tk-fn">slice</span>(<span class="tk-nm">0</span>, -<span class="tk-nm">1</span>)
+    .<span class="tk-fn">map</span>(extractSearchTerm);</pre></div>
+
+<p><strong>改进 2</strong>：在截取之前，先用 <code>reduce</code> 把相邻的重复项合并：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> getLastSearches = (urls) =&gt;
+  urls
+    .<span class="tk-fn">reduce</span>((result, url, index) =&gt; {
+      <span class="tk-kw">const</span> searchTerm = <span class="tk-fn">extractSearchTerm</span>(url);
+
+      <span class="tk-kw">if</span> (index === <span class="tk-nm">0</span>) {
+        <span class="tk-kw">return</span> result.<span class="tk-fn">concat</span>(searchTerm);
+      }
+
+      <span class="tk-kw">const</span> previousSearchTerm = result[result.length - <span class="tk-nm">1</span>];
+
+      <span class="tk-kw">if</span> (searchTerm === previousSearchTerm) {
+        <span class="tk-kw">return</span> result;
+      } <span class="tk-kw">else</span> {
+        <span class="tk-kw">return</span> result.<span class="tk-fn">concat</span>(searchTerm);
+      }
+    }, [])
+    .<span class="tk-fn">slice</span>(-<span class="tk-nm">6</span>)
+    .<span class="tk-fn">slice</span>(<span class="tk-nm">0</span>, -<span class="tk-nm">1</span>);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="reduce 合并相邻重复项再截取">
+  <text class="ttl" x="20" y="24">输入（URL → 搜索词）</text>
+  <rect class="bx" x="20" y="36" width="80" height="34" rx="6"/><text class="mono sm" x="60" y="58" text-anchor="middle">react</text>
+  <rect class="bx-r" x="105" y="36" width="80" height="34" rx="6"/><text class="mono sm on-r" x="145" y="58" text-anchor="middle">react</text>
+  <rect class="bx" x="190" y="36" width="80" height="34" rx="6"/><text class="mono sm" x="230" y="58" text-anchor="middle">vue</text>
+  <rect class="bx" x="275" y="36" width="80" height="34" rx="6"/><text class="mono sm" x="315" y="58" text-anchor="middle">react</text>
+  <rect class="bx" x="360" y="36" width="80" height="34" rx="6"/><text class="mono sm" x="400" y="58" text-anchor="middle">solid</text>
+  <rect class="bx-r" x="445" y="36" width="80" height="34" rx="6"/><text class="mono sm on-r" x="485" y="58" text-anchor="middle">solid</text>
+  <rect class="bx" x="530" y="36" width="80" height="34" rx="6"/><text class="mono sm" x="570" y="58" text-anchor="middle">astro</text>
+  <text class="sm on-r" x="640" y="58">红色 = 与前一项相同</text>
+
+  <path class="ln-a" d="M300 76 V100" marker-end="url(#ar-a)"/>
+  <text class="mono sm on-a" x="312" y="94">reduce：只在和前一项不同时 concat</text>
+
+  <rect class="bx" x="20" y="108" width="80" height="34" rx="6"/><text class="mono sm" x="60" y="130" text-anchor="middle">react</text>
+  <rect class="bx" x="105" y="108" width="80" height="34" rx="6"/><text class="mono sm" x="145" y="130" text-anchor="middle">vue</text>
+  <rect class="bx" x="190" y="108" width="80" height="34" rx="6"/><text class="mono sm" x="230" y="130" text-anchor="middle">react</text>
+  <rect class="bx" x="275" y="108" width="80" height="34" rx="6"/><text class="mono sm" x="315" y="130" text-anchor="middle">solid</text>
+  <rect class="bx-a" x="360" y="108" width="80" height="34" rx="6"/><text class="mono sm on-a" x="400" y="130" text-anchor="middle">astro</text>
+  <text class="sm" x="460" y="130">注意 react 仍出现两次：只合并“相邻”的</text>
+
+  <path class="ln-b" d="M200 148 V172" marker-end="url(#ar-b)"/>
+  <text class="mono sm on-b" x="212" y="166">.slice(-6).slice(0, -1)：去掉当前的 astro</text>
+
+  <rect class="bx-b" x="20" y="180" width="80" height="34" rx="6"/><text class="mono sm on-b" x="60" y="202" text-anchor="middle">react</text>
+  <rect class="bx-b" x="105" y="180" width="80" height="34" rx="6"/><text class="mono sm on-b" x="145" y="202" text-anchor="middle">vue</text>
+  <rect class="bx-b" x="190" y="180" width="80" height="34" rx="6"/><text class="mono sm on-b" x="230" y="202" text-anchor="middle">react</text>
+  <rect class="bx-b" x="275" y="180" width="80" height="34" rx="6"/><text class="mono sm on-b" x="315" y="202" text-anchor="middle">solid</text>
+  <text class="sm on-b" x="380" y="202">→ 显示成 4 个按钮</text>
+</svg>
+<figcaption>图 34-2　数据处理管道：合并相邻重复 → 截取 → 去掉当前</figcaption>
+</figure>
+
+<p><strong>改进 3</strong>：点击历史按钮时，同时更新搜索框的状态：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> handleLastSearch = (searchTerm) =&gt; {
+  <span class="tk-fn">setSearchTerm</span>(searchTerm);
+
+  <span class="tk-fn">handleSearch</span>(searchTerm);
+};</pre></div>
+
+<h2 id="component">提取 LastSearches 组件</h2>
+
+<p>最后，把这块新界面提取成组件，保持 <code>App</code> 简洁：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> lastSearches = <span class="tk-fn">getLastSearches</span>(urls);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;SearchForm</span> ... <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;LastSearches</span>
+        lastSearches={lastSearches}
+        onLastSearch={handleLastSearch}
+      <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      ...
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">LastSearches</span> = ({ lastSearches, onLastSearch }) =&gt; (
+  <span class="tk-tg">&lt;&gt;</span>
+    {lastSearches.<span class="tk-fn">map</span>((searchTerm, index) =&gt; (
+      <span class="tk-tg">&lt;button</span>
+        key={searchTerm + index}
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        onClick={() =&gt; <span class="tk-fn">onLastSearch</span>(searchTerm)}
+      &gt;
+        {searchTerm}
+      <span class="tk-tg">&lt;/button</span>&gt;
+    ))}
+  <span class="tk-tg">&lt;/&gt;</span>
+);</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 回顾一下用到了多少东西</div>
+  <p>
+    这个功能综合了：状态的重构（单值 → 数组）、不可变更新（<code>concat</code>）、派生数据（最近搜索从 urls 计算而来）、
+    数组方法链（<code>slice</code>、<code>map</code>、<code>reduce</code>）、内联处理函数、key、组件提取……
+    如果你能独立完成，React 基础已经相当扎实了。实现方式也不止一种，你的做法可能更简单。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>把 <code>url</code> 重构为 <code>urls</code> 数组，最后一个用于请求，其余构成搜索历史 —— 不需要新增状态。</li>
+  <li>“最近搜索”是派生数据：用 <code>slice</code>、<code>map</code>、<code>reduce</code> 从状态计算得到。</li>
+  <li>提取工具函数（<code>getUrl</code>、<code>extractSearchTerm</code>）和通用处理函数（<code>handleSearch</code>），消除重复。</li>
+  <li>新功能的界面提取成独立组件，保持 App 轻量。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>完成三项体验改进。</li>
+    <li>想一想：<code>urls</code> 会无限增长。怎样只保留最近若干条？（提示：在 <code>handleSearch</code> 里截断。）</li>
+    <li>挑战：让搜索历史在刷新页面后依然存在（提示：第 15 章的自定义 Hook 需要支持数组，可以用 JSON 序列化）。</li>
+    <li>（选读）了解 JavaScript 中的分组操作，例如 <code>Object.groupBy</code>。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么这里不需要为搜索历史新建一个状态？</summary>
+    <div><p>搜索历史可以从已有的 urls 状态派生；新增状态会产生两份需要同步的数据，容易出错。</p></div></details>
+  <details><summary>concat 和 push 有什么区别？在 React 状态中该用哪个？</summary>
+    <div><p>push 修改原数组并返回新长度；concat 返回新数组不修改原数组。React 状态需要不可变更新，应使用 concat 或展开运算符 <code>[...arr, x]</code>。</p></div></details>
+  <details><summary>什么时候可以用下标作为 key？</summary>
+    <div><p>当列表项没有稳定 id、且列表项不包含内部状态、或列表不会重新排序时，作为最后手段；与内容拼接可以减少冲突。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 18 章 · 内联处理函数：删除条目 — React 19 入门教程</title>
+<meta name="description" content="把参数“夹带”进事件处理函数">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="18">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 18 章 · Hooks 与组件模式</span>
+<h1>内联处理函数：删除条目</h1>
+<p class="lede">
+  这一章给列表加上第二个交互：每条文章旁边放一个 “Dismiss” 按钮，点击就把它从列表里移除。
+  实现它会用到之前学过的几乎所有知识 —— state、props、处理函数、回调 —— 还会引出一个新写法：
+  <strong>内联处理函数</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>把文章列表变成 state，用 <code>filter()</code> 以不可变的方式删除一项</li>
+    <li>把回调函数穿过两层组件传给 <code>Item</code></li>
+    <li>掌握给处理函数“夹带参数”的两种内联写法</li>
+    <li>知道内联处理函数什么时候该用、什么时候该拆出去</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<div class="box tip">
+  <div class="t">&#128161; 先自己试试</div>
+  <p>任务：每个列表项旁边渲染一个按钮，点击后从列表中删除该项。提示：</p>
+  <ul style="margin-bottom:0">
+    <li>列表需要变成 state（<code>useState</code>），才能被修改；</li>
+    <li>每个 <code>Item</code> 渲染一个按钮，点击时通过回调通知 <code>App</code>；</li>
+    <li><code>App</code> 根据被点击项的 id 过滤出新数组，设为新状态。</li>
+  </ul>
+</div>
+
+<h2 id="state">第一步：让列表成为状态</h2>
+
+<p>
+  目前 <code>stories</code> 是 <code>App</code> 里的普通常量，只能被“过滤显示”，不能真正被修改。
+  把示例数据挪到组件外面叫 <code>initialStories</code>，再用它初始化一个状态：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> initialStories = [
+  {
+    title: <span class="tk-st">'React'</span>,
+    url: <span class="tk-st">'https://react.dev/'</span>,
+    author: <span class="tk-st">'Jordan Walke'</span>,
+    num_comments: <span class="tk-nm">3</span>,
+    points: <span class="tk-nm">4</span>,
+    objectID: <span class="tk-nm">0</span>,
+  },
+  {
+    title: <span class="tk-st">'Redux'</span>,
+    url: <span class="tk-st">'https://redux.js.org/'</span>,
+    author: <span class="tk-st">'Dan Abramov, Andrew Clark'</span>,
+    num_comments: <span class="tk-nm">2</span>,
+    points: <span class="tk-nm">5</span>,
+    objectID: <span class="tk-nm">1</span>,
+  },
+];
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useStorageState</span>(<span class="tk-st">'search'</span>, <span class="tk-st">'React'</span>);
+
+  <span class="tk-kw">const</span> [stories, setStories] = <span class="tk-fn">useState</span>(initialStories);
+
+  ...
+};</pre></div>
+
+<p>页面表现和之前完全一样，只是列表的“来源”变成了一个可以修改的状态。</p>
+
+<h2 id="remove">第二步：在 App 里写删除逻辑</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+
+  <span class="tk-kw">const</span> [stories, setStories] = <span class="tk-fn">useState</span>(initialStories);
+
+  <span class="tk-kw">const</span> handleRemoveStory = (item) =&gt; {
+    <span class="tk-kw">const</span> newStories = stories.<span class="tk-fn">filter</span>(
+      (story) =&gt; item.objectID !== story.objectID
+    );
+
+    <span class="tk-fn">setStories</span>(newStories);
+  };
+
+  ...
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      ...
+      <span class="tk-tg">&lt;hr</span> <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;List</span> list={searchedStories} onRemoveItem={handleRemoveStory} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>
+  <code>handleRemoveStory</code> 接收要删除的那一项，用 <code>filter()</code> 留下所有 id <strong>不等于</strong>它的文章，
+  得到一个<strong>新数组</strong>，再设为新状态。注意我们没有用 <code>splice</code> 去修改原数组 ——
+  第 10 章说过，数组和对象状态要“替换”而不是“修改”。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 180" role="img" aria-label="filter 生成新数组而不修改原数组">
+  <text class="ttl" x="120" y="24" text-anchor="middle">旧 stories</text>
+  <rect class="bx" x="40" y="36" width="160" height="34" rx="6"/><text class="sm" x="120" y="58" text-anchor="middle">0 · React</text>
+  <rect class="bx-r" x="40" y="78" width="160" height="34" rx="6"/><text class="sm on-r" x="120" y="100" text-anchor="middle">1 · Redux  ← 点了 Dismiss</text>
+  <rect class="bx" x="40" y="120" width="160" height="34" rx="6"/><text class="sm" x="120" y="142" text-anchor="middle">2 · Vite</text>
+
+  <rect class="bx-a" x="280" y="66" width="200" height="56" rx="10"/>
+  <text class="mono sm on-a" x="380" y="90" text-anchor="middle">stories.filter(story =&gt;</text>
+  <text class="mono sm on-a" x="380" y="108" text-anchor="middle">story.objectID !== 1)</text>
+  <path class="ln-a" d="M202 94 H276" marker-end="url(#ar-a)"/>
+
+  <text class="ttl on-g" x="640" y="24" text-anchor="middle">新 stories（新数组）</text>
+  <rect class="bx-g" x="560" y="56" width="160" height="34" rx="6"/><text class="sm" x="640" y="78" text-anchor="middle">0 · React</text>
+  <rect class="bx-g" x="560" y="98" width="160" height="34" rx="6"/><text class="sm" x="640" y="120" text-anchor="middle">2 · Vite</text>
+  <path class="ln-g" d="M482 94 H556" marker-end="url(#ar-g)"/>
+  <text class="sm" x="640" y="160" text-anchor="middle">setStories(新数组) → 重新渲染</text>
+</svg>
+<figcaption>图 18-1　不可变更新：用 filter 创建新数组，原数组保持不变</figcaption>
+</figure>
+
+<h2 id="pass-down">第三步：把回调传到 Item</h2>
+
+<p>
+  <code>List</code> 自己用不到 <code>onRemoveItem</code>，它只是个“二传手”，原样转交给每个 <code>Item</code>：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">List</span> = ({ list, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;ul</span>&gt;
+    {list.<span class="tk-fn">map</span>((item) =&gt; (
+      <span class="tk-tg">&lt;Item</span>
+        key={item.objectID}
+        item={item}
+        onRemoveItem={onRemoveItem}
+      <span class="tk-tg">/&gt;</span>
+    ))}
+  <span class="tk-tg">&lt;/ul</span>&gt;
+);</pre></div>
+
+<p>
+  <code>Item</code> 里加一个按钮。回调需要知道“删的是哪一项”，所以再写一个处理函数，把 <code>item</code> 交给回调：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; {
+  <span class="tk-kw">const</span> handleRemoveItem = () =&gt; {
+    <span class="tk-fn">onRemoveItem</span>(item);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;li</span>&gt;
+      <span class="tk-tg">&lt;span</span>&gt;
+        <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+      <span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span>&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span>&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span>&gt;
+        <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={handleRemoveItem}&gt;
+          <span class="tk-tp">Dismiss</span>
+        <span class="tk-tg">&lt;/button</span>&gt;
+      <span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;/li</span>&gt;
+  );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="删除操作的回调链：Item 调用回调，App 更新状态，列表重新渲染">
+  <rect class="bx-a" x="240" y="20" width="280" height="70" rx="12"/>
+  <text class="ttl on-a" x="380" y="44" text-anchor="middle">App</text>
+  <text class="mono sm" x="380" y="64" text-anchor="middle">stories ●  handleRemoveStory(item)</text>
+  <text class="sm" x="380" y="80" text-anchor="middle">④ setStories(新数组)</text>
+
+  <rect class="bx-b" x="240" y="120" width="280" height="50" rx="10"/>
+  <text class="ttl on-b" x="380" y="142" text-anchor="middle">List</text>
+  <text class="sm" x="380" y="160" text-anchor="middle">只是转交 onRemoveItem</text>
+
+  <rect class="bx-g" x="240" y="200" width="280" height="70" rx="10"/>
+  <text class="ttl on-g" x="380" y="224" text-anchor="middle">Item（Redux 那一行）</text>
+  <text class="sm" x="380" y="244" text-anchor="middle">① 点击 Dismiss</text>
+  <text class="mono sm" x="380" y="262" text-anchor="middle">② onRemoveItem(item)</text>
+
+  <path class="ln-a" d="M300 92 V116" marker-end="url(#ar-a)"/>
+  <path class="ln-a" d="M300 172 V196" marker-end="url(#ar-a)"/>
+  <text class="sm on-a" x="200" y="110" text-anchor="end">onRemoveItem=</text>
+  <text class="sm on-a" x="200" y="126" text-anchor="end">{handleRemoveStory}</text>
+  <text class="sm on-a" x="200" y="190" text-anchor="end">onRemoveItem=</text>
+  <text class="sm on-a" x="200" y="206" text-anchor="end">{onRemoveItem}</text>
+
+  <path class="ln-g flow" d="M470 196 C560 170 560 110 490 92" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="570" y="140">③ 执行的是 App 里的</text>
+  <text class="sm on-g" x="570" y="156">handleRemoveStory</text>
+  <text class="sm" x="570" y="200">⑤ App 重新渲染，</text>
+  <text class="sm" x="570" y="216">新列表经 props 流下来</text>
+</svg>
+<figcaption>图 18-2　回调函数向下穿过 List 到达 Item，调用效果回到 App</figcaption>
+</figure>
+
+<p>
+  点一下 Dismiss，那一项就消失了。这个功能综合运用了 state（可变的列表）、props（向下传列表和回调）、
+  处理函数（按钮点击）和回调处理函数（通知 App）。
+</p>
+
+<h2 id="inline">内联处理函数</h2>
+
+<p>
+  <code>Item</code> 里多写的 <code>handleRemoveItem</code> 只有一个目的：把 <code>item</code> 作为参数交给 <code>onRemoveItem</code>。
+  能不能在 JSX 里直接完成？注意不能写 <code>onClick={onRemoveItem(item)}</code> —— 第 8 章讲过，那样会在渲染时就立即调用。
+  有两种写法：
+</p>
+
+<h3>写法一：bind</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={onRemoveItem.<span class="tk-fn">bind</span>(<span class="tk-kw">null</span>, item)}&gt;
+  <span class="tk-tp">Dismiss</span>
+<span class="tk-tg">&lt;/button</span>&gt;</pre></div>
+
+<p>
+  <code>fn.bind(null, item)</code> 不会调用函数，而是<strong>返回一个新函数</strong>，这个新函数被调用时会自动带上 <code>item</code> 参数。
+</p>
+
+<h3>写法二：内联箭头函数（更常用）</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;
+      <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}&gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);</pre></div>
+
+<p>
+  <code>() =&gt; onRemoveItem(item)</code> 是一个新的函数，它被交给 <code>onClick</code>；点击时它才执行，再去调用 <code>onRemoveItem(item)</code>。
+  <code>Item</code> 又变回了简洁体。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="三种写法对比">
+  <rect class="bx-r" x="20" y="20" width="230" height="160" rx="12"/>
+  <text class="ttl on-r" x="135" y="46" text-anchor="middle">&#10060; 直接调用</text>
+  <text class="mono sm" x="135" y="80" text-anchor="middle">onClick={onRemoveItem(item)}</text>
+  <text class="sm" x="135" y="112" text-anchor="middle">渲染时就执行了</text>
+  <text class="sm" x="135" y="130" text-anchor="middle">→ 每一项都被立即删除</text>
+  <text class="sm" x="135" y="148" text-anchor="middle">→ 甚至无限循环</text>
+
+  <rect class="bx-g" x="265" y="20" width="230" height="160" rx="12"/>
+  <text class="ttl on-g" x="380" y="46" text-anchor="middle">&#9989; 内联箭头函数</text>
+  <text class="mono sm" x="380" y="80" text-anchor="middle">onClick={() =&gt;</text>
+  <text class="mono sm" x="380" y="98" text-anchor="middle">onRemoveItem(item)}</text>
+  <text class="sm" x="380" y="130" text-anchor="middle">传的是“一个会调用它的函数”</text>
+  <text class="sm" x="380" y="148" text-anchor="middle">点击时才执行</text>
+
+  <rect class="bx-g" x="510" y="20" width="230" height="160" rx="12"/>
+  <text class="ttl on-g" x="625" y="46" text-anchor="middle">&#9989; 单独的处理函数</text>
+  <text class="mono sm" x="625" y="80" text-anchor="middle">const handleRemove = () =&gt;</text>
+  <text class="mono sm" x="625" y="98" text-anchor="middle">onRemoveItem(item);</text>
+  <text class="mono sm" x="625" y="116" text-anchor="middle">onClick={handleRemove}</text>
+  <text class="sm" x="625" y="148" text-anchor="middle">逻辑多时更清晰</text>
+</svg>
+<figcaption>图 18-3　内联箭头函数 = 把“调用”包进一个新函数里，推迟到点击时执行</figcaption>
+</figure>
+
+<h3>什么时候不要内联</h3>
+
+<p>内联函数写起来短，但如果逻辑变多，JSX 很快就会变得难读：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;button</span>
+  <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+  onClick={() =&gt; {
+    <span class="tk-cm">// 做点别的事情</span>
+    <span class="tk-cm">// 注意：避免在 JSX 里写复杂逻辑</span>
+    <span class="tk-fn">onRemoveItem</span>(item);
+  }}
+&gt;
+  <span class="tk-tp">Dismiss</span>
+<span class="tk-tg">&lt;/button</span>&gt;</pre></div>
+
+<div class="box key">
+  <div class="t">&#9733; 经验法则</div>
+  <p>
+    内联处理函数只要一行、不掩盖重要逻辑，就可以放心用。一旦需要块体（多于一行代码），
+    就把它提取成一个有名字的处理函数。三种写法（单独处理函数、bind、内联箭头函数）都是合法的，选最易读的那种。
+  </p>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; “内联函数会影响性能吗？”</div>
+  <p>
+    每次渲染都会创建一个新的箭头函数，这在老文章里常被当作性能问题。实际上创建函数非常便宜，
+    只有在配合 <code>memo</code> 做渲染优化时才需要关心（第 28 章）；而如果启用了 React Compiler，它会自动帮你处理。
+    初学阶段完全不用担心。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>要修改的数据必须是 state；删除一项用 <code>filter()</code> 返回新数组，再调用 setter。</li>
+  <li>回调可以经过多层组件传递，中间组件只负责转交（这就是 prop drilling 的雏形）。</li>
+  <li>给处理函数传参数：内联箭头函数 <code>() =&gt; fn(arg)</code>（最常用）或 <code>fn.bind(null, arg)</code>。</li>
+  <li>内联函数只适合一行的简单逻辑；逻辑复杂就提取成单独的处理函数。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 “Dismiss” 旁边加一个 “Upvote” 按钮，点击后该文章的 <code>points</code> 加 1（提示：用 <code>map()</code> 返回新数组，被点的那一项返回 <code>{ ...story, points: story.points + 1 }</code>）。</li>
+    <li>在列表上方加一个表单，可以添加一条新文章（提示：<code>setStories([...stories, newStory])</code>）。</li>
+    <li>刷新页面后，被删除的文章又回来了。想一想为什么，以及可以怎么解决。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是内联处理函数？有什么优点？</summary>
+    <div><p>直接写在 JSX 事件属性里的函数，如 <code>onClick={() =&gt; remove(item)}</code>。优点是能方便地传入额外参数，代码更紧凑。</p></div></details>
+  <details><summary>为什么不能写 onClick={remove(item)}？</summary>
+    <div><p>这会在渲染时立即调用 <code>remove</code>，把返回值传给 onClick；应传入一个函数，让 React 在点击时调用。</p></div></details>
+  <details><summary>如何在 React 中不可变地删除数组中的一项？</summary>
+    <div><p>用 <code>filter()</code> 生成不包含该项的新数组，再用 setter 更新状态；不要用 <code>splice</code> 修改原数组。</p></div></details>
+  <details><summary>内联函数的替代方案是什么？</summary>
+    <div><p>在组件内定义单独的具名处理函数，再把函数引用传给事件属性。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

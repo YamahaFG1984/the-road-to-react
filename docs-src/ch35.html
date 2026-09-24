@@ -1,0 +1,368 @@
+<p class="lede">
+  Hacker News API 每次只返回一页（默认 20 条）结果。仔细看它返回的数据，除了 <code>hits</code> 还有一个 <code>page</code> 字段 ——
+  这意味着我们可以继续请求第 1 页、第 2 页……这一章实现“<strong>加载更多</strong>”：点击按钮获取下一页，拼接到当前列表的末尾。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>区分普通分页和无限分页</li>
+    <li>把 API 地址拆成可组合的常量，并正确解析出搜索词</li>
+    <li>在 reducer 中保存页码，并根据页码决定替换还是拼接数据</li>
+    <li>调整条件渲染，避免加载更多时列表闪烁</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="kinds">两种分页</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="普通分页与无限分页的对比">
+  <text class="ttl" x="190" y="24" text-anchor="middle">普通分页：每次只显示一页</text>
+  <rect class="bx" x="60" y="40" width="260" height="110" rx="10"/>
+  <text class="sm" x="80" y="64">第 3 页的 20 条</text>
+  <path class="ln-d" d="M80 80 H300"/><path class="ln-d" d="M80 100 H300"/><path class="ln-d" d="M80 120 H300"/>
+  <g>
+    <rect class="bx" x="60" y="166" width="30" height="28" rx="5"/><text class="sm" x="75" y="185" text-anchor="middle">1</text>
+    <rect class="bx" x="96" y="166" width="30" height="28" rx="5"/><text class="sm" x="111" y="185" text-anchor="middle">2</text>
+    <rect class="bx-a" x="132" y="166" width="30" height="28" rx="5"/><text class="sm on-a" x="147" y="185" text-anchor="middle">3</text>
+    <rect class="bx" x="168" y="166" width="30" height="28" rx="5"/><text class="sm" x="183" y="185" text-anchor="middle">4</text>
+    <text class="sm" x="215" y="185">…</text>
+    <rect class="bx" x="230" y="166" width="36" height="28" rx="5"/><text class="sm" x="248" y="185" text-anchor="middle">10</text>
+  </g>
+  <text class="sm" x="190" y="218" text-anchor="middle">点页码 → 替换成那一页</text>
+
+  <text class="ttl on-a" x="570" y="24" text-anchor="middle">无限分页：不断追加（本章）</text>
+  <rect class="bx" x="440" y="40" width="260" height="40" rx="8"/>
+  <text class="sm" x="460" y="65">第 0 页的 20 条</text>
+  <rect class="bx" x="440" y="84" width="260" height="40" rx="8"/>
+  <text class="sm" x="460" y="109">第 1 页的 20 条</text>
+  <rect class="bx-g" x="440" y="128" width="260" height="30" rx="8"/>
+  <text class="sm on-g" x="460" y="148">第 2 页的 20 条（新拼接）</text>
+  <rect class="bx-a" x="520" y="166" width="100" height="28" rx="6"/>
+  <text class="sm on-a" x="570" y="185" text-anchor="middle">More</text>
+  <text class="sm" x="570" y="218" text-anchor="middle">点 More → 拼接下一页到末尾</text>
+</svg>
+<figcaption>图 35-1　两种分页方式。无限分页常见于社交媒体的信息流</figcaption>
+</figure>
+
+<div class="box tip">
+  <div class="t">&#128161; 任务</div>
+  <p>不再只获取第一页，而是实现“点击按钮加载下一页”的无限分页。提示：</p>
+  <ul style="margin-bottom:0">
+    <li>给 API 地址加上分页参数；</li>
+    <li>请求成功后把返回的 <code>page</code> 存进状态；</li>
+    <li>每次新搜索都从第 0 页开始；点击新按钮时请求 <code>page + 1</code>。</li>
+  </ul>
+</div>
+
+<h2 id="url">拆分 API 地址</h2>
+
+<p>把原来一整个字符串的 API 地址拆成几个可组合的部分：</p>
+
+```jsx src/App.jsx
+const API_BASE = 'https://hn.algolia.com/api/v1';
+const API_SEARCH = '/search';
+const PARAM_SEARCH = 'query=';
+
+// 小心：中间有个 ?
+const getUrl = (searchTerm) =>
+  `${API_BASE}${API_SEARCH}?${PARAM_SEARCH}${searchTerm}`;
+```
+
+<p>
+  幸亏上一章把 URL 拼接提取成了 <code>getUrl</code>，其他地方都不用改。但 <code>extractSearchTerm</code> 原来是靠“去掉 <code>API_ENDPOINT</code> 前缀”实现的，
+  URL 多了参数以后就不行了：
+</p>
+
+```text
+https://hn.algolia.com/api/v1/search?query=react
+https://hn.algolia.com/api/v1/search?query=react&page=0
+```
+
+<p>改成截取 <code>?</code> 和 <code>&amp;</code> 之间的部分，再去掉 <code>query=</code>：</p>
+
+```jsx src/App.jsx
+const extractSearchTerm = (url) =>
+  url
+    .substring(url.lastIndexOf('?') + 1, url.lastIndexOf('&'))
+    .replace(PARAM_SEARCH, '');
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 190" role="img" aria-label="URL 的组成与搜索词的提取">
+  <rect class="code-bg" x="20" y="30" width="720" height="44" rx="8"/>
+  <text class="code-tx" x="36" y="58" style="font-size:13.5px"><tspan fill="#82c8e8">https://hn.algolia.com/api/v1</tspan><tspan fill="#d7a3e6">/search</tspan>?<tspan fill="#b4d68a">query=</tspan><tspan fill="#ff9d5c" style="font-weight:700">react</tspan>&amp;<tspan fill="#b4d68a">page=</tspan><tspan fill="#ffcb6b">0</tspan></text>
+  <text class="sm on-b" x="153" y="94" text-anchor="middle">API_BASE</text>
+  <text class="sm on-p" x="300" y="94" text-anchor="middle">API_SEARCH</text>
+  <text class="sm on-g" x="360" y="112" text-anchor="middle">PARAM_SEARCH</text>
+  <text class="sm on-a" x="405" y="94" text-anchor="middle">searchTerm</text>
+  <text class="sm on-g" x="453" y="112" text-anchor="middle">PARAM_PAGE</text>
+  <text class="sm" x="480" y="94" text-anchor="middle">page</text>
+
+  <text class="mono sm" x="20" y="140">① substring(lastIndexOf('?') + 1, lastIndexOf('&amp;'))  →  query=react</text>
+  <text class="mono sm" x="20" y="164">② replace('query=', '')                                →  react</text>
+</svg>
+<figcaption>图 35-2　URL 的各个组成部分，以及从中提取搜索词的两步</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 更稳妥的做法：URL / URLSearchParams</div>
+  <p>
+    手工截取字符串很脆弱（参数顺序变了、搜索词里有 <code>&amp;</code> 就会出错）。浏览器内置的 <code>URL</code> API 能正确地构造和解析地址，也会自动编码特殊字符：
+  </p>
+```js
+const getUrl = (searchTerm, page) => {
+  const url = new URL(`${API_BASE}${API_SEARCH}`);
+  url.searchParams.set('query', searchTerm);
+  url.searchParams.set('page', page);
+  return url.toString();
+};
+
+const extractSearchTerm = (url) =>
+  new URL(url).searchParams.get('query');
+```
+  <p style="margin-top:8px">正文沿用原书的字符串写法以便对照，实际项目推荐用 <code>URL</code>。</p>
+</div>
+
+<h2 id="page-state">把页码存进状态</h2>
+
+<p>请求成功时，除了文章列表，也把 API 返回的页码交给 reducer：</p>
+
+```jsx src/App.jsx
+const handleFetchStories = useCallback(async () => {
+  dispatchStories({ type: 'STORIES_FETCH_INIT' });
+
+  try {
+    const lastUrl = urls[urls.length - 1];
+    const result = await axios.get(lastUrl);
+
+    dispatchStories({
+      type: 'STORIES_FETCH_SUCCESS',
+      payload: {
+        list: result.data.hits,
+        page: result.data.page,
+      },
+    });
+  } catch {
+    dispatchStories({ type: 'STORIES_FETCH_FAILURE' });
+  }
+}, [urls]);
+```
+
+```jsx src/App.jsx
+const storiesReducer = (state, action) => {
+  switch (action.type) {
+    case 'STORIES_FETCH_INIT':
+      ...
+    case 'STORIES_FETCH_SUCCESS':
+      return {
+        ...state,
+        isLoading: false,
+        isError: false,
+        data: action.payload.list,
+        page: action.payload.page,
+      };
+    ...
+  }
+};
+
+const App = () => {
+  ...
+  const [stories, dispatchStories] = useReducer(storiesReducer, {
+    data: [],
+    page: 0,
+    isLoading: false,
+    isError: false,
+  });
+  ...
+};
+```
+
+<h2 id="more">请求下一页</h2>
+
+<p>给 URL 加上页码参数：</p>
+
+```jsx src/App.jsx
+const API_BASE = 'https://hn.algolia.com/api/v1';
+const API_SEARCH = '/search';
+const PARAM_SEARCH = 'query=';
+const PARAM_PAGE = 'page=';
+
+// 小心：中间有 ? 和 &
+const getUrl = (searchTerm, page) =>
+  `${API_BASE}${API_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}`;
+```
+
+<p>新搜索和历史搜索都从第 0 页开始；新的 <code>handleMore</code> 用当前搜索词请求 <code>page + 1</code>：</p>
+
+```jsx src/App.jsx
+const App = () => {
+  ...
+  const [urls, setUrls] = useState([getUrl(searchTerm, 0)]);
+
+  const handleSearch = (searchTerm, page) => {
+    const url = getUrl(searchTerm, page);
+    setUrls(urls.concat(url));
+  };
+
+  const searchAction = () => {
+    handleSearch(searchTerm, 0);
+  };
+
+  const handleLastSearch = (searchTerm) => {
+    setSearchTerm(searchTerm);
+    handleSearch(searchTerm, 0);
+  };
+
+  const handleMore = () => {
+    const lastUrl = urls[urls.length - 1];
+    const searchTerm = extractSearchTerm(lastUrl);
+    handleSearch(searchTerm, stories.page + 1);
+  };
+
+  ...
+
+  return (
+    <div>
+      ...
+
+      {stories.isLoading ? (
+        <p>Loading ...</p>
+      ) : (
+        <List list={stories.data} onRemoveItem={handleRemoveStory} />
+      )}
+
+      <button type="button" onClick={handleMore}>
+        More
+      </button>
+    </div>
+  );
+};
+```
+
+<div class="box note">
+  <div class="t">&#9432; 为什么从 URL 里取搜索词，而不是用 searchTerm 状态？</div>
+  <p>
+    用户可能在搜索框里又输入了别的文字，但还没提交。“加载更多”应该继续的是<strong>上一次真正请求的</strong>搜索，而它记录在最后一个 URL 里。
+  </p>
+</div>
+
+<h2 id="concat">拼接而不是替换</h2>
+
+<p>
+  点 More 确实能拿到下一页，但列表被<strong>替换</strong>成了新的 20 条，而不是在后面追加。
+  在 reducer 里修正：第 0 页（新搜索）替换，其他页拼接：
+</p>
+
+```jsx src/App.jsx
+case 'STORIES_FETCH_SUCCESS':
+  return {
+    ...state,
+    isLoading: false,
+    isError: false,
+    data:
+      action.payload.page === 0
+        ? action.payload.list
+        : state.data.concat(action.payload.list),
+    page: action.payload.page,
+  };
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="reducer 根据页码决定替换或拼接">
+  <rect class="bx-p" x="20" y="80" width="190" height="60" rx="10"/>
+  <text class="ttl on-p" x="115" y="104" text-anchor="middle">FETCH_SUCCESS</text>
+  <text class="mono sm" x="115" y="124" text-anchor="middle">{ list, page }</text>
+  <rect class="bx-a" x="270" y="80" width="150" height="60" rx="30"/>
+  <text class="mono sm on-a" x="345" y="115" text-anchor="middle">page === 0 ?</text>
+  <path class="ln-p" d="M212 110 H266" marker-end="url(#ar-p)"/>
+
+  <rect class="bx-b" x="490" y="20" width="250" height="70" rx="10"/>
+  <text class="ttl on-b" x="615" y="46" text-anchor="middle">是：新搜索 → 替换</text>
+  <text class="mono sm" x="615" y="70" text-anchor="middle">data = list</text>
+  <rect class="bx-g" x="490" y="130" width="250" height="70" rx="10"/>
+  <text class="ttl on-g" x="615" y="156" text-anchor="middle">否：加载更多 → 拼接</text>
+  <text class="mono sm" x="615" y="180" text-anchor="middle">data = state.data.concat(list)</text>
+  <path class="ln-b" d="M422 100 L486 60" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M422 120 L486 162" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 35-3　同一个动作，根据页码决定替换还是追加</figcaption>
+</figure>
+
+<h2 id="flicker">消除闪烁</h2>
+
+<p>
+  列表会增长了，但每次点 More，整个列表都会<strong>消失一下</strong>：加载期间 <code>List</code> 被 “Loading ...” 整个替换掉了。
+  分页时我们希望列表一直显示，只把 More 按钮换成加载提示：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">加载时替换整个列表</div>
+```jsx
+{stories.isLoading ? (
+  <p>Loading ...</p>
+) : (
+  <List list={stories.data} ... />
+)}
+
+<button onClick={handleMore}>More</button>
+```
+  </div>
+  <div class="new"><div class="h">列表常驻，只替换按钮</div>
+```jsx
+<List list={stories.data} ... />
+
+{stories.isLoading ? (
+  <p>Loading ...</p>
+) : (
+  <button type="button" onClick={handleMore}>
+    More
+  </button>
+)}
+```
+  </div>
+</div>
+
+<p>
+  从“单个列表”演进到“分页列表”时，条件渲染的位置经常要这样调整。至此，我们可以一直往下浏览热门文章了。
+</p>
+
+<div class="box tip">
+  <div class="t">&#128161; 多看看 API 文档</div>
+  <p>
+    每个第三方 API 返回的数据结构都不一样，功能也各有不同。Hacker News API 还支持 <code>hitsPerPage</code>（每页条数）、按时间排序的 <code>search_by_date</code> 等参数 ——
+    花几分钟读文档，常常能发现现成的功能。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>无限分页：保存当前页码，每次请求 <code>page + 1</code>，把结果拼接到已有列表后面。</li>
+  <li>把 API 地址拆成可组合的常量和一个 <code>getUrl</code> 函数；解析 URL 更推荐用 <code>URL</code> / <code>URLSearchParams</code>。</li>
+  <li>reducer 根据页码判断：第 0 页替换，之后的页拼接。</li>
+  <li>分页时让列表常驻，只把“加载更多”按钮替换成加载提示，避免闪烁。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>查阅 Hacker News API 文档：有没有办法让每页返回更多条目？</li>
+    <li>实现普通分页：显示 1、2、3… 页码按钮，点击只显示那一页。需要改 reducer 的哪部分？</li>
+    <li>实现无限滚动：不点按钮，列表滚动到底部时自动加载下一页（提示：<code>IntersectionObserver</code> + ref + effect）。</li>
+    <li>API 返回的 <code>nbPages</code> 表示总页数。到最后一页时隐藏 More 按钮。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>普通分页和无限分页有什么区别？</summary>
+    <div><p>普通分页每次只显示一页并替换内容；无限分页把新一页追加到已有列表后面，通过按钮或滚动到底部触发。</p></div></details>
+  <details><summary>为什么在 reducer 里判断 page === 0？</summary>
+    <div><p>第 0 页意味着一次新搜索，应替换数据；其余页是加载更多，应拼接到现有数据之后。</p></div></details>
+  <details><summary>如何实现无限滚动？</summary>
+    <div><p>在列表底部放一个哨兵元素，用 IntersectionObserver 监听它进入视口时触发加载下一页，并在 effect 清理函数中断开观察。</p></div></details>
+  <details><summary>为什么加载更多时列表会闪烁？如何避免？</summary>
+    <div><p>因为加载状态下整个列表被替换成加载提示。应让列表常驻，只把“加载更多”按钮替换为加载提示。</p></div></details>
+</div>

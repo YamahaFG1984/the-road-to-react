@@ -1,0 +1,399 @@
+<p class="lede">
+  props 只是一个普通 JavaScript 对象，所以所有处理对象的现代 JavaScript 技巧都能用在它身上。
+  这一章介绍几种让 props 写起来更简洁的写法：解构、默认值、嵌套解构、展开和剩余运算符。
+  它们不是必需的，但你在任何一个真实 React 项目里都会天天看到。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>在函数签名里直接解构 props</li>
+    <li>用参数默认值代替已被移除的 <code>defaultProps</code></li>
+    <li>理解嵌套解构、展开运算符 <code>{...obj}</code>、剩余运算符 <code>...rest</code></li>
+    <li>知道每种写法适合什么场景</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="destructuring">对象解构</h2>
+
+<p>先复习 JavaScript 的对象解构：一次从对象里取出多个属性。</p>
+
+```js
+const user = {
+  firstName: 'Robin',
+  lastName: 'Wieruch',
+};
+
+// 不用解构
+const firstName = user.firstName;
+const lastName = user.lastName;
+
+// 用解构
+const { firstName, lastName } = user;
+```
+
+<p>用在 <code>Search</code> 的 props 上：</p>
+
+```jsx src/App.jsx
+const Search = (props) => {
+  const { search, onSearch } = props;
+
+  return (
+    <div>
+      <label htmlFor="search">Search: </label>
+      <input
+        id="search"
+        type="text"
+        value={search}
+        onChange={onSearch}
+      />
+    </div>
+  );
+};
+```
+
+<p>
+  但为了写这一行解构，组件又得从简洁体改回块体。更好的办法是<strong>直接在函数参数里解构</strong>：
+</p>
+
+```jsx src/App.jsx
+const Search = ({ search, onSearch }) => (
+  <div>
+    <label htmlFor="search">Search: </label>
+    <input
+      id="search"
+      type="text"
+      value={search}
+      onChange={onSearch}
+    />
+  </div>
+);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="在参数中解构 props">
+  <rect class="bx-a" x="20" y="40" width="250" height="120" rx="12"/>
+  <text class="ttl on-a" x="145" y="66" text-anchor="middle">父组件传来的 props 对象</text>
+  <text class="mono sm" x="40" y="96">{</text>
+  <text class="mono sm on-b" x="56" y="116">search: 'React',</text>
+  <text class="mono sm on-g" x="56" y="136">onSearch: handleSearch,</text>
+  <text class="mono sm" x="40" y="152">}</text>
+
+  <rect class="code-bg" x="330" y="60" width="410" height="44" rx="8"/>
+  <text class="code-tx" x="346" y="88" style="font-size:14px">const Search = ({ <tspan fill="#82c8e8" style="font-weight:700">search</tspan>, <tspan fill="#b4d68a" style="font-weight:700">onSearch</tspan> }) =&gt; (…)</text>
+
+  <path class="ln-b" d="M170 112 C260 112 330 130 480 106" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M226 132 C300 160 500 160 560 106" marker-end="url(#ar-g)"/>
+  <text class="sm" x="560" y="196" text-anchor="middle">同名属性直接变成局部变量</text>
+  <text class="sm" x="560" y="214" text-anchor="middle">不再需要写 props.xxx</text>
+</svg>
+<figcaption>图 13-1　在函数签名里解构：props 这个“容器”消失了，只剩下你需要的值</figcaption>
+</figure>
+
+<p>组件内部几乎从不直接使用 props 这个容器本身，所以这种写法非常普遍。<code>List</code> 和 <code>Item</code> 也改一下：</p>
+
+```jsx src/App.jsx
+const List = ({ list }) => (
+  <ul>
+    {list.map((item) => (
+      <Item key={item.objectID} item={item} />
+    ))}
+  </ul>
+);
+
+const Item = ({ item }) => (
+  <li>
+    <span>
+      <a href={item.url}>{item.title}</a>
+    </span>
+    <span>{item.author}</span>
+    <span>{item.num_comments}</span>
+    <span>{item.points}</span>
+  </li>
+);
+```
+
+<h2 id="default">默认值</h2>
+
+<p>解构时可以顺便给默认值，父组件没传这个 prop 时就用它：</p>
+
+```jsx
+const Search = ({ search = '', onSearch, label = 'Search' }) => ( ... );
+```
+
+<div class="vs">
+  <div class="old"><div class="h">defaultProps <span class="ver old">React 19 中对函数组件已移除</span></div>
+```jsx
+const Search = (props) => ( ... );
+
+Search.defaultProps = {
+  label: 'Search',
+};
+```
+  </div>
+  <div class="new"><div class="h">参数默认值 <span class="ver">推荐</span></div>
+```jsx
+const Search = ({ label = 'Search' }) => ( ... );
+```
+  </div>
+</div>
+
+<h2 id="nested">嵌套解构</h2>
+
+<p><code>item</code> 本身也是个对象，可以在参数里继续往下解构：</p>
+
+```js
+const user = {
+  firstName: 'Robin',
+  pet: {
+    name: 'Trixi',
+  },
+};
+
+// 嵌套解构
+const {
+  firstName,
+  pet: { name },
+} = user;
+
+console.log(firstName + ' has a pet called ' + name);
+// "Robin has a pet called Trixi"
+```
+
+```jsx src/App.jsx（写法 1：嵌套解构）
+const Item = ({
+  item: {
+    title,
+    url,
+    author,
+    num_comments,
+    points,
+  },
+}) => (
+  <li>
+    <span>
+      <a href={url}>{title}</a>
+    </span>
+    <span>{author}</span>
+    <span>{num_comments}</span>
+    <span>{points}</span>
+  </li>
+);
+```
+
+<p>
+  能用，但函数签名一下子变得又长又深。嵌套解构在数据结构很深的场景里有用，在这里反而降低了可读性。
+</p>
+
+<h2 id="spread">展开运算符</h2>
+
+<p>另一种思路：不传 <code>item</code> 对象，而是把它的每个属性都作为单独的 prop 传给 <code>Item</code>：</p>
+
+```jsx src/App.jsx（写法 2 · 第一步）
+const List = ({ list }) => (
+  <ul>
+    {list.map((item) => (
+      <Item
+        key={item.objectID}
+        title={item.title}
+        url={item.url}
+        author={item.author}
+        num_comments={item.num_comments}
+        points={item.points}
+      />
+    ))}
+  </ul>
+);
+
+const Item = ({ title, url, author, num_comments, points }) => ( ... );
+```
+
+<p>
+  <code>Item</code> 的签名清爽了，<code>List</code> 却变啰嗦了。用<strong>展开运算符</strong> <code>...</code> 解决。先复习：
+</p>
+
+```js
+const profile = { firstName: 'Robin', lastName: 'Wieruch' };
+const address = { country: 'Germany', city: 'Berlin' };
+
+const user = {
+  ...profile,
+  gender: 'male',
+  ...address,
+};
+
+console.log(user);
+// { firstName: 'Robin', lastName: 'Wieruch', gender: 'male',
+//   country: 'Germany', city: 'Berlin' }
+```
+
+<p>在 JSX 里，<code>{...item}</code> 会把对象的每个键值对展开成一个个属性：</p>
+
+```jsx src/App.jsx（写法 2 · 第二步）
+const List = ({ list }) => (
+  <ul>
+    {list.map((item) => (
+      <Item key={item.objectID} {...item} />
+    ))}
+  </ul>
+);
+```
+
+<h2 id="rest">剩余运算符</h2>
+
+<p>
+  最后一步。<code>objectID</code> 只用作 <code>key</code>，<code>Item</code> 并不需要它。
+  用<strong>剩余运算符</strong>把它从对象中“拆”出来，剩下的再展开：
+</p>
+
+```js
+const user = {
+  id: '1',
+  firstName: 'Robin',
+  lastName: 'Wieruch',
+  country: 'Germany',
+  city: 'Berlin',
+};
+
+const { id, country, city, ...userWithoutAddress } = user;
+
+console.log(userWithoutAddress); // { firstName: 'Robin', lastName: 'Wieruch' }
+console.log(id);                 // '1'
+```
+
+```jsx src/App.jsx（写法 2 · 最终版）
+const List = ({ list }) => (
+  <ul>
+    {list.map(({ objectID, ...item }) => (
+      <Item key={objectID} {...item} />
+    ))}
+  </ul>
+);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="剩余运算符拆出 objectID，展开运算符把其余属性作为 props">
+  <rect class="bx" x="20" y="40" width="210" height="176" rx="12"/>
+  <text class="ttl" x="125" y="64" text-anchor="middle">一条 story</text>
+  <text class="mono sm on-r" x="40" y="92">objectID: 0,</text>
+  <text class="mono sm on-b" x="40" y="114">title: 'React',</text>
+  <text class="mono sm on-b" x="40" y="134">url: '…',</text>
+  <text class="mono sm on-b" x="40" y="154">author: '…',</text>
+  <text class="mono sm on-b" x="40" y="174">num_comments: 3,</text>
+  <text class="mono sm on-b" x="40" y="194">points: 4</text>
+
+  <rect class="bx-p" x="280" y="40" width="200" height="60" rx="10"/>
+  <text class="ttl on-p" x="380" y="64" text-anchor="middle">剩余 ...（左边）</text>
+  <text class="mono sm" x="380" y="86" text-anchor="middle">({ objectID, ...item })</text>
+
+  <rect class="bx-r" x="280" y="140" width="200" height="40" rx="8"/>
+  <text class="mono sm on-r" x="380" y="165" text-anchor="middle">objectID → key</text>
+  <rect class="bx-b" x="280" y="196" width="200" height="40" rx="8"/>
+  <text class="mono sm on-b" x="380" y="221" text-anchor="middle">item = 其余 5 个属性</text>
+
+  <path class="ln-r" d="M150 88 L276 158" marker-end="url(#ar-r)"/>
+  <path class="ln-b" d="M200 150 L276 214" marker-end="url(#ar-b)"/>
+
+  <rect class="bx-g" x="540" y="120" width="200" height="116" rx="10"/>
+  <text class="ttl on-g" x="640" y="144" text-anchor="middle">展开 ...（右边）</text>
+  <text class="mono sm" x="640" y="168" text-anchor="middle">&lt;Item key={objectID}</text>
+  <text class="mono sm" x="640" y="186" text-anchor="middle">{...item} /&gt;</text>
+  <text class="sm" x="640" y="212" text-anchor="middle">= title="React" url="…"</text>
+  <text class="sm" x="640" y="228" text-anchor="middle">author="…" …</text>
+  <path class="ln-g" d="M482 216 H536" marker-end="url(#ar-g)"/>
+  <path class="ln-r" d="M482 160 H536" marker-end="url(#ar-r)"/>
+</svg>
+<figcaption>图 13-2　三个点，两种含义：在赋值左边是“剩余”（收集），在右边或 JSX 里是“展开”（摊开）</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 不要把 key 展开进去</div>
+  <p>
+    如果写成 <code>{list.map((item) =&gt; &lt;Item {...item} key={item.objectID} /&gt;)}</code> 而 <code>item</code> 里恰好有个叫 <code>key</code> 的字段，
+    或者把一个包含 <code>key</code> 的 props 对象整体展开，React 18.3 / 19 会警告
+    <em>“A props object containing a "key" prop is being spread into JSX”</em>。<code>key</code> 请始终显式地单独写。
+  </p>
+</div>
+
+<h2 id="choose">该用哪种？</h2>
+
+<p>
+  写法 2 最精简，但用到了不少进阶语法；写法 1 增加了缩进却没带来好处。
+  <strong>本教程接下来继续使用最初的版本</strong> —— 传 <code>item</code> 对象、在签名里解构一层 ——
+  它不是最短的，却是最容易读懂的：
+</p>
+
+```jsx src/App.jsx（后续章节使用的版本）
+const List = ({ list }) => (
+  <ul>
+    {list.map((item) => (
+      <Item key={item.objectID} item={item} />
+    ))}
+  </ul>
+);
+
+const Item = ({ item }) => (
+  <li>
+    <span>
+      <a href={item.url}>{item.title}</a>
+    </span>
+    <span>{item.author}</span>
+    <span>{item.num_comments}</span>
+    <span>{item.points}</span>
+  </li>
+);
+```
+
+<div class="box key">
+  <div class="t">&#9733; 经验法则</div>
+  <ul style="margin:0">
+    <li><strong>几乎总是</strong>在函数签名里解构 props。例外：props 只是原样转交给下一个子组件时。</li>
+    <li>要把一个对象的全部键值对传给子组件时，用<strong>展开</strong> <code>{...obj}</code>，例如 <code>&lt;Child {...props} /&gt;</code>。</li>
+    <li>只想从 props 中分离出某几个属性时，用<strong>剩余</strong> <code>{ a, ...rest }</code>。</li>
+    <li>只有在能提高可读性时才用<strong>嵌套解构</strong>。</li>
+    <li>团队协作时，可读性永远比少写几个字符重要。</li>
+  </ul>
+</div>
+
+<div class="box deep">
+  <div class="t">&#128270; 深入一点：为什么 useState 返回数组，而 props 是对象？</div>
+  <p>
+    数组解构按<strong>位置</strong>取值，所以你可以随意命名：<code>const [searchTerm, setSearchTerm] = useState('')</code>、
+    <code>const [count, setCount] = useState(0)</code>。如果 <code>useState</code> 返回对象，就得写成
+    <code>const { state: count, setState: setCount } = useState(0)</code>，一个组件里用好几次就很烦。
+    props 则天然是“按名字”的，用对象最合适。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>在函数签名里解构 props：<code>({ list, onRemove }) =&gt; …</code>，并用参数默认值代替 <code>defaultProps</code>。</li>
+  <li>展开 <code>{...obj}</code> 把对象的键值对作为属性传给元素；剩余 <code>{ a, ...rest }</code> 把对象拆成“指定属性 + 其余部分”。</li>
+  <li><code>key</code> 要单独显式书写，不要混在展开的对象里。</li>
+  <li>选择写法时优先考虑可读性。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>把项目中所有组件都改成在签名里解构 props。</li>
+    <li>分别实现“写法 1”和“写法 2”，确认效果一样，再改回推荐版本。</li>
+    <li>写一个 <code>Button</code> 组件：<code>({ children, ...rest }) =&gt; &lt;button {...rest}&gt;{children}&lt;/button&gt;</code>，用它渲染一个 <code>type="button"</code>、带 <code>onClick</code> 的按钮 —— 体会“把剩下的 props 原样转交”的用法。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>如何在函数组件的参数中解构 props？</summary>
+    <div><p><code>function MyComponent({ prop1, prop2 }) { ... }</code>，也可以同时给默认值：<code>{ prop1 = 'default' }</code>。</p></div></details>
+  <details><summary>展开运算符在 React props 中怎么用？</summary>
+    <div><p><code>&lt;MyComponent {...obj} /&gt;</code> 把对象的所有属性作为单独的 props 传入；也可以和其他属性组合：<code>&lt;C {...props} extra={x} /&gt;</code>，后写的覆盖先写的。</p></div></details>
+  <details><summary>展开运算符是深拷贝还是浅拷贝？</summary>
+    <div><p>浅拷贝。嵌套对象仍然是对原对象的引用。</p></div></details>
+  <details><summary>剩余运算符在 React 中有什么用途？</summary>
+    <div><p>从 props 中取出部分属性，其余收集到一个新对象里，常用于“自己处理几个 prop，其余原样传给内部元素”。</p></div></details>
+  <details><summary>什么是 prop drilling？</summary>
+    <div><p>为了把数据传给深层组件，不得不经过多层并不使用它的中间组件逐层传递 props。Context（第 25 章）或组件组合（第 16 章）可以缓解。</p></div></details>
+</div>

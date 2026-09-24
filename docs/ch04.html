@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 4 章 · JSX：在 JavaScript 里写界面 — React 19 入门教程</title>
+<meta name="description" content="花括号、className、htmlFor 以及 JSX 编译成什么">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="4">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 4 章 · 组件与 JSX</span>
+<h1>JSX：在 JavaScript 里写界面</h1>
+<p class="lede">
+  组件返回的那段“像 HTML 的东西”叫 <strong>JSX</strong>。它是 React 最有辨识度的特性：
+  不需要学一套新的模板语法，用一对花括号就能把任意 JavaScript 表达式塞进界面里。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 <code>{ }</code> 在 JSX 里显示变量、对象属性和函数返回值</li>
+    <li>记住 JSX 和 HTML 的几处不同：<code>className</code>、<code>htmlFor</code>、驼峰命名、必须闭合</li>
+    <li>理解 JSX 会被编译成普通的 JavaScript 函数调用</li>
+    <li>知道 JSX 的几条规则：单一根元素、只能放表达式、注释写法</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="braces">花括号：通往 JavaScript 的窗口</h2>
+
+<p>上一章留了一个问题：怎么把变量 <code>title</code> 显示出来？答案是用花括号：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> title = <span class="tk-st">'React'</span>;
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">Hello</span> {title}<span class="tk-tg">&lt;/h1</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-tp">App</span>;</pre></div>
+
+<p>
+  浏览器显示 “Hello React”。把 <code>title</code> 改成 <code>'World'</code> 并保存，页面立刻变成 “Hello World”
+  —— 这就是上一章提到的热更新在起作用。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="花括号在 JSX 中开出一个 JavaScript 表达式的窗口">
+  <rect class="code-bg" x="120" y="40" width="520" height="56" rx="10"/>
+  <text class="code-tx" x="150" y="75" style="font-size:18px">&lt;h1&gt;Hello <tspan class="fill-a" style="font-weight:700">{</tspan><tspan fill="#82c8e8">title</tspan><tspan class="fill-a" style="font-weight:700">}</tspan>&lt;/h1&gt;</text>
+
+  <path class="ln-a" d="M298 98 V132" marker-end="url(#ar-a)"/>
+  <rect class="bx-a" x="190" y="136" width="220" height="46" rx="8"/>
+  <text class="ttl on-a" x="300" y="156" text-anchor="middle">花括号里是 JavaScript</text>
+  <text class="sm" x="300" y="173" text-anchor="middle">任意表达式：变量、运算、函数调用</text>
+
+  <text class="sm on-b" x="130" y="30">外面是标签（照常写）</text>
+  <text class="sm" x="460" y="160">title = 'React'  →  &lt;h1&gt;Hello React&lt;/h1&gt;</text>
+  <text class="sm" x="460" y="178">title = 'World'  →  &lt;h1&gt;Hello World&lt;/h1&gt;</text>
+</svg>
+<figcaption>图 4-1　JSX 里标签照写，遇到 <code>{ }</code> 就切换回 JavaScript</figcaption>
+</figure>
+
+<p>花括号里可以放任何<strong>表达式</strong>（能算出一个值的东西）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> welcome = {
+  greeting: <span class="tk-st">'Hey'</span>,
+  title: <span class="tk-st">'React'</span>,
+};
+
+<span class="tk-kw">function</span> <span class="tk-fn">getTitle</span>(title) {
+  <span class="tk-kw">return</span> title;
+}
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;{welcome.greeting} {welcome.title}<span class="tk-tg">&lt;/h1</span>&gt;   <span class="tk-cm">{/* 对象属性 */}</span>
+      <span class="tk-tg">&lt;h2</span>&gt;<span class="tk-tp">Hello</span> {<span class="tk-fn">getTitle</span>(<span class="tk-st">'React'</span>)}<span class="tk-tg">&lt;/h2</span>&gt;           <span class="tk-cm">{/* 函数调用 */}</span>
+      <span class="tk-tg">&lt;p</span>&gt;<span class="tk-nm">1</span> + <span class="tk-nm">1</span> = {<span class="tk-nm">1</span> + <span class="tk-nm">1</span>}<span class="tk-tg">&lt;/p</span>&gt;                          <span class="tk-cm">{/* 运算 */}</span>
+      <span class="tk-tg">&lt;p</span>&gt;{<span class="tk-st">'react'</span>.<span class="tk-fn">toUpperCase</span>()}<span class="tk-tg">&lt;/p</span>&gt;                  <span class="tk-cm">{/* 方法调用 */}</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<div class="box warn">
+  <div class="t">&#9888; 只能放表达式，不能放语句</div>
+  <p>
+    <code>if</code>、<code>for</code>、<code>const x = 1</code> 是<strong>语句</strong>，不能直接写进 <code>{ }</code>。
+    需要条件判断时用三元运算符 <code>cond ? a : b</code> 或 <code>cond &amp;&amp; a</code>（第 19 章），
+    需要循环时用数组的 <code>map()</code>（下一章）。
+  </p>
+</div>
+
+<h2 id="attributes">JSX 不完全是 HTML</h2>
+
+<p>
+  试着在 JSX 里加一个带标签的输入框。要求点击 “Search:” 文字时，输入框能获得焦点：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> title = <span class="tk-st">'React'</span>;
+
+<span class="tk-kw">function</span> <span class="tk-tp">App</span>() {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">Hello</span> {title}<span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  注意 <code>htmlFor</code>：在 HTML 里它叫 <code>for</code>。JSX 本质上是 JavaScript，
+  而 <code>for</code> 和 <code>class</code> 是 JavaScript 的保留字，所以 React 换了名字。
+  最终渲染到浏览器时，它们会被还原成 <code>for</code> 和 <code>class</code>。
+</p>
+
+<div class="tw">
+<table>
+  <tr><th>HTML 写法</th><th>JSX 写法</th><th>原因</th></tr>
+  <tr><td><code>class="card"</code></td><td><code>className="card"</code></td><td><code>class</code> 是 JS 保留字</td></tr>
+  <tr><td><code>for="search"</code></td><td><code>htmlFor="search"</code></td><td><code>for</code> 是 JS 保留字</td></tr>
+  <tr><td><code>onclick="..."</code></td><td><code>onClick={fn}</code></td><td>事件名用驼峰，值是函数而不是字符串</td></tr>
+  <tr><td><code>tabindex</code>、<code>maxlength</code></td><td><code>tabIndex</code>、<code>maxLength</code></td><td>多单词属性一律驼峰</td></tr>
+  <tr><td><code>style="color: red; font-size: 14px"</code></td><td><code>style={{ color: 'red', fontSize: 14 }}</code></td><td>style 是对象，属性名驼峰</td></tr>
+  <tr><td><code>&lt;br&gt;</code>、<code>&lt;img src="a.png"&gt;</code></td><td><code>&lt;br /&gt;</code>、<code>&lt;img src="a.png" /&gt;</code></td><td>所有标签都必须闭合</td></tr>
+  <tr><td><code>&lt;!-- 注释 --&gt;</code></td><td><code>{/* 注释 */}</code></td><td>注释要写在花括号里</td></tr>
+  <tr><td><code>aria-label</code>、<code>data-id</code></td><td><code>aria-label</code>、<code>data-id</code></td><td>例外：这两类保持短横线</td></tr>
+</table>
+</div>
+
+<p>
+  属性值也可以用花括号动态指定：<code>&lt;a href={item.url}&gt;</code>、<code>&lt;img src={logo} /&gt;</code>。
+  字符串字面量用引号，其他一切用花括号。
+</p>
+
+<h2 id="compile">JSX 会变成什么</h2>
+
+<p>
+  浏览器并不认识 JSX。Vite（背后是 Babel / esbuild / Oxc 这类编译器）会在代码送到浏览器之前，
+  把 JSX 翻译成普通的函数调用：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="JSX 经过编译变成函数调用，再由 React 变成 DOM">
+  <rect class="bx-a" x="20" y="30" width="220" height="100" rx="10"/>
+  <text class="ttl on-a" x="130" y="54" text-anchor="middle">① 你写的 JSX</text>
+  <text class="mono sm" x="36" y="84">&lt;h1 className="title"&gt;</text>
+  <text class="mono sm" x="48" y="102">Hello {title}</text>
+  <text class="mono sm" x="36" y="120">&lt;/h1&gt;</text>
+
+  <path class="ln-a" d="M242 80 H290" marker-end="url(#ar-a)"/>
+  <text class="sm on-a" x="266" y="70" text-anchor="middle">编译</text>
+
+  <rect class="bx-b" x="294" y="30" width="250" height="100" rx="10"/>
+  <text class="ttl on-b" x="419" y="54" text-anchor="middle">② 普通 JavaScript</text>
+  <text class="mono sm" x="306" y="84">jsx('h1', {</text>
+  <text class="mono sm" x="318" y="102">className: 'title',</text>
+  <text class="mono sm" x="318" y="120">children: ['Hello ', title] })</text>
+
+  <path class="ln-b" d="M546 80 H590" marker-end="url(#ar-b)"/>
+  <text class="sm on-b" x="568" y="70" text-anchor="middle">运行</text>
+
+  <rect class="bx-p" x="594" y="30" width="146" height="100" rx="10"/>
+  <text class="ttl on-p" x="667" y="54" text-anchor="middle">③ React 元素</text>
+  <text class="mono sm" x="604" y="84">{ type: 'h1',</text>
+  <text class="mono sm" x="610" y="102">props: {…} }</text>
+  <text class="sm" x="667" y="120" text-anchor="middle">一个普通对象</text>
+
+  <path class="ln-g" d="M667 132 V180" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="676" y="160">react-dom 渲染</text>
+
+  <rect class="bx-g" x="496" y="184" width="254" height="60" rx="10"/>
+  <text class="ttl on-g" x="623" y="208" text-anchor="middle">④ 真实 DOM</text>
+  <text class="mono sm" x="623" y="230" text-anchor="middle" style="font-size:11px">&lt;h1 class="title"&gt;Hello React&lt;/h1&gt;</text>
+
+  <rect class="bx-d" x="20" y="160" width="460" height="110" rx="10"/>
+  <text class="ttl" x="36" y="184">旧的编译结果（React 16 及以前）</text>
+  <text class="mono sm" x="36" y="208">React.createElement('h1',</text>
+  <text class="mono sm" x="48" y="226">{ className: 'title' }, 'Hello ', title)</text>
+  <text class="sm" x="36" y="252">↑ 需要作用域里有 React，所以每个文件都要 import React</text>
+</svg>
+<figcaption>图 4-2　JSX 只是语法糖：它被编译成创建“React 元素”的函数调用，React 再把元素变成真实 DOM</figcaption>
+</figure>
+
+<p>
+  所以 JSX <strong>不是必需的</strong>，你完全可以手写 <code>createElement</code>。
+  但几乎没人这么做：JSX 读起来就是界面的样子，而函数调用嵌套几层就没法看了。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">经典转换 <span class="ver old">React ≤ 16</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> <span class="tk-tp">React</span> <span class="tk-kw">from</span> <span class="tk-st">'react'</span>; <span class="tk-cm">// 必须有，否则报错</span>
+
+<span class="tk-cm">// &lt;h1&gt;Hello&lt;/h1&gt; 编译成：</span>
+<span class="tk-tp">React</span>.<span class="tk-fn">createElement</span>(<span class="tk-st">'h1'</span>, <span class="tk-kw">null</span>, <span class="tk-st">'Hello'</span>);</pre></div>
+  </div>
+  <div class="new"><div class="h">自动转换 <span class="ver">React 17+</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 不需要 import React</span>
+
+<span class="tk-cm">// &lt;h1&gt;Hello&lt;/h1&gt; 编译成（编译器自动加 import）：</span>
+<span class="tk-kw">import</span> { jsx <span class="tk-kw">as</span> _jsx } <span class="tk-kw">from</span> <span class="tk-st">'react/jsx-runtime'</span>;
+<span class="tk-fn">_jsx</span>(<span class="tk-st">'h1'</span>, { children: <span class="tk-st">'Hello'</span> });</pre></div>
+  </div>
+</div>
+
+<div class="box deep">
+  <div class="t">&#128270; 深入一点：HTML 和 JS 为什么要写在一起？</div>
+  <p>
+    过去的“最佳实践”是把结构（HTML）、逻辑（JS）和样式（CSS）分到不同文件里。React 反其道而行：
+    按<strong>功能</strong>而不是按<strong>技术</strong>划分 —— 一个组件把和它有关的标记与逻辑放在一起。
+    因为按钮的外观和按钮被点击后做什么，本来就是紧密相关的。这个观点当年备受争议，现在已经被
+    Vue、Svelte、Solid 等框架以不同方式采纳。
+  </p>
+</div>
+
+<h2 id="rules">JSX 的几条规则</h2>
+
+<h3>1. 只能返回一个根元素</h3>
+<p>
+  <code>return</code> 后面只能是一个元素。想并排返回两个？用一个父元素包起来，
+  或者用 Fragment <code>&lt;&gt;…&lt;/&gt;</code>（第 16 章）：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">&#10060; 报错</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">return</span> (
+  <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">Hello</span><span class="tk-tg">&lt;/h1</span>&gt;
+  <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">World</span><span class="tk-tg">&lt;/p</span>&gt;
+);</pre></div>
+  </div>
+  <div class="new"><div class="h">&#9989; 正确</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">return</span> (
+  <span class="tk-tg">&lt;div</span>&gt;
+    <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">Hello</span><span class="tk-tg">&lt;/h1</span>&gt;
+    <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">World</span><span class="tk-tg">&lt;/p</span>&gt;
+  <span class="tk-tg">&lt;/div</span>&gt;
+);</pre></div>
+  </div>
+</div>
+
+<p>原因看图 4-2 就明白了：JSX 会变成一个函数调用，而一个函数只能返回一个值。</p>
+
+<h3>2. 多行 JSX 用圆括号包起来</h3>
+<p>
+  <code>return (</code> 后面换行写 JSX 是惯例。如果写成 <code>return</code> 后直接换行，
+  JavaScript 的自动分号插入会让函数返回 <code>undefined</code>。
+</p>
+
+<h3>3. 所有标签都要闭合</h3>
+<p><code>&lt;input&gt;</code> 要写 <code>&lt;input /&gt;</code>，<code>&lt;hr&gt;</code> 要写 <code>&lt;hr /&gt;</code>。</p>
+
+<h3>4. 花括号里的值怎么显示</h3>
+<div class="tw">
+<table>
+  <tr><th>值</th><th>显示结果</th></tr>
+  <tr><td>字符串、数字</td><td>原样显示</td></tr>
+  <tr><td><code>true</code>、<code>false</code>、<code>null</code>、<code>undefined</code></td><td>什么都不显示（条件渲染靠的就是这个）</td></tr>
+  <tr><td>数组</td><td>依次显示每一项（列表渲染靠的就是这个）</td></tr>
+  <tr><td>JSX 元素</td><td>渲染这个元素</td></tr>
+  <tr><td>普通对象 <code>{ a: 1 }</code></td><td><strong>报错</strong>：Objects are not valid as a React child</td></tr>
+</table>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 安全：JSX 会自动转义</div>
+  <p>
+    <code>{'&lt;script&gt;alert(1)&lt;/script&gt;'}</code> 会被当成普通文字显示，而不会执行。
+    这让 React 默认就能防御大部分 XSS 攻击。如果你真的要插入一段 HTML 字符串，React 提供了一个名字很吓人的属性
+    <code>dangerouslySetInnerHTML</code> —— 名字就是在提醒你：只对完全可信的内容使用。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>JSX 让你在 JavaScript 里用类似 HTML 的语法描述界面；<code>{ }</code> 里放任意 JavaScript 表达式。</li>
+  <li>属性名用驼峰：<code>className</code>、<code>htmlFor</code>、<code>onClick</code>；所有标签必须闭合。</li>
+  <li>JSX 会被编译成 <code>jsx()</code>（旧版是 <code>React.createElement()</code>）调用，返回描述界面的普通对象。</li>
+  <li>React 17 起，只写 JSX 的文件不再需要 <code>import React</code>。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>定义一个数字、一个布尔值、一个数组，分别在 JSX 里显示，观察各自的效果。</li>
+    <li>试着直接显示一个对象 <code>{welcome}</code>，读一读控制台的报错信息。</li>
+    <li>把 <code>htmlFor</code> 改成 <code>for</code>，看看控制台里 React 给你什么警告。</li>
+    <li>挑战：用数组的 <code>map()</code> 方法把 <code>['a', 'b', 'c']</code> 渲染成三个 <code>&lt;li&gt;</code>。做不出来也没关系，下一章就讲。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 JSX？浏览器能直接运行 JSX 吗？</summary>
+    <div><p>JSX 是 JavaScript 的语法扩展，用类似 HTML 的写法描述 UI。浏览器不能直接运行，需要 Babel、esbuild 等工具编译成普通 JavaScript 函数调用。</p></div></details>
+  <details><summary>使用 React 必须写 JSX 吗？</summary>
+    <div><p>不必须。JSX 只是 <code>createElement</code> / <code>jsx()</code> 调用的语法糖，但它更直观，几乎所有项目都使用它。</p></div></details>
+  <details><summary>为什么 JSX 中用 className 而不是 class？</summary>
+    <div><p>JSX 最终是 JavaScript，<code>class</code> 是 JS 保留字，且 DOM 属性本身就叫 <code>className</code>。同理 <code>for</code> 写作 <code>htmlFor</code>。</p></div></details>
+  <details><summary>为什么 React 17 之后不需要在每个文件里 import React？</summary>
+    <div><p>新的 JSX 转换会让编译器从 <code>react/jsx-runtime</code> 自动导入所需函数，不再依赖作用域中的 <code>React</code> 变量。</p></div></details>
+  <details><summary>JSX 里怎么写注释？</summary>
+    <div><p>写在花括号里：<code>{/* 注释 */}</code>。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

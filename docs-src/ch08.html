@@ -1,0 +1,255 @@
+<p class="lede">
+  到目前为止，页面只会“显示”，不会“响应”。这一章我们给搜索框加上第一个交互：
+  用户每敲一个字，我们都能拿到输入框里的内容。你会学到 React 声明式的事件写法，
+  以及初学者踩得最多的一个坑。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>在 JSX 里用 <code>onChange</code>、<code>onClick</code> 等属性绑定事件处理函数</li>
+    <li>理解 React 的合成事件对象和 <code>event.target.value</code></li>
+    <li>分清“传函数”和“传函数调用的结果”</li>
+    <li>了解 React 事件系统和原生事件、旧版本 React 的几处不同</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="handler">给输入框加一个处理函数</h2>
+
+<p>
+  原生 JavaScript 里，你会先找到 DOM 节点，再用 <code>addEventListener</code> 挂上监听器。
+  React 里不需要找节点 —— 直接在 JSX 上声明“发生这个事件时调用这个函数”。
+</p>
+
+<p>先把 <code>Search</code> 从简洁体改回块体，这样才能在 <code>return</code> 之前定义函数：</p>
+
+```jsx src/App.jsx
+const Search = () => {
+  const handleChange = (event) => {
+    // 合成事件对象
+    console.log(event);
+    // 输入框当前的值
+    console.log(event.target.value);
+  };
+
+  return (
+    <div>
+      <label htmlFor="search">Search: </label>
+      <input id="search" type="text" onChange={handleChange} />
+    </div>
+  );
+};
+```
+
+<p>
+  打开浏览器控制台，在输入框里打字，每敲一个键就会打印一次事件对象和当前的值。
+  这个函数就叫<strong>事件处理函数</strong>（event handler），习惯以 <code>handle</code> 开头命名：
+  <code>handleChange</code>、<code>handleClick</code>、<code>handleSubmit</code>。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="用户输入到事件处理函数的流程">
+  <rect class="bx" x="20" y="80" width="130" height="64" rx="10"/>
+  <text class="ttl" x="85" y="106" text-anchor="middle">用户</text>
+  <text class="sm" x="85" y="126" text-anchor="middle">在输入框敲 "r"</text>
+
+  <rect class="bx-b" x="200" y="80" width="150" height="64" rx="10"/>
+  <text class="ttl on-b" x="275" y="106" text-anchor="middle">浏览器</text>
+  <text class="sm" x="275" y="126" text-anchor="middle">产生原生 input 事件</text>
+
+  <rect class="bx-p" x="400" y="80" width="150" height="64" rx="10"/>
+  <text class="ttl on-p" x="475" y="106" text-anchor="middle">React</text>
+  <text class="sm" x="475" y="126" text-anchor="middle">包装成合成事件</text>
+
+  <rect class="bx-a" x="600" y="70" width="140" height="84" rx="10"/>
+  <text class="ttl on-a" x="670" y="96" text-anchor="middle">handleChange</text>
+  <text class="mono sm" x="670" y="118" text-anchor="middle">(event) =&gt; {…}</text>
+  <text class="mono sm" x="670" y="140" text-anchor="middle">event.target.value</text>
+
+  <path class="ln" d="M152 112 H196" marker-end="url(#ar)"/>
+  <path class="ln-b" d="M352 112 H396" marker-end="url(#ar-b)"/>
+  <path class="ln-p" d="M552 112 H596" marker-end="url(#ar-p)"/>
+
+  <rect class="code-bg" x="200" y="176" width="540" height="40" rx="8"/>
+  <text class="code-tx" x="216" y="201">&lt;input onChange={<tspan class="fill-a" style="font-weight:700">handleChange</tspan>} /&gt;   ← 在 JSX 里声明这个对应关系</text>
+  <path class="ln-a" d="M670 156 V172" />
+</svg>
+<figcaption>图 8-1　你只需在 JSX 里声明“哪个事件交给哪个函数”，找节点、挂监听都由 React 完成</figcaption>
+</figure>
+
+<div class="vs">
+  <div class="old"><div class="h">命令式：原生 DOM</div>
+```js
+const input = document.getElementById('search');
+
+input.addEventListener('input', (event) => {
+  console.log(event.target.value);
+});
+```
+  </div>
+  <div class="new"><div class="h">声明式：React</div>
+```jsx
+const handleChange = (event) => {
+  console.log(event.target.value);
+};
+
+<input id="search" onChange={handleChange} />
+```
+  </div>
+</div>
+
+<h2 id="synthetic">合成事件</h2>
+
+<p>
+  你在控制台里看到的 <code>event</code> 不是浏览器原生事件，而是 React 包装过的
+  <strong>合成事件</strong>（SyntheticEvent）。它的接口和原生事件几乎一样 ——
+  <code>event.target</code>、<code>event.preventDefault()</code>、<code>event.stopPropagation()</code> 都在 ——
+  但抹平了不同浏览器之间的差异。真的需要原生事件时，可以用 <code>event.nativeEvent</code>，
+  不过实际开发中几乎用不到。
+</p>
+
+<div class="box warn">
+  <div class="t">&#9888; React 的 onChange 和原生 change 事件不一样</div>
+  <p>
+    原生 HTML 的 <code>change</code> 事件要等输入框<strong>失去焦点</strong>才触发；
+    React 的 <code>onChange</code> 在<strong>每一次输入</strong>时都触发（行为其实等同于原生的 <code>input</code> 事件）。
+    这是 React 有意为之的设计，方便做实时搜索、实时校验。
+  </p>
+</div>
+
+<h2 id="pass-fn">传函数，别传调用结果</h2>
+
+<p>
+  这是 React 初学者最常见的 bug 之一，一定要记牢：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">&#10060; 错误</div>
+```jsx
+// 渲染时就立即调用了 handleChange，
+// 把它的返回值（undefined）交给了 onChange
+<input onChange={handleChange()} />
+```
+  </div>
+  <div class="new"><div class="h">&#9989; 正确</div>
+```jsx
+// 把函数本身交给 onChange，
+// 等事件发生时由 React 来调用
+<input onChange={handleChange} />
+```
+  </div>
+</div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 180" role="img" aria-label="传函数引用与传调用结果的区别">
+  <rect class="bx-r" x="20" y="24" width="350" height="136" rx="12"/>
+  <text class="ttl on-r" x="195" y="50" text-anchor="middle">onClick={handleClick()}</text>
+  <text class="sm" x="40" y="78">① 渲染时立刻执行 handleClick()</text>
+  <text class="sm" x="40" y="100">② onClick 拿到的是返回值 undefined</text>
+  <text class="sm" x="40" y="122">③ 用户点击时什么都不发生</text>
+  <text class="sm on-r" x="40" y="146">如果 handleClick 里改了状态 → 无限循环</text>
+
+  <rect class="bx-g" x="390" y="24" width="350" height="136" rx="12"/>
+  <text class="ttl on-g" x="565" y="50" text-anchor="middle">onClick={handleClick}</text>
+  <text class="sm" x="410" y="78">① 渲染时只是把函数“交”给 React</text>
+  <text class="sm" x="410" y="100">② 用户点击</text>
+  <text class="sm" x="410" y="122">③ React 调用 handleClick(event)</text>
+  <text class="sm on-g" x="410" y="146">需要传参？用箭头函数包一层（第 18 章）</text>
+</svg>
+<figcaption>图 8-2　有括号 = 现在就调用；没括号 = 把函数交出去，以后再调</figcaption>
+</figure>
+
+<p>
+  唯一的例外：如果 <code>handleChange()</code> 本身<strong>返回的是一个函数</strong>，那加括号就是对的。
+  但初学阶段先记住“不加括号”。需要传额外参数的写法 <code>onClick={() =&gt; handleRemove(item)}</code> 会在第 18 章讲。
+</p>
+
+<h2 id="summary-jsx">JSX 里混合 HTML 与 JavaScript 的三种方式</h2>
+
+<p>到这里，你已经见过在 JSX 里使用 JavaScript 的三种方式：</p>
+
+<div class="cards">
+  <div class="card"><span class="ic">&#128196;</span><h4>显示值</h4><p><code>&lt;span&gt;{title}&lt;/span&gt;</code><br>把变量显示成内容</p></div>
+  <div class="card"><span class="ic">&#128279;</span><h4>传递给属性</h4><p><code>&lt;a href={url}&gt;</code><br>动态设置 HTML 属性</p></div>
+  <div class="card"><span class="ic">&#128433;</span><h4>传递函数</h4><p><code>&lt;input onChange={handleChange} /&gt;</code><br>响应用户交互</p></div>
+</div>
+
+<h2 id="history">React 事件系统的演变</h2>
+
+<p>如果你读到旧代码或旧文章，可能会遇到下面这些已经过时的说法：</p>
+
+<div class="tw">
+<table>
+  <tr><th>主题</th><th>旧行为 <span class="ver old">React ≤ 16</span></th><th>现在 <span class="ver">React 17+</span></th></tr>
+  <tr><td>事件委托挂在哪里</td><td>统一挂在 <code>document</code> 上</td><td>挂在 React 的根容器（<code>#root</code>）上，多个 React 版本可以共存</td></tr>
+  <tr><td>事件池</td><td>事件对象会被复用，异步访问要先调用 <code>event.persist()</code></td><td>取消事件池，<code>event.persist()</code> 不再需要（调用也无效果）</td></tr>
+  <tr><td><code>onScroll</code></td><td>会冒泡</td><td>不冒泡，和浏览器一致</td></tr>
+  <tr><td>类组件里的 <code>this</code></td><td>要在构造函数里 <code>this.handleClick = this.handleClick.bind(this)</code></td><td>函数组件没有 <code>this</code>，处理函数就是普通闭包</td></tr>
+</table>
+</div>
+
+<div class="vs">
+  <div class="old"><div class="h">类组件的事件处理 <span class="ver old">旧写法</span></div>
+```jsx
+class Search extends React.Component {
+  constructor(props) {
+    super(props);
+    // 不 bind 的话，this 会是 undefined
+    this.handleChange = this.handleChange.bind(this);
+  }
+
+  handleChange(event) {
+    console.log(event.target.value);
+  }
+
+  render() {
+    return <input onChange={this.handleChange} />;
+  }
+}
+```
+  </div>
+  <div class="new"><div class="h">函数组件 <span class="ver">现在</span></div>
+```jsx
+const Search = () => {
+  const handleChange = (event) => {
+    console.log(event.target.value);
+  };
+
+  return <input onChange={handleChange} />;
+};
+```
+  </div>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>在 JSX 上用 <code>onXxx={函数}</code> 声明事件处理函数，事件名是驼峰的（<code>onClick</code>、<code>onChange</code>、<code>onBlur</code>）。</li>
+  <li>处理函数收到 React 的合成事件，用 <code>event.target.value</code> 读取输入框的值。</li>
+  <li>传函数本身 <code>onChange={fn}</code>，不要传调用结果 <code>onChange={fn()}</code>。</li>
+  <li>React 的 <code>onChange</code> 每次输入都触发；事件池、<code>bind(this)</code> 都是旧时代的产物。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>给输入框再加一个 <code>onBlur</code> 处理函数，在输入框失去焦点时打印一句话。</li>
+    <li>在页面上加一个按钮，点击时 <code>console.log('clicked')</code>。然后故意写成 <code>onClick={handleClick()}</code>，观察什么时候打印。</li>
+    <li>（选读）了解事件冒泡与捕获：给外层 <code>div</code> 加 <code>onClick</code>，点击里面的按钮，看看两个处理函数的执行顺序；再试试 <code>onClickCapture</code>。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>React 中如何绑定事件处理函数？</summary>
+    <div><p>在 JSX 元素上使用驼峰命名的事件属性，并传入函数引用，例如 <code>&lt;button onClick={handleClick}&gt;</code>。</p></div></details>
+  <details><summary>什么是合成事件（SyntheticEvent）？</summary>
+    <div><p>React 对浏览器原生事件的跨浏览器包装，提供与原生一致的接口；原生事件可通过 <code>event.nativeEvent</code> 获取。</p></div></details>
+  <details><summary>如何给事件处理函数传递额外参数？</summary>
+    <div><p>用箭头函数包一层：<code>onClick={() =&gt; handleClick(id)}</code>。</p></div></details>
+  <details><summary>event.preventDefault() 和 event.stopPropagation() 分别做什么？</summary>
+    <div><p>前者阻止浏览器默认行为（如表单提交刷新页面、链接跳转）；后者阻止事件继续冒泡到父元素。</p></div></details>
+  <details><summary>event.target 是什么？</summary>
+    <div><p>触发事件的那个 DOM 元素，可以读取它的属性，比如输入框的 <code>value</code>。</p></div></details>
+</div>

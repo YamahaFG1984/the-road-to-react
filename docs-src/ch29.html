@@ -1,0 +1,531 @@
+<p class="lede">
+  JavaScript 的类型错误要等到代码<strong>运行</strong>时才会暴露：页面白屏、控制台报 “Cannot read properties of undefined”。
+  TypeScript 把这类错误提前到<strong>写代码</strong>的时候，在编辑器里就用红线标出来。
+  这一章把 Hacker Stories 迁移到 TypeScript，并总结 React 里最常用的几种类型写法。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>在 Vite 项目中启用 TypeScript</li>
+    <li>给函数、自定义 Hook、组件 props 加类型</li>
+    <li>用联合类型给 reducer 的 action 做到真正的类型安全</li>
+    <li>掌握事件、ref、children 的 React 专用类型，以及 React 19 在类型上的变化</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="why">为什么用 TypeScript</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="TypeScript 把错误发现的时间提前">
+  <path class="ln" d="M20 110 H740" marker-end="url(#ar)"/>
+  <circle class="fill-g" cx="120" cy="110" r="9"/>
+  <text class="ttl on-g" x="120" y="80" text-anchor="middle">写代码时</text>
+  <text class="sm" x="120" y="140" text-anchor="middle">编辑器红线提示</text>
+  <text class="sm on-g" x="120" y="158" text-anchor="middle">TypeScript 在这里报错</text>
+
+  <circle class="fill-b" cx="330" cy="110" r="7"/>
+  <text class="ttl on-b" x="330" y="80" text-anchor="middle">构建时</text>
+  <text class="sm" x="330" y="140" text-anchor="middle">tsc / npm run build</text>
+
+  <circle class="fill-a" cx="530" cy="110" r="7"/>
+  <text class="ttl on-a" x="530" y="80" text-anchor="middle">开发时运行</text>
+  <text class="sm" x="530" y="140" text-anchor="middle">浏览器控制台报错</text>
+
+  <circle class="fill-r" cx="700" cy="110" r="9"/>
+  <text class="ttl on-r" x="745" y="80" text-anchor="end">用户使用时</text>
+  <text class="sm" x="745" y="140" text-anchor="end">白屏 / 线上事故</text>
+  <text class="sm on-r" x="745" y="158" text-anchor="end">JavaScript 可能到这才发现</text>
+
+  <text class="sm" x="380" y="196" text-anchor="middle">越早发现，修复成本越低。同时类型本身就是文档，重构时也更有底气。</text>
+  <text class="sm" x="380" y="30" text-anchor="middle">发现错误的时机</text>
+</svg>
+<figcaption>图 29-1　TypeScript 把一大类错误从“运行时”提前到“编译时”</figcaption>
+</figure>
+
+<h2 id="setup">启用 TypeScript</h2>
+
+<div class="box tip">
+  <div class="t">&#128161; 新项目：直接用 TS 模板</div>
+  <p>
+    新项目最省事的办法是创建时就选 TypeScript 模板：<code>npm create vite@latest my-app -- --template react-ts</code>，
+    所有配置都已生成好。下面是把现有 JavaScript 项目迁移过去的步骤。
+  </p>
+</div>
+
+<p>安装 TypeScript 以及 React 的类型定义：</p>
+
+```bash
+npm install --save-dev typescript @types/react @types/react-dom
+npm install --save-dev typescript-eslint
+```
+
+<p>
+  新建三个配置文件：<code>tsconfig.app.json</code>（浏览器端代码，也就是 <code>src/</code>）、
+  <code>tsconfig.node.json</code>（在 Node 中运行的配置文件，如 <code>vite.config.ts</code>），以及把两者合并起来的 <code>tsconfig.json</code>：
+</p>
+
+```json tsconfig.app.json
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["src"]
+}
+```
+
+```json tsconfig.node.json
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true
+  },
+  "include": ["vite.config.ts"]
+}
+```
+
+```json tsconfig.json
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+```
+
+<p>ESLint 配置也要换成能理解 TypeScript 的版本：</p>
+
+```js eslint.config.js
+import js from '@eslint/js';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  { ignores: ['dist'] },
+  {
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
+    },
+  }
+);
+```
+
+<p>把文件后缀从 <code>.jsx</code> 改成 <code>.tsx</code>，并更新 <code>index.html</code> 里的入口路径：</p>
+
+```bash
+mv src/main.jsx src/main.tsx
+mv src/App.jsx src/App.tsx
+```
+
+```html index.html
+<script type="module" src="/src/main.tsx"></script>
+```
+
+<p>再在 <code>src/</code> 下新建 <code>vite-env.d.ts</code>，让 TypeScript 认识 Vite 特有的导入（如 CSS、SVG）：</p>
+
+```ts src/vite-env.d.ts
+/// <reference types="vite/client" />
+```
+
+<p>重启开发服务器。应用照常运行（Vite 只是去掉类型，并不做类型检查），但编辑器里会出现很多红线 —— 接下来逐个消灭它们。</p>
+
+<h2 id="main">入口文件</h2>
+
+```tsx src/main.tsx
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+<p>
+  不加 <code>!</code> 时 TypeScript 会报错：<code>getElementById</code> 的返回类型是 <code>HTMLElement | null</code>（找不到就返回 null），
+  而 <code>createRoot</code> 不接受 null。我们确定 <code>index.html</code> 里有这个元素，于是用<strong>非空断言</strong> <code>!</code> 告诉 TypeScript：“我比你清楚，这里不会是 null。”
+</p>
+
+<h2 id="functions">给函数和自定义 Hook 加类型</h2>
+
+<p>自定义 Hook 本质上就是函数，先给参数加上类型：</p>
+
+```tsx src/App.tsx
+const useStorageState = (key: string, initialState: string) => {
+  const [value, setValue] = useState(
+    localStorage.getItem(key) ?? initialState
+  );
+
+  useEffect(() => {
+    localStorage.setItem(key, value);
+  }, [value, key]);
+
+  return [value, setValue] as const;
+};
+```
+
+<p>
+  返回类型可以不写，TypeScript 会推断出来。但数组要加 <code>as const</code>：否则它被推断为“由字符串和函数组成的数组”，
+  调用方就不知道第一项一定是字符串、第二项一定是函数了。加上 <code>as const</code> 后，它是一个固定长度、每一位类型确定的<strong>元组</strong>。
+</p>
+
+<h3>useState 的类型推断</h3>
+
+```tsx
+const [value, setValue] = useState('React');
+// value 被推断为 string；setValue 只接受 string
+
+const [user, setUser] = useState<User | null>(null);
+// 初始值是 null 时，要用泛型告诉它将来还可能是什么
+```
+
+<h2 id="props">给组件 props 加类型</h2>
+
+<p>从叶子组件 <code>Item</code> 开始。最直接的写法是把类型写在参数后面，但会又长又重复：</p>
+
+```tsx src/App.tsx
+const Item = ({
+  item,
+  onRemoveItem,
+}: {
+  item: {
+    objectID: string;
+    url: string;
+    title: string;
+    author: string;
+    num_comments: number;
+    points: number;
+  };
+  onRemoveItem: (item: {
+    objectID: string;
+    url: string;
+    title: string;
+    author: string;
+    num_comments: number;
+    points: number;
+  }) => void;
+}) => ( ... );
+```
+
+<p>把文章的结构提取成一个 <code>Story</code> 类型，再把 props 提取成 <code>ItemProps</code>：</p>
+
+```tsx src/App.tsx
+type Story = {
+  objectID: string;
+  url: string;
+  title: string;
+  author: string;
+  num_comments: number;
+  points: number;
+};
+
+type ItemProps = {
+  item: Story;
+  onRemoveItem: (item: Story) => void;
+};
+
+const Item = ({ item, onRemoveItem }: ItemProps) => (
+  <li>
+    ...
+  </li>
+);
+
+type ListProps = {
+  list: Story[];
+  onRemoveItem: (item: Story) => void;
+};
+
+const List = ({ list, onRemoveItem }: ListProps) => (
+  <ul>
+    ...
+  </ul>
+);
+```
+
+<p><code>Story</code> 类型还可以用在 <code>App</code> 的回调里：</p>
+
+```tsx src/App.tsx
+const handleRemoveStory = (item: Story) => {
+  dispatchStories({
+    type: 'REMOVE_STORY',
+    payload: item,
+  });
+};
+```
+
+<div class="vs">
+  <div class="old"><div class="h">React.FC <span class="ver old">曾经流行</span></div>
+```tsx
+const Item: React.FC<ItemProps> = ({ item }) => ( ... );
+```
+  </div>
+  <div class="new"><div class="h">直接标注参数 <span class="ver">现在推荐</span></div>
+```tsx
+const Item = ({ item }: ItemProps) => ( ... );
+```
+  </div>
+</div>
+
+<p>
+  老代码里常见 <code>React.FC</code>。它早期会隐式地给组件加上 <code>children</code>（React 18 起已去掉），写法也更绕。
+  今天社区普遍直接给参数标注类型，本教程也这样做。
+</p>
+
+<h2 id="reducer">给 reducer 加类型</h2>
+
+<p>先描述状态的结构，再描述 action。一个偷懒的写法是：</p>
+
+```tsx src/App.tsx
+type StoriesState = {
+  data: Story[];
+  isLoading: boolean;
+  isError: boolean;
+};
+
+type StoriesAction = {
+  type: string;
+  payload: any;
+};
+```
+
+<p>
+  但 <code>type: string</code> 和 <code>payload: any</code> 太宽泛了，写错动作名、传错 payload 都不会报错。
+  更好的做法是为每种动作单独定义类型，再用<strong>联合类型</strong>把它们组合起来：
+</p>
+
+```tsx src/App.tsx
+type StoriesFetchInitAction = {
+  type: 'STORIES_FETCH_INIT';
+};
+
+type StoriesFetchSuccessAction = {
+  type: 'STORIES_FETCH_SUCCESS';
+  payload: Story[];
+};
+
+type StoriesFetchFailureAction = {
+  type: 'STORIES_FETCH_FAILURE';
+};
+
+type StoriesRemoveAction = {
+  type: 'REMOVE_STORY';
+  payload: Story;
+};
+
+type StoriesAction =
+  | StoriesFetchInitAction
+  | StoriesFetchSuccessAction
+  | StoriesFetchFailureAction
+  | StoriesRemoveAction;
+
+const storiesReducer = (
+  state: StoriesState,
+  action: StoriesAction
+) => {
+  switch (action.type) {
+    ...
+  }
+};
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="可辨识联合类型在 switch 中自动收窄 payload 的类型">
+  <rect class="bx-a" x="20" y="20" width="220" height="210" rx="12"/>
+  <text class="ttl on-a" x="130" y="46" text-anchor="middle">StoriesAction（联合）</text>
+  <rect class="bx" x="36" y="62" width="188" height="32" rx="6"/>
+  <text class="mono sm" x="130" y="83" text-anchor="middle">'STORIES_FETCH_INIT'</text>
+  <rect class="bx-g" x="36" y="102" width="188" height="36" rx="6"/>
+  <text class="mono sm on-g" x="130" y="118" text-anchor="middle">'STORIES_FETCH_SUCCESS'</text>
+  <text class="mono sm" x="130" y="132" text-anchor="middle">payload: Story[]</text>
+  <rect class="bx" x="36" y="146" width="188" height="32" rx="6"/>
+  <text class="mono sm" x="130" y="167" text-anchor="middle">'STORIES_FETCH_FAILURE'</text>
+  <rect class="bx-p" x="36" y="186" width="188" height="36" rx="6"/>
+  <text class="mono sm on-p" x="130" y="202" text-anchor="middle">'REMOVE_STORY'</text>
+  <text class="mono sm" x="130" y="216" text-anchor="middle">payload: Story</text>
+
+  <rect class="code-bg" x="300" y="40" width="440" height="170" rx="10"/>
+  <text class="code-tx" x="316" y="68">switch (action.type) {</text>
+  <text class="code-tx" x="332" y="96">case 'STORIES_FETCH_SUCCESS':</text>
+  <text class="code-tx" x="348" y="118"><tspan class="fill-g">action.payload</tspan>  // 类型：Story[]</text>
+  <text class="code-tx" x="332" y="146">case 'REMOVE_STORY':</text>
+  <text class="code-tx" x="348" y="168"><tspan class="fill-p">action.payload</tspan>  // 类型：Story</text>
+  <text class="code-tx" x="332" y="196">case 'TYPO':  <tspan fill="#f08076">// ✗ 编译错误</tspan></text>
+  <path class="ln-g" d="M226 120 C270 120 270 112 296 112" marker-end="url(#ar-g)"/>
+  <path class="ln-p" d="M226 204 C270 204 270 164 296 164" marker-end="url(#ar-p)"/>
+</svg>
+<figcaption>图 29-2　可辨识联合（discriminated union）：TypeScript 根据 type 自动推断出对应的 payload 类型</figcaption>
+</figure>
+
+<p>
+  这叫<strong>可辨识联合</strong>：每个成员都有一个字面量类型的 <code>type</code> 字段，TypeScript 在 <code>switch</code> 的每个分支里会自动把 action 收窄到对应的成员。
+  拼错动作名、给 <code>REMOVE_STORY</code> 传一个数组，都会立刻得到编译错误。
+</p>
+
+<h2 id="events">事件、ref 与 children 的类型</h2>
+
+<p>表单相关的回调参数是 React 的事件类型，泛型参数是触发事件的元素类型：</p>
+
+```tsx src/App.tsx
+type SearchFormProps = {
+  searchTerm: string;
+  onSearchInput: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  searchAction: (formData: FormData) => void;
+};
+
+const SearchForm = ({
+  searchTerm,
+  onSearchInput,
+  searchAction,
+}: SearchFormProps) => ( ... );
+
+const App = () => {
+  ...
+  const handleSearchInput = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setSearchTerm(event.target.value);
+  };
+  ...
+};
+```
+
+<p><code>useRef</code> 的类型推断不出来，要用泛型说明它将引用什么元素：</p>
+
+```tsx src/App.tsx
+const inputRef = useRef<HTMLInputElement>(null);
+```
+
+<p>最后是 <code>InputWithLabel</code>，注意可选 prop 用 <code>?</code>，<code>children</code> 用 <code>React.ReactNode</code>：</p>
+
+```tsx src/App.tsx
+type InputWithLabelProps = {
+  id: string;
+  value: string;
+  type?: string;
+  onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isFocused?: boolean;
+  children: React.ReactNode;
+};
+
+const InputWithLabel = ({
+  id,
+  value,
+  type = 'text',
+  onInputChange,
+  isFocused,
+  children,
+}: InputWithLabelProps) => {
+  ...
+};
+```
+
+<div class="tw">
+<table>
+  <tr><th>要标注的东西</th><th>常用类型</th></tr>
+  <tr><td>输入框 onChange 事件</td><td><code>React.ChangeEvent&lt;HTMLInputElement&gt;</code></td></tr>
+  <tr><td>按钮点击</td><td><code>React.MouseEvent&lt;HTMLButtonElement&gt;</code></td></tr>
+  <tr><td>表单 onSubmit</td><td><code>React.FormEvent&lt;HTMLFormElement&gt;</code></td></tr>
+  <tr><td>form action</td><td><code>(formData: FormData) =&gt; void | Promise&lt;void&gt;</code></td></tr>
+  <tr><td>children / 任何可渲染的内容</td><td><code>React.ReactNode</code></td></tr>
+  <tr><td>DOM ref</td><td><code>useRef&lt;HTMLInputElement&gt;(null)</code></td></tr>
+  <tr><td>作为 prop 接收的 ref（React 19）</td><td><code>ref?: React.Ref&lt;HTMLInputElement&gt;</code></td></tr>
+  <tr><td>继承原生元素的所有属性</td><td><code>React.ComponentProps&lt;'button'&gt;</code></td></tr>
+</table>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; React 19 在类型上的几处变化</div>
+  <ul style="margin:0">
+    <li><code>useRef</code> 现在<strong>必须</strong>传参数：<code>useRef()</code> 要写成 <code>useRef(undefined)</code> 或 <code>useRef&lt;T&gt;(null)</code>；所有 ref 对象的 <code>current</code> 都是可写的。</li>
+    <li>全局的 <code>JSX</code> 命名空间被移除，需要时写 <code>React.JSX.Element</code>。</li>
+    <li>ref 回调不能隐式返回值（第 17 章）：<code>ref={(n) =&gt; (x = n)}</code> 会报类型错误。</li>
+    <li>ref 作为普通 prop：组件 props 类型里直接声明 <code>ref?: React.Ref&lt;…&gt;</code>，或用 <code>React.ComponentProps&lt;'input'&gt;</code>（已包含 ref）。</li>
+  </ul>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 示例数据和真实数据的 objectID 类型不一样</div>
+  <p>
+    我们手写的示例数据里 <code>objectID</code> 是数字 <code>0</code>、<code>1</code>，而 Hacker News API 返回的是字符串 <code>"42345678"</code>。
+    TypeScript 会立刻指出这个不一致 —— 这正是类型的价值。把 <code>Story</code> 里的类型定义成和真实 API 一致（string），示例数据也相应改成字符串。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>新项目用 <code>react-ts</code> 模板；老项目安装 <code>typescript</code> 和类型包、添加 tsconfig、把 <code>.jsx</code> 改为 <code>.tsx</code>。</li>
+  <li>给函数参数加类型；自定义 Hook 返回元组时加 <code>as const</code>；<code>useState</code> 多数能推断，初始值为 null 时用泛型。</li>
+  <li>用 <code>type XxxProps</code> 描述组件 props，直接标注在参数上。</li>
+  <li>reducer 的 action 用可辨识联合，获得真正的类型安全。</li>
+  <li>React 专用类型：<code>React.ChangeEvent</code>、<code>React.ReactNode</code>、<code>useRef&lt;HTMLInputElement&gt;(null)</code> 等。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>完成整个 <code>App.tsx</code> 的类型标注，直到编辑器里没有红线。</li>
+    <li>故意 dispatch 一个不存在的动作类型，看看 TypeScript 的报错。</li>
+    <li>把 <code>onRemoveItem</code> 的类型提取成 <code>type OnRemoveItem = (item: Story) =&gt; void</code>，在两处复用。</li>
+    <li>在 <code>package.json</code> 的 build 脚本前加上 <code>tsc -b &amp;&amp;</code>，让构建时也做类型检查。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>在 React 中使用 TypeScript 有什么好处？</summary>
+    <div><p>在编写代码时发现类型错误、编辑器智能提示更强、类型即文档、重构更安全。</p></div></details>
+  <details><summary>如何给组件的 props 定义类型？</summary>
+    <div><p>定义 <code>type Props = {…}</code>（或 interface），在参数解构处标注：<code>({ a, b }: Props) =&gt; …</code>；可选 prop 用 <code>?</code>。</p></div></details>
+  <details><summary>children 应该用什么类型？</summary>
+    <div><p>通常用 <code>React.ReactNode</code>，它涵盖字符串、数字、元素、数组、null 等所有可渲染内容。</p></div></details>
+  <details><summary>什么是可辨识联合？在 reducer 中有什么用？</summary>
+    <div><p>由若干具有相同字面量字段（如 type）的类型组成的联合。在 switch 中根据该字段自动收窄类型，保证每个 action 的 payload 类型正确。</p></div></details>
+  <details><summary>为什么自定义 Hook 返回数组时要用 as const？</summary>
+    <div><p>让 TypeScript 推断为只读元组而不是普通数组，保留每一位的具体类型和顺序。</p></div></details>
+</div>

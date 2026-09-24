@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 33 章 · 排序与反向排序 — React 19 入门教程</title>
+<meta name="description" content="表头按钮、排序字典与 lodash">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="33">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 33 章 · 实战进阶</span>
+<h1>排序与反向排序</h1>
+<p class="lede">
+  从这一部分开始，我们给 Hacker Stories 加上真实应用中常见的功能。每一节都以一个<strong>任务</strong>开头 ——
+  建议先自己尝试，卡住了再看提示和讲解。第一个任务：让列表可以按标题、作者、评论数、点数<strong>排序</strong>，
+  再次点击同一列时<strong>反向排序</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>给列表加上表头，并用按钮切换排序依据</li>
+    <li>用“排序函数字典”把排序键映射到排序逻辑</li>
+    <li>基于上一次的状态计算新状态，实现正序 / 倒序切换</li>
+    <li>避免在渲染中修改 props 数组</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<div class="box tip">
+  <div class="t">&#128161; 任务一：排序</div>
+  <p>让列表可以按 title、author、comments、points 排序（先只实现一个方向）。提示：</p>
+  <ul style="margin-bottom:0">
+    <li>在 <code>App</code> 或 <code>List</code> 里新增一个 sort 状态；</li>
+    <li>每一列一个按钮，点击时把 sort 设为这一列；</li>
+    <li>根据 sort 对列表应用对应的排序函数；可以用 Lodash 的 <code>sortBy</code>。</li>
+  </ul>
+</div>
+
+<h2 id="header">先加表头</h2>
+
+<p>把列表当成一张表格：每行是一篇文章，每列是一个属性。先加一行表头，用行内样式简单地对齐：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">List</span> = ({ list, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;ul</span>&gt;
+    <span class="tk-tg">&lt;li</span> style={{ display: <span class="tk-st">'flex'</span> }}&gt;
+      <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'40%'</span> }}&gt;<span class="tk-tp">Title</span><span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'30%'</span> }}&gt;<span class="tk-tp">Author</span><span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;<span class="tk-tp">Comments</span><span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;<span class="tk-tp">Points</span><span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;<span class="tk-tp">Actions</span><span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;/li</span>&gt;
+
+    {list.<span class="tk-fn">map</span>((item) =&gt; (
+      <span class="tk-tg">&lt;Item</span> key={item.objectID} item={item} onRemoveItem={onRemoveItem} <span class="tk-tg">/&gt;</span>
+    ))}
+  <span class="tk-tg">&lt;/ul</span>&gt;
+);
+
+<span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span> style={{ display: <span class="tk-st">'flex'</span> }}&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'40%'</span> }}&gt;
+      <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'30%'</span> }}&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}&gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);</pre></div>
+
+<p>（后面的代码片段里会省略这些 style，以免干扰重点。你自己的代码里可以保留，或者改成 CSS。）</p>
+
+<h2 id="state">排序状态放在哪里</h2>
+
+<p>
+  只有 <code>List</code> 需要知道当前的排序方式，所以状态就放在 <code>List</code> 里（第 11 章：放在需要它的最近的组件）。
+  初始值 <code>'NONE'</code> 表示保持 API 返回的原始顺序：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">List</span> = ({ list, onRemoveItem }) =&gt; {
+  <span class="tk-kw">const</span> [sort, setSort] = <span class="tk-fn">useState</span>(<span class="tk-st">'NONE'</span>);
+
+  <span class="tk-kw">const</span> handleSort = (sortKey) =&gt; {
+    <span class="tk-fn">setSort</span>(sortKey);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;ul</span>&gt;
+      <span class="tk-tg">&lt;li</span>&gt;
+        <span class="tk-tg">&lt;span</span>&gt;
+          <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">handleSort</span>(<span class="tk-st">'TITLE'</span>)}&gt;
+            <span class="tk-tp">Title</span>
+          <span class="tk-tg">&lt;/button</span>&gt;
+        <span class="tk-tg">&lt;/span</span>&gt;
+        <span class="tk-tg">&lt;span</span>&gt;
+          <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">handleSort</span>(<span class="tk-st">'AUTHOR'</span>)}&gt;
+            <span class="tk-tp">Author</span>
+          <span class="tk-tg">&lt;/button</span>&gt;
+        <span class="tk-tg">&lt;/span</span>&gt;
+        <span class="tk-tg">&lt;span</span>&gt;
+          <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">handleSort</span>(<span class="tk-st">'COMMENT'</span>)}&gt;
+            <span class="tk-tp">Comments</span>
+          <span class="tk-tg">&lt;/button</span>&gt;
+        <span class="tk-tg">&lt;/span</span>&gt;
+        <span class="tk-tg">&lt;span</span>&gt;
+          <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">handleSort</span>(<span class="tk-st">'POINT'</span>)}&gt;
+            <span class="tk-tp">Points</span>
+          <span class="tk-tg">&lt;/button</span>&gt;
+        <span class="tk-tg">&lt;/span</span>&gt;
+        <span class="tk-tg">&lt;span</span>&gt;<span class="tk-tp">Actions</span><span class="tk-tg">&lt;/span</span>&gt;
+      <span class="tk-tg">&lt;/li</span>&gt;
+
+      {list.<span class="tk-fn">map</span>((item) =&gt; ( ... ))}
+    <span class="tk-tg">&lt;/ul</span>&gt;
+  );
+};</pre></div>
+
+<p>每个按钮用内联箭头函数（第 18 章）把自己的排序键传给 <code>handleSort</code>。</p>
+
+<h2 id="sorts">排序函数字典</h2>
+
+<p>
+  JavaScript 的排序有不少坑（数字、大小写、<code>undefined</code>……），我们借助工具库 <strong>Lodash</strong> 的 <code>sortBy</code>：
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install lodash</pre></div>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { sortBy } <span class="tk-kw">from</span> <span class="tk-st">'lodash'</span>;</pre></div>
+
+<p>然后定义一个对象，把每个排序键映射到一个“接收列表、返回排好序的新列表”的函数：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">SORTS</span> = {
+  <span class="tk-tp">NONE</span>: (list) =&gt; list,
+  <span class="tk-tp">TITLE</span>: (list) =&gt; <span class="tk-fn">sortBy</span>(list, <span class="tk-st">'title'</span>),
+  <span class="tk-tp">AUTHOR</span>: (list) =&gt; <span class="tk-fn">sortBy</span>(list, <span class="tk-st">'author'</span>),
+  <span class="tk-tp">COMMENT</span>: (list) =&gt; <span class="tk-fn">sortBy</span>(list, <span class="tk-st">'num_comments'</span>).<span class="tk-fn">reverse</span>(),
+  <span class="tk-tp">POINT</span>: (list) =&gt; <span class="tk-fn">sortBy</span>(list, <span class="tk-st">'points'</span>).<span class="tk-fn">reverse</span>(),
+};</pre></div>
+
+<p>
+  评论数和点数用 <code>.reverse()</code>，是为了让数字<strong>从大到小</strong>排 —— 看热门文章时，大家更想先看点数高的。
+  在 <code>List</code> 里取出当前的排序函数，先排序，再渲染：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">List</span> = ({ list, onRemoveItem }) =&gt; {
+  <span class="tk-kw">const</span> [sort, setSort] = <span class="tk-fn">useState</span>(<span class="tk-st">'NONE'</span>);
+
+  <span class="tk-kw">const</span> handleSort = (sortKey) =&gt; {
+    <span class="tk-fn">setSort</span>(sortKey);
+  };
+
+  <span class="tk-kw">const</span> sortFunction = <span class="tk-tp">SORTS</span>[sort];
+  <span class="tk-kw">const</span> sortedList = <span class="tk-fn">sortFunction</span>(list);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;ul</span>&gt;
+      ...
+
+      {sortedList.<span class="tk-fn">map</span>((item) =&gt; (
+        <span class="tk-tg">&lt;Item</span> key={item.objectID} item={item} onRemoveItem={onRemoveItem} <span class="tk-tg">/&gt;</span>
+      ))}
+    <span class="tk-tg">&lt;/ul</span>&gt;
+  );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="排序状态通过字典查到排序函数，再作用于列表">
+  <rect class="bx-b" x="20" y="90" width="140" height="60" rx="10"/>
+  <text class="ttl on-b" x="90" y="114" text-anchor="middle">sort 状态</text>
+  <text class="mono sm" x="90" y="136" text-anchor="middle">'POINT'</text>
+
+  <rect class="bx-a" x="210" y="20" width="260" height="210" rx="12"/>
+  <text class="ttl on-a" x="340" y="44" text-anchor="middle">SORTS 字典</text>
+  <text class="mono sm" x="226" y="74">NONE:    list =&gt; list</text>
+  <text class="mono sm" x="226" y="100">TITLE:   sortBy(…'title')</text>
+  <text class="mono sm" x="226" y="126">AUTHOR:  sortBy(…'author')</text>
+  <text class="mono sm" x="226" y="152">COMMENT: sortBy(…).reverse()</text>
+  <rect class="bx-g" x="220" y="164" width="240" height="26" rx="5"/>
+  <text class="mono sm on-g" x="226" y="182">POINT:   sortBy(…).reverse()</text>
+
+  <rect class="bx" x="520" y="30" width="220" height="80" rx="10"/>
+  <text class="ttl" x="630" y="54" text-anchor="middle">list（props）</text>
+  <text class="sm" x="630" y="76" text-anchor="middle">API 原始顺序</text>
+  <text class="sm" x="630" y="94" text-anchor="middle">不修改它</text>
+
+  <rect class="bx-g" x="520" y="150" width="220" height="80" rx="10"/>
+  <text class="ttl on-g" x="630" y="174" text-anchor="middle">sortedList（新数组）</text>
+  <text class="sm" x="630" y="196" text-anchor="middle">点数从高到低</text>
+  <text class="sm" x="630" y="214" text-anchor="middle">→ map 渲染成 Item</text>
+
+  <path class="ln-b" d="M162 120 C200 120 190 178 216 178" marker-end="url(#ar-b)"/>
+  <text class="mono sm on-b" x="140" y="200">SORTS[sort]</text>
+  <path class="ln-g" d="M462 178 H516" marker-end="url(#ar-g)"/>
+  <path class="ln" d="M630 112 V146" marker-end="url(#ar)"/>
+  <text class="sm" x="640" y="134">sortFunction(list)</text>
+</svg>
+<figcaption>图 33-1　状态只存一个“键”，排序逻辑放在字典里，排好序的列表在渲染时派生出来</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 不要用 <code>list.sort()</code></div>
+  <p>
+    数组自带的 <code>sort()</code> 和 <code>reverse()</code> 会<strong>原地修改</strong>数组。<code>list</code> 是 props，
+    直接修改它就等于篡改了父组件的状态（第 9 章：props 只读）。Lodash 的 <code>sortBy</code> 返回新数组，所以对它的结果调用 <code>.reverse()</code> 是安全的。
+    如果不想引入 Lodash，ES2023 新增的 <code>toSorted()</code>、<code>toReversed()</code> 会返回新数组：
+    <code>list.toSorted((a, b) =&gt; b.points - a.points)</code>。
+  </p>
+</div>
+
+<h2 id="reverse">任务二：反向排序</h2>
+
+<div class="box tip">
+  <div class="t">&#128161; 任务二</div>
+  <p>
+    同一个按钮点第二次时，改为反方向排序；再点一次又恢复。提示：再加一个状态 <code>isReverse</code>；
+    在 <code>handleSort</code> 里根据<strong>上一次</strong>的排序状态计算新状态。
+  </p>
+</div>
+
+<p>“排序键”和“是否反转”总是一起变化，把它们放进同一个对象状态里：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">List</span> = ({ list, onRemoveItem }) =&gt; {
+  <span class="tk-kw">const</span> [sort, setSort] = <span class="tk-fn">useState</span>({
+    sortKey: <span class="tk-st">'NONE'</span>,
+    isReverse: <span class="tk-kw">false</span>,
+  });
+
+  <span class="tk-kw">const</span> handleSort = (sortKey) =&gt; {
+    <span class="tk-kw">const</span> isReverse = sort.sortKey === sortKey &amp;&amp; !sort.isReverse;
+
+    <span class="tk-fn">setSort</span>({ sortKey, isReverse });
+  };
+
+  <span class="tk-kw">const</span> sortFunction = <span class="tk-tp">SORTS</span>[sort.sortKey];
+  <span class="tk-kw">const</span> sortedList = sort.isReverse
+    ? <span class="tk-fn">sortFunction</span>(list).<span class="tk-fn">reverse</span>()
+    : <span class="tk-fn">sortFunction</span>(list);
+
+  <span class="tk-kw">return</span> ( ... );
+};</pre></div>
+
+<p>
+  关键是这一行：<code>sort.sortKey === sortKey &amp;&amp; !sort.isReverse</code>。
+  只有“点的还是同一列”<strong>并且</strong>“当前不是反向”时，新状态才是反向；换了一列，一律从正向开始。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="点击同一列时在正序和倒序之间切换的状态图">
+  <rect class="bx" x="20" y="80" width="140" height="56" rx="28"/>
+  <text class="mono sm" x="90" y="104" text-anchor="middle">NONE</text>
+  <text class="sm" x="90" y="122" text-anchor="middle">原始顺序</text>
+  <rect class="bx-b" x="260" y="80" width="170" height="56" rx="28"/>
+  <text class="mono sm on-b" x="345" y="104" text-anchor="middle">TITLE · 正序</text>
+  <text class="mono sm" x="345" y="122" text-anchor="middle">isReverse: false</text>
+  <rect class="bx-p" x="540" y="80" width="190" height="56" rx="28"/>
+  <text class="mono sm on-p" x="635" y="104" text-anchor="middle">TITLE · 倒序</text>
+  <text class="mono sm" x="635" y="122" text-anchor="middle">isReverse: true</text>
+
+  <path class="ln" d="M162 108 H256" marker-end="url(#ar)"/>
+  <text class="sm" x="210" y="100" text-anchor="middle">点 Title</text>
+  <path class="ln-p" d="M432 96 H536" marker-end="url(#ar-p)"/>
+  <text class="sm on-p" x="484" y="88" text-anchor="middle">再点 Title</text>
+  <path class="ln-b" d="M536 122 H434" marker-end="url(#ar-b)"/>
+  <text class="sm on-b" x="484" y="140" text-anchor="middle">再点 Title</text>
+  <path class="ln-d" d="M345 138 V180 H635 V138"/>
+  <text class="sm" x="490" y="196" text-anchor="middle">任何状态下点击别的列 → 那一列的正序</text>
+</svg>
+<figcaption>图 33-2　新状态由“点了哪一列”和“上一次的状态”共同决定</figcaption>
+</figure>
+
+<h3>对象属性简写</h3>
+
+<p><code>setSort({ sortKey, isReverse })</code> 用了 ES6 的<strong>属性简写</strong>：属性名和变量名相同时，可以只写一次。</p>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre><span class="tk-kw">const</span> firstName = <span class="tk-st">'Robin'</span>;
+
+<span class="tk-kw">const</span> user = {
+  firstName: firstName,
+};
+
+<span class="tk-cm">// 等价于</span>
+<span class="tk-kw">const</span> user2 = {
+  firstName,
+};</pre></div>
+
+<h2 id="demo">试一试</h2>
+
+<div class="demo" id="sort-demo">
+  <div class="h">交互演示 · 排序与反向排序</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+    <button type="button" data-k="TITLE">Title</button>
+    <button type="button" data-k="AUTHOR">Author</button>
+    <button type="button" data-k="COMMENT">Comments</button>
+    <button type="button" data-k="POINT">Points</button>
+  </div>
+  <div class="log" style="min-height:120px;max-height:none"></div>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('sort-demo');
+  var list = [
+    { title: 'React', author: 'Jordan Walke', num_comments: 3, points: 4 },
+    { title: 'Redux', author: 'Dan Abramov', num_comments: 2, points: 5 },
+    { title: 'Vite', author: 'Evan You', num_comments: 8, points: 12 },
+    { title: 'Astro', author: 'Fred Schott', num_comments: 5, points: 7 }
+  ];
+  function by(k) { return function (l) { return l.slice().sort(function (a, b) { return a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0; }); }; }
+  var SORTS = {
+    NONE: function (l) { return l; },
+    TITLE: by('title'), AUTHOR: by('author'),
+    COMMENT: function (l) { return by('num_comments')(l).reverse(); },
+    POINT: function (l) { return by('points')(l).reverse(); }
+  };
+  var sort = { sortKey: 'NONE', isReverse: false };
+  function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
+  function render() {
+    var sorted = SORTS[sort.sortKey](list);
+    if (sort.isReverse) sorted = sorted.slice().reverse();
+    var out = 'sort = { sortKey: \'' + sort.sortKey + '\', isReverse: ' + sort.isReverse + ' }\n\n';
+    out += pad('Title', 8) + pad('Author', 14) + pad('Comments', 10) + 'Points\n';
+    sorted.forEach(function (s) { out += pad(s.title, 8) + pad(s.author, 14) + pad(s.num_comments, 10) + s.points + '\n'; });
+    root.querySelector('.log').textContent = out;
+    root.querySelectorAll('button').forEach(function (b) {
+      b.style.borderColor = b.dataset.k === sort.sortKey ? 'var(--accent)' : '';
+      b.textContent = b.textContent.replace(/ [↑↓]$/, '') + (b.dataset.k === sort.sortKey ? (sort.isReverse ? ' ↑' : ' ↓') : '');
+    });
+  }
+  root.addEventListener('click', function (e) {
+    var k = e.target.dataset && e.target.dataset.k;
+    if (!k) return;
+    var isReverse = sort.sortKey === k && !sort.isReverse;
+    sort = { sortKey: k, isReverse: isReverse };
+    render();
+  });
+  render();
+})();
+</script>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>排序状态只保存“键”（和方向），排好序的列表在渲染时派生出来 —— 不要把排序结果存成状态。</li>
+  <li>用字典对象把排序键映射到排序函数，比一长串 if/else 更清晰、易扩展。</li>
+  <li>不要原地修改 props 数组；用 Lodash <code>sortBy</code> 或 <code>toSorted()</code> 返回新数组。</li>
+  <li>新状态依赖旧状态时，在处理函数里基于当前状态计算（或用 <code>setSort(prev =&gt; …)</code> 的函数形式）。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>为什么 <code>points</code> 和 <code>num_comments</code> 默认要 <code>reverse()</code>？</li>
+    <li>给当前激活的排序按钮加上不同的样式，并用上下箭头（SVG 或字符）表示方向。</li>
+    <li>把 sort 状态放在 <code>List</code> 里有什么缺点？试试：先按 Title 排序，再搜索别的关键词，观察排序状态（提示：加载时 <code>List</code> 会被 “Loading ...” 替换掉，它的状态会随之销毁）。如果状态在 <code>App</code> 里会怎样？</li>
+    <li>用 <code>toSorted()</code> 重写 <code>SORTS</code>，去掉对 Lodash 的依赖。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>在 React 中对列表排序时要注意什么？</summary>
+    <div><p>不要原地修改 props 或 state 中的数组（<code>sort</code>、<code>reverse</code> 会修改原数组）；应生成新数组，并且排序结果通常在渲染时派生，而不是存成状态。</p></div></details>
+  <details><summary>为什么排序状态可以放在 List 而不是 App 中？各有什么影响？</summary>
+    <div><p>只有 List 使用它，就近放置更内聚；但 List 卸载（例如加载中被替换）时状态会丢失。放在 App 中可以跨加载保留，但 App 会承担更多职责。</p></div></details>
+  <details><summary>当新状态依赖于旧状态时应该怎么做？</summary>
+    <div><p>基于旧状态计算新值；如果可能在同一次事件中多次更新，使用 setter 的函数形式 <code>setX(prev =&gt; …)</code> 以获取最新值。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

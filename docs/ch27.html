@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 27 章 · CSS-in-JS 与 SVG — React 19 入门教程</title>
+<meta name="description" content="styled-components、Tailwind 与图标">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="27">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 27 章 · 样式</span>
+<h1>CSS-in-JS 与 SVG</h1>
+<p class="lede">
+  上一章的样式都写在 CSS 文件里。这一章换一个方向：把样式直接写进 JavaScript（<strong>CSS-in-JS</strong>），
+  以 styled-components 为例；再看看近几年更流行的 <strong>Tailwind CSS</strong>；最后学习如何在 React 里使用 <strong>SVG 图标</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 styled-components 创建带样式的组件，并根据 props 动态改变样式</li>
+    <li>了解 CSS-in-JS 的现状，以及 Tailwind 的思路</li>
+    <li>在 Vite 中把 SVG 作为 React 组件导入</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="styled">styled-components</h2>
+
+<p>
+  styled-components 是最有名的 CSS-in-JS 库。先安装并导入：
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install styled-components</pre></div>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> axios <span class="tk-kw">from</span> <span class="tk-st">'axios'</span>;
+<span class="tk-kw">import</span> styled <span class="tk-kw">from</span> <span class="tk-st">'styled-components'</span>;</pre></div>
+
+<p>用 <code>styled.标签名</code> 加一段模板字符串，就创建出一个“自带样式的组件”：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">StyledContainer</span> = styled.div<span class="tk-st">`
+  height: 100vw;
+  padding: 20px;
+
+  background: #83a4d4;
+  background: linear-gradient(to left, #b6fbff, #83a4d4);
+
+  color: #171212;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledHeadlinePrimary</span> = styled.h1<span class="tk-st">`
+  font-size: 48px;
+  font-weight: 300;
+  letter-spacing: 2px;
+`</span>;</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="styled.div 模板字符串生成一个带样式的 React 组件">
+  <rect class="bx-p" x="20" y="40" width="240" height="120" rx="12"/>
+  <text class="ttl on-p" x="140" y="66" text-anchor="middle">定义</text>
+  <text class="mono sm" x="36" y="96">const StyledTitle =</text>
+  <text class="mono sm" x="52" y="116">styled.h1`</text>
+  <text class="mono sm" x="68" y="136">font-size: 48px;`;</text>
+
+  <rect class="bx-a" x="310" y="40" width="200" height="120" rx="12"/>
+  <text class="ttl on-a" x="410" y="66" text-anchor="middle">库在运行时</text>
+  <text class="sm" x="410" y="92" text-anchor="middle">① 生成唯一类名 .sc-a1b2</text>
+  <text class="sm" x="410" y="112" text-anchor="middle">② 把 CSS 插入 &lt;style&gt;</text>
+  <text class="sm" x="410" y="132" text-anchor="middle">③ 返回一个 React 组件</text>
+
+  <rect class="bx-g" x="560" y="40" width="180" height="120" rx="12"/>
+  <text class="ttl on-g" x="650" y="66" text-anchor="middle">使用</text>
+  <text class="mono sm" x="650" y="96" text-anchor="middle">&lt;StyledTitle&gt;</text>
+  <text class="sm" x="650" y="116" text-anchor="middle">↓ 渲染为</text>
+  <text class="mono sm" x="650" y="136" text-anchor="middle">&lt;h1 class="sc-a1b2"&gt;</text>
+
+  <path class="ln-p" d="M262 100 H306" marker-end="url(#ar-p)"/>
+  <path class="ln-a" d="M512 100 H556" marker-end="url(#ar-a)"/>
+  <text class="sm" x="380" y="196" text-anchor="middle">样式和组件绑定在一起，没有单独的 CSS 文件，也不会有类名冲突</text>
+</svg>
+<figcaption>图 27-1　styled-components：写样式，得到组件</figcaption>
+</figure>
+
+<p>它们和普通组件一样使用，开闭标签之间的内容就是 <code>children</code>：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;StyledContainer</span>&gt;
+      <span class="tk-tg">&lt;StyledHeadlinePrimary</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/StyledHeadlinePrimary</span>&gt;
+
+      <span class="tk-tg">&lt;SearchForm</span> ... <span class="tk-tg">/&gt;</span>
+
+      {stories.isError &amp;&amp; <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Something</span> went wrong ...<span class="tk-tg">&lt;/p</span>&gt;}
+
+      {stories.isLoading ? (
+        <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> ...<span class="tk-tg">&lt;/p</span>&gt;
+      ) : (
+        <span class="tk-tg">&lt;List</span> list={stories.data} onRemoveItem={handleRemoveStory} <span class="tk-tg">/&gt;</span>
+      )}
+    <span class="tk-tg">&lt;/StyledContainer</span>&gt;
+  );
+};</pre></div>
+
+<h3>根据 props 动态设置样式</h3>
+
+<p>
+  <code>Item</code> 里原来用行内样式设置每列宽度。换成一个 <code>StyledColumn</code>，宽度通过 prop 传进去，
+  在模板字符串里用一个函数读取：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">StyledItem</span> = styled.li<span class="tk-st">`
+  display: flex;
+  align-items: center;
+  padding-bottom: 5px;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledColumn</span> = styled.span<span class="tk-st">`
+  padding: 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  a {
+    color: inherit;
+  }
+
+  width: ${(props) =&gt; props.$width};
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;StyledItem</span>&gt;
+    <span class="tk-tg">&lt;StyledColumn</span> $width=<span class="tk-st">"40%"</span>&gt;
+      <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+    <span class="tk-tg">&lt;/StyledColumn</span>&gt;
+    <span class="tk-tg">&lt;StyledColumn</span> $width=<span class="tk-st">"30%"</span>&gt;{item.author}<span class="tk-tg">&lt;/StyledColumn</span>&gt;
+    <span class="tk-tg">&lt;StyledColumn</span> $width=<span class="tk-st">"10%"</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/StyledColumn</span>&gt;
+    <span class="tk-tg">&lt;StyledColumn</span> $width=<span class="tk-st">"10%"</span>&gt;{item.points}<span class="tk-tg">&lt;/StyledColumn</span>&gt;
+    <span class="tk-tg">&lt;StyledColumn</span> $width=<span class="tk-st">"10%"</span>&gt;
+      <span class="tk-tg">&lt;StyledButtonSmall</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}
+      &gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/StyledButtonSmall</span>&gt;
+    <span class="tk-tg">&lt;/StyledColumn</span>&gt;
+  <span class="tk-tg">&lt;/StyledItem</span>&gt;
+);</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 为什么是 <code>$width</code> 而不是 <code>width</code></div>
+  <p>
+    原书写的是 <code>width="40%"</code>。styled-components v6 不再自动过滤 props，<code>width</code> 会被原样传到真实的
+    <code>&lt;span&gt;</code> 上，React 会警告这是个未知的 DOM 属性。以 <code>$</code> 开头的 <strong>transient prop</strong>
+    只给样式使用，不会传到 DOM，这是 v6 推荐的写法。
+  </p>
+</div>
+
+<h3>嵌套与扩展</h3>
+
+<p>CSS 嵌套开箱即用，<code>&amp;</code> 表示当前元素。<code>styled(已有组件)</code> 可以在已有样式基础上扩展：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">StyledButton</span> = styled.button<span class="tk-st">`
+  background: transparent;
+  border: 1px solid #171212;
+  padding: 5px;
+  cursor: pointer;
+
+  transition: all 0.1s ease-in;
+
+  &amp;:hover {
+    background: #171212;
+    color: #ffffff;
+  }
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledButtonSmall</span> = <span class="tk-fn">styled</span>(<span class="tk-tp">StyledButton</span>)<span class="tk-st">`
+  padding: 5px;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledButtonLarge</span> = <span class="tk-fn">styled</span>(<span class="tk-tp">StyledButton</span>)<span class="tk-st">`
+  padding: 10px;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledSearchForm</span> = styled.form<span class="tk-st">`
+  padding: 10px 0 20px 0;
+  display: flex;
+  align-items: baseline;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledLabel</span> = styled.label<span class="tk-st">`
+  border-top: 1px solid #171212;
+  border-left: 1px solid #171212;
+  padding-left: 5px;
+  font-size: 24px;
+`</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StyledInput</span> = styled.input<span class="tk-st">`
+  border: none;
+  border-bottom: 1px solid #171212;
+  background-color: transparent;
+
+  font-size: 24px;
+`</span>;</pre></div>
+
+<p>styled 组件渲染的仍然是真实的 HTML 元素，所以原生属性（<code>action</code>、<code>type</code>、<code>disabled</code>、<code>ref</code>）照常可用：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">SearchForm</span> = ({ searchTerm, onSearchInput, searchAction }) =&gt; (
+  <span class="tk-tg">&lt;StyledSearchForm</span> action={searchAction}&gt;
+    <span class="tk-tg">&lt;InputWithLabel</span>
+      id=<span class="tk-st">"search"</span>
+      value={searchTerm}
+      isFocused
+      onInputChange={onSearchInput}
+    &gt;
+      <span class="tk-tg">&lt;strong</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/strong</span>&gt;
+    <span class="tk-tg">&lt;/InputWithLabel</span>&gt;
+
+    <span class="tk-tg">&lt;StyledButtonLarge</span> <span class="tk-kw">type</span>=<span class="tk-st">"submit"</span> disabled={!searchTerm}&gt;
+      <span class="tk-tp">Submit</span>
+    <span class="tk-tg">&lt;/StyledButtonLarge</span>&gt;
+  <span class="tk-tg">&lt;/StyledSearchForm</span>&gt;
+);
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({ ... }) =&gt; {
+  ...
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;StyledLabel</span> htmlFor={id}&gt;{children}<span class="tk-tg">&lt;/StyledLabel</span>&gt;
+      &amp;nbsp;
+      <span class="tk-tg">&lt;StyledInput</span>
+        ref={inputRef}
+        id={id}
+        <span class="tk-kw">type</span>={<span class="tk-kw">type</span>}
+        value={value}
+        onChange={onInputChange}
+      <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<div class="box warn">
+  <div class="t">&#9888; CSS-in-JS 的现状（2025 年起）</div>
+  <p>
+    styled-components 这类<strong>运行时</strong> CSS-in-JS 库在浏览器里生成样式，会带来额外开销，并且与 React 服务端组件配合不佳。
+    2025 年 styled-components 已宣布进入<strong>维护模式</strong>，不再开发新功能，官方也不建议新项目采用。
+    你仍会在大量现有项目里见到它，所以值得了解；但新项目更推荐 CSS Modules、Tailwind，或“零运行时”的 CSS-in-JS（如 vanilla-extract、Linaria），它们在构建时把样式提取成普通 CSS 文件。
+  </p>
+</div>
+
+<h2 id="tailwind">另一种思路：Tailwind CSS</h2>
+
+<p>
+  Tailwind 属于 utility-first 流派：不写 CSS 类名，而是直接在 <code>className</code> 里组合大量“一个类只做一件事”的工具类。
+  在 Vite 项目中安装：
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install tailwindcss @tailwindcss/vite</pre></div>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">vite.config.js</span></div><pre><span class="tk-kw">import</span> { defineConfig } <span class="tk-kw">from</span> <span class="tk-st">'vite'</span>;
+<span class="tk-kw">import</span> react <span class="tk-kw">from</span> <span class="tk-st">'@vitejs/plugin-react'</span>;
+<span class="tk-kw">import</span> tailwindcss <span class="tk-kw">from</span> <span class="tk-st">'@tailwindcss/vite'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-fn">defineConfig</span>({
+  plugins: [<span class="tk-fn">react</span>(), <span class="tk-fn">tailwindcss</span>()],
+});</pre></div>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/index.css</span></div><pre>@import <span class="tk-st">"tailwindcss"</span>;</pre></div>
+
+<div class="vs">
+  <div class="old"><div class="h">CSS 文件 + 语义类名</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;li</span> className=<span class="tk-st">"item"</span>&gt;
+  <span class="tk-tg">&lt;span</span> className=<span class="tk-st">"column-title"</span>&gt;…<span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;button</span> className=<span class="tk-st">"button button_small"</span>&gt;
+    <span class="tk-tp">Dismiss</span>
+  <span class="tk-tg">&lt;/button</span>&gt;
+<span class="tk-tg">&lt;/li</span>&gt;</pre></div>
+  </div>
+  <div class="new"><div class="h">Tailwind 工具类</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;li</span> className=<span class="tk-st">"flex items-center pb-1"</span>&gt;
+  <span class="tk-tg">&lt;span</span> className=<span class="tk-st">"w-2/5 truncate px-1"</span>&gt;…<span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;button</span> className="border border-stone-<span class="tk-nm">900</span> p-<span class="tk-nm">1</span>
+                     hover:bg-stone-<span class="tk-nm">900</span> hover:text-white"&gt;
+    <span class="tk-tp">Dismiss</span>
+  <span class="tk-tg">&lt;/button</span>&gt;
+<span class="tk-tg">&lt;/li</span>&gt;</pre></div>
+  </div>
+</div>
+
+<p>
+  好处是不用想类名、不用在文件之间跳来跳去、最终 CSS 只包含用到的类；代价是 JSX 里的类名很长。
+  它是目前 React 社区最流行的样式方案之一，值得在自己的项目里试一试。
+</p>
+
+<h2 id="svg">SVG 图标</h2>
+
+<p>
+  现代界面大量使用 SVG 图标。这一节在“普通 CSS”方案的基础上，把 “Dismiss” 文字换成一个对勾图标。
+  在 React 里使用 SVG 有三种常见方式：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="在 React 中使用 SVG 的三种方式">
+  <rect class="bx" x="20" y="20" width="230" height="180" rx="12"/>
+  <text class="ttl" x="135" y="46" text-anchor="middle">① 当作图片</text>
+  <text class="mono sm" x="135" y="76" text-anchor="middle" style="font-size:10.5px">import url from './check.svg';</text>
+  <text class="mono sm" x="135" y="96" text-anchor="middle">&lt;img src={url} /&gt;</text>
+  <text class="sm on-g" x="135" y="136" text-anchor="middle">✓ Vite 原生支持</text>
+  <text class="sm on-r" x="135" y="156" text-anchor="middle">✗ 不能用 CSS 改颜色</text>
+
+  <rect class="bx-a" x="265" y="20" width="230" height="180" rx="12"/>
+  <text class="ttl on-a" x="380" y="46" text-anchor="middle">② 当作组件（本节）</text>
+  <text class="mono sm" x="380" y="76" text-anchor="middle">import Check from</text>
+  <text class="mono sm" x="380" y="94" text-anchor="middle">'./check.svg?react';</text>
+  <text class="mono sm" x="380" y="114" text-anchor="middle">&lt;Check width="18px" /&gt;</text>
+  <text class="sm on-g" x="380" y="146" text-anchor="middle">✓ 可传 props、继承文字颜色</text>
+  <text class="sm on-r" x="380" y="166" text-anchor="middle">✗ 需要 vite-plugin-svgr</text>
+
+  <rect class="bx" x="510" y="20" width="230" height="180" rx="12"/>
+  <text class="ttl" x="625" y="46" text-anchor="middle">③ 图标库</text>
+  <text class="mono sm" x="625" y="76" text-anchor="middle">import { FaCheck }</text>
+  <text class="mono sm" x="625" y="94" text-anchor="middle">from 'react-icons/fa';</text>
+  <text class="mono sm" x="625" y="114" text-anchor="middle">&lt;FaCheck /&gt;</text>
+  <text class="sm on-g" x="625" y="146" text-anchor="middle">✓ 上千个现成图标</text>
+  <text class="sm" x="625" y="166" text-anchor="middle">react-icons / lucide-react</text>
+</svg>
+<figcaption>图 27-2　在 React 中使用 SVG 的三种方式</figcaption>
+</figure>
+
+<p>安装 Vite 的 SVG 插件并加入配置：</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install vite-plugin-svgr --save-dev</pre></div>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">vite.config.js</span></div><pre><span class="tk-kw">import</span> { defineConfig } <span class="tk-kw">from</span> <span class="tk-st">'vite'</span>;
+<span class="tk-kw">import</span> react <span class="tk-kw">from</span> <span class="tk-st">'@vitejs/plugin-react'</span>;
+<span class="tk-kw">import</span> svgr <span class="tk-kw">from</span> <span class="tk-st">'vite-plugin-svgr'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-fn">defineConfig</span>({
+  plugins: [<span class="tk-fn">react</span>(), <span class="tk-fn">svgr</span>()],
+});</pre></div>
+
+<p>从 <a href="https://heroicons.com/">Heroicons</a> 拿一个对勾图标，保存为 <code>src/check.svg</code>：</p>
+
+<div class="code" data-lang="html"><div class="bar"><span class="tag">src/check.svg</span></div><pre>&lt;svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+  stroke-width="1.5" stroke="currentColor"&gt;
+  &lt;path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /&gt;
+&lt;/svg&gt;</pre></div>
+
+<p>在导入路径后加 <code>?react</code>，得到的就是一个 React 组件：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> <span class="tk-st">'./App.css'</span>;
+<span class="tk-kw">import</span> <span class="tk-tp">Check</span> <span class="tk-kw">from</span> <span class="tk-st">'./check.svg?react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span> className=<span class="tk-st">"item"</span>&gt;
+    ...
+    <span class="tk-tg">&lt;span</span> style={{ width: <span class="tk-st">'10%'</span> }}&gt;
+      <span class="tk-tg">&lt;button</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}
+        className=<span class="tk-st">"button button_small"</span>
+      &gt;
+        <span class="tk-tg">&lt;Check</span> height=<span class="tk-st">"18px"</span> width=<span class="tk-st">"18px"</span> <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);</pre></div>
+
+<p>
+  SVG 里的 <code>stroke="currentColor"</code> 让图标使用当前文字颜色，所以按钮 hover 时文字变白，图标也跟着变白。
+</p>
+
+<div class="box note">
+  <div class="t">&#9432; 可访问性</div>
+  <p>
+    按钮只剩下图标后，读屏软件就不知道它是干什么的了。给按钮加上 <code>aria-label="Dismiss"</code>，
+    或者在图标旁放一个视觉上隐藏的文字。第 30 章用 React Testing Library 按角色和名字查找按钮时，也会依赖这一点。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>styled-components：<code>styled.div&#96;…&#96;</code> 创建带样式的组件，模板字符串里用函数读取 props，用 <code>$</code> 开头的 transient prop 避免传到 DOM。</li>
+  <li>运行时 CSS-in-JS 已不再是新项目的首选（styled-components 进入维护模式）；Tailwind 和零运行时方案更流行。</li>
+  <li>SVG 可以当图片、当组件（<code>vite-plugin-svgr</code> + <code>?react</code>）、或用图标库；当组件时可以继承颜色、接收 props。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>styled-components 没有全局 CSS 文件，查一查怎么用 <code>createGlobalStyle</code> 定义全局样式。</li>
+    <li>试用一次 Tailwind：新建一个分支，把 <code>Item</code> 改成 Tailwind 类名。</li>
+    <li>安装 <code>react-icons</code>，把对勾换成一个垃圾桶图标，并给按钮加上 <code>aria-label</code>。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 CSS-in-JS？有什么优缺点？</summary>
+    <div><p>在 JavaScript 中编写样式并与组件绑定。优点：作用域隔离、基于 props 的动态样式、样式与组件共存；缺点：运行时开销、与服务端组件兼容性差、增加包体积（零运行时方案可缓解）。</p></div></details>
+  <details><summary>styled-components 中如何根据 props 改变样式？</summary>
+    <div><p>在模板字符串中插入函数：<code>${(props) =&gt; props.$width}</code>；v6 中建议使用 <code>$</code> 前缀的 transient props，避免属性被传到 DOM。</p></div></details>
+  <details><summary>在 React 中使用 SVG 有哪些方式？</summary>
+    <div><p>作为 img 的 src、内联 JSX、通过 svgr 转换成组件、或使用图标组件库。</p></div></details>
+  <details><summary>Tailwind CSS 的核心思路是什么？</summary>
+    <div><p>utility-first：用大量单一用途的工具类直接在 className 中组合样式，构建时只生成用到的 CSS。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

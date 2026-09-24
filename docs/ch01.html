@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 1 章 · 你好，React — React 19 入门教程</title>
+<meta name="description" content="网页从服务器渲染走到单页应用，React 为什么会赢">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="1">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 1 章 · 起步</span>
+<h1>你好，React</h1>
+<p class="lede">
+  在写第一行 React 代码之前，先花十分钟弄明白一件事：React 到底解决了什么问题？
+  理解了网页从“服务器拼好 HTML”走到“浏览器里用 JavaScript 画界面”的这段历史，
+  后面所有概念 —— 组件、状态、重新渲染 —— 都会显得顺理成章。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清<strong>多页应用（服务器渲染）</strong>和<strong>单页应用（SPA）</strong>的区别</li>
+    <li>理解 React 的核心思想：<strong>组件</strong>和<strong>声明式</strong></li>
+    <li>知道 2025 年之后开始一个 React 项目的正确姿势（以及为什么不再用 Create React App）</li>
+    <li>装好 Node.js、npm 和编辑器</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="mpa">从前：服务器负责一切</h2>
+
+<p>
+  早期的网站是这样工作的：你在浏览器里输入网址，浏览器向服务器发一个请求，
+  服务器把整页 HTML 拼好返回，浏览器把它画出来。点一个链接？再来一遍 ——
+  <strong>每次换页都要整页重新加载</strong>。
+</p>
+
+<p>
+  在这种模式里，服务器干了绝大部分的活；浏览器只负责显示。JavaScript（通常是 jQuery）
+  只做一些点缀：展开个下拉菜单、弹个提示框。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="多页应用：每次跳转都向服务器请求完整 HTML">
+  <text class="ttl" x="20" y="26">多页应用（MPA）：每换一页，就向服务器要一整页 HTML</text>
+
+  <rect class="bx-b" x="30" y="50" width="140" height="220" rx="12"/>
+  <text class="ttl on-b" x="100" y="76" text-anchor="middle">浏览器</text>
+  <rect class="bx" x="48" y="92" width="104" height="36" rx="6"/>
+  <text class="sm" x="100" y="115" text-anchor="middle">首页</text>
+  <rect class="bx" x="48" y="150" width="104" height="36" rx="6"/>
+  <text class="sm" x="100" y="173" text-anchor="middle">文章页</text>
+  <rect class="bx" x="48" y="208" width="104" height="36" rx="6"/>
+  <text class="sm" x="100" y="231" text-anchor="middle">关于页</text>
+
+  <rect class="bx-g" x="590" y="50" width="140" height="220" rx="12"/>
+  <text class="ttl on-g" x="660" y="76" text-anchor="middle">服务器</text>
+  <text class="sm" x="660" y="100" text-anchor="middle">查数据库</text>
+  <text class="sm" x="660" y="118" text-anchor="middle">套模板</text>
+  <text class="sm" x="660" y="136" text-anchor="middle">拼出整页 HTML</text>
+
+  <path class="ln-b" d="M156 104 H586" marker-end="url(#ar-b)"/>
+  <text class="sm" x="370" y="98" text-anchor="middle">GET /</text>
+  <path class="ln-g" d="M586 118 H158" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="370" y="134" text-anchor="middle">完整 HTML + CSS + 一点 JS</text>
+
+  <path class="ln-b" d="M156 162 H586" marker-end="url(#ar-b)"/>
+  <text class="sm" x="370" y="156" text-anchor="middle">GET /post/42（点链接）</text>
+  <path class="ln-g" d="M586 176 H158" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="370" y="192" text-anchor="middle">又一整页 HTML（白屏、重新加载）</text>
+
+  <path class="ln-b" d="M156 220 H586" marker-end="url(#ar-b)"/>
+  <text class="sm" x="370" y="214" text-anchor="middle">GET /about</text>
+  <path class="ln-g" d="M586 234 H158" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="370" y="250" text-anchor="middle">再一整页 HTML</text>
+</svg>
+<figcaption>图 1-1　多页应用：服务器负责渲染，每次跳转都整页刷新</figcaption>
+</figure>
+
+<h2 id="spa">后来：单页应用（SPA）</h2>
+
+<p>
+  随着网页越来越像“应用”（邮箱、地图、在线文档），整页刷新的体验就不够用了。
+  于是出现了<strong>单页应用</strong>（Single-Page Application，SPA）：
+  服务器第一次只返回一个<strong>几乎是空的 HTML</strong> 和一个<strong>比较大的 JavaScript 文件</strong>。
+  浏览器运行这段 JavaScript，由它在页面上“画”出整个界面。之后切换页面、更新内容，
+  都由 JavaScript 在浏览器里完成，需要数据时才去服务器取一点 JSON。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="单页应用：第一次加载 JS，之后只请求数据">
+  <text class="ttl" x="20" y="26">单页应用（SPA）：先把“应用”下载下来，之后只要数据</text>
+
+  <rect class="bx-b" x="30" y="50" width="200" height="220" rx="12"/>
+  <text class="ttl on-b" x="130" y="76" text-anchor="middle">浏览器</text>
+  <rect class="bx-a" x="48" y="92" width="164" height="160" rx="8"/>
+  <text class="ttl on-a" x="130" y="116" text-anchor="middle">React 应用（JS）</text>
+  <text class="sm" x="130" y="140" text-anchor="middle">在浏览器里生成 HTML</text>
+  <text class="sm" x="130" y="158" text-anchor="middle">切换页面不刷新</text>
+  <text class="sm" x="130" y="176" text-anchor="middle">响应点击、输入</text>
+  <rect class="bx" x="66" y="192" width="128" height="46" rx="6"/>
+  <text class="mono sm" x="130" y="212" text-anchor="middle">&lt;div id="root"&gt;</text>
+  <text class="sm" x="130" y="229" text-anchor="middle">← 界面都画在这里</text>
+
+  <rect class="bx-g" x="590" y="50" width="140" height="220" rx="12"/>
+  <text class="ttl on-g" x="660" y="76" text-anchor="middle">服务器</text>
+  <text class="sm" x="660" y="100" text-anchor="middle">静态文件</text>
+  <text class="sm" x="660" y="118" text-anchor="middle">+ JSON API</text>
+
+  <path class="ln-b" d="M232 106 H586" marker-end="url(#ar-b)"/>
+  <text class="sm" x="410" y="100" text-anchor="middle">① 首次访问</text>
+  <path class="ln-g" d="M586 122 H234" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="410" y="140" text-anchor="middle">很小的 index.html + 较大的 bundle.js</text>
+
+  <path class="ln-b flow" d="M232 196 H586" marker-end="url(#ar-b)"/>
+  <text class="sm" x="410" y="188" text-anchor="middle">② 之后：fetch('/api/stories?query=react')</text>
+  <path class="ln-g" d="M586 214 H234" marker-end="url(#ar-g)"/>
+  <text class="sm on-g" x="410" y="232" text-anchor="middle">只返回 JSON 数据，不再返回整页</text>
+</svg>
+<figcaption>图 1-2　单页应用：渲染工作从服务器移到了浏览器</figcaption>
+</figure>
+
+<p>
+  React 就是在这个浪潮里诞生的。2013 年 Facebook 开源了 React，
+  它和 Angular、Ember、Backbone 等“第一代 SPA 框架”竞争，最终凭借一个简单而强大的想法胜出：
+  <strong>组件</strong>。
+</p>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>多页应用（服务器渲染）</th><th>单页应用（SPA）</th></tr>
+  <tr><td>谁生成 HTML</td><td>服务器</td><td>浏览器里的 JavaScript</td></tr>
+  <tr><td>首次加载</td><td>快，直接有内容</td><td>要先下载并运行 JS，稍慢</td></tr>
+  <tr><td>页面切换</td><td>整页刷新</td><td>局部更新，不刷新</td></tr>
+  <tr><td>服务器返回</td><td>完整 HTML</td><td>第一次是 JS，之后是 JSON</td></tr>
+  <tr><td>典型技术</td><td>PHP、Rails、Express + 模板</td><td>React、Vue、Angular</td></tr>
+</table>
+</div>
+
+<div class="box deep">
+  <div class="t">&#128270; 深入一点：钟摆又摆回来了</div>
+  <p>
+    纯 SPA 的缺点是首屏慢、对搜索引擎不友好。所以今天的 React 生态又把一部分渲染搬回了服务器：
+    Next.js 这类框架会先在服务器上把 React 组件渲染成 HTML（SSR），再在浏览器里“激活”。
+    React 19 更进一步，正式引入了只在服务器上运行的<strong>服务端组件</strong>（Server Components）。
+    这些是进阶话题，第 25 章会带你认识。本教程前面的内容是纯客户端 SPA —— 它是理解一切的基础。
+  </p>
+</div>
+
+<h2 id="components">React 的核心思想：组件</h2>
+
+<p>
+  在 React 里，你不再按“页面”去思考，而是按<strong>组件</strong>（Component）去思考。
+  组件是一块<strong>自带结构（HTML）、样式（CSS）和行为（JavaScript）</strong>的界面积木。
+  小积木拼成大积木，大积木拼成整个应用：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 320" role="img" aria-label="把一个页面拆分成组件树">
+  <text class="ttl" x="20" y="24">左：你看到的页面</text>
+  <rect class="bx-a" x="20" y="36" width="330" height="266" rx="10"/>
+  <text class="sm on-a" x="32" y="54">App</text>
+  <rect class="bx-b" x="36" y="62" width="298" height="34" rx="6"/>
+  <text class="sm on-b" x="46" y="84">Search：[ react        ] [Submit]</text>
+  <rect class="bx-g" x="36" y="106" width="298" height="182" rx="6"/>
+  <text class="sm on-g" x="46" y="124">List</text>
+  <rect class="bx-p" x="50" y="132" width="270" height="34" rx="5"/>
+  <text class="sm on-p" x="60" y="154">Item：React · Jordan Walke · 3 · 4</text>
+  <rect class="bx-p" x="50" y="174" width="270" height="34" rx="5"/>
+  <text class="sm on-p" x="60" y="196">Item：Redux · Dan Abramov · 2 · 5</text>
+  <rect class="bx-p" x="50" y="216" width="270" height="34" rx="5"/>
+  <text class="sm on-p" x="60" y="238">Item：Vite · Evan You · 7 · 9</text>
+  <text class="sm" x="185" y="274" text-anchor="middle">……</text>
+
+  <text class="ttl" x="420" y="24">右：React 眼中的组件树</text>
+  <rect class="bx-a" x="540" y="46" width="100" height="36" rx="8"/>
+  <text class="ttl on-a" x="590" y="69" text-anchor="middle">App</text>
+  <rect class="bx-b" x="440" y="130" width="110" height="36" rx="8"/>
+  <text class="ttl on-b" x="495" y="153" text-anchor="middle">Search</text>
+  <rect class="bx-g" x="630" y="130" width="100" height="36" rx="8"/>
+  <text class="ttl on-g" x="680" y="153" text-anchor="middle">List</text>
+  <rect class="bx-p" x="560" y="220" width="70" height="32" rx="7"/>
+  <text class="sm on-p" x="595" y="241" text-anchor="middle">Item</text>
+  <rect class="bx-p" x="645" y="220" width="70" height="32" rx="7"/>
+  <text class="sm on-p" x="680" y="241" text-anchor="middle">Item</text>
+  <rect class="bx-p" x="730" y="220" width="22" height="32" rx="7"/>
+  <text class="sm on-p" x="741" y="241" text-anchor="middle">…</text>
+  <path class="ln" d="M570 84 L505 128"/>
+  <path class="ln" d="M610 84 L670 128"/>
+  <path class="ln" d="M670 168 L600 218"/>
+  <path class="ln" d="M680 168 V218"/>
+  <path class="ln" d="M690 168 L738 218"/>
+  <text class="sm" x="595" y="290" text-anchor="middle">同一个 Item 组件，用不同数据渲染多次</text>
+</svg>
+<figcaption>图 1-3　页面被拆成组件，组件组成一棵树。本教程要做的 Hacker Stories 就长这样</figcaption>
+</figure>
+
+<p>组件带来的好处：</p>
+<ul>
+  <li><strong>复用</strong>：写一次 <code>Item</code>，给它不同的数据，就能显示一百条文章。</li>
+  <li><strong>隔离</strong>：改 <code>Search</code> 不会不小心弄坏 <code>List</code>。</li>
+  <li><strong>可读</strong>：看组件树就能看懂一个应用的结构。</li>
+</ul>
+
+<h2 id="declarative">声明式：描述“是什么”，而不是“怎么做”</h2>
+
+<p>
+  React 另一个关键词是<strong>声明式</strong>（declarative）。对比一下：用原生 DOM / jQuery 写一个计数按钮，
+  和用 React 写同一个按钮。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">命令式：一步步告诉浏览器怎么改 <span class="ver old">jQuery 时代</span></div>
+<div class="code" data-lang="js"><div class="bar"><span class="tag">JavaScript</span></div><pre><span class="tk-kw">let</span> count = <span class="tk-nm">0</span>;
+<span class="tk-kw">const</span> button = document.<span class="tk-fn">querySelector</span>(<span class="tk-st">'#btn'</span>);
+
+button.<span class="tk-fn">addEventListener</span>(<span class="tk-st">'click'</span>, () =&gt; {
+  count = count + <span class="tk-nm">1</span>;
+  <span class="tk-cm">// 手动找到节点、手动改文字</span>
+  button.textContent = <span class="tk-st">`点了 ${count} 次`</span>;
+});</pre></div>
+  </div>
+  <div class="new"><div class="h">声明式：描述在某个状态下界面长什么样 <span class="ver">React</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">function</span> <span class="tk-tp">Counter</span>() {
+  <span class="tk-kw">const</span> [count, setCount] = <span class="tk-fn">useState</span>(<span class="tk-nm">0</span>);
+
+  <span class="tk-cm">// 只描述结果，React 负责更新 DOM</span>
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;button</span> onClick={() =&gt; <span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>)}&gt;
+      点了 {count} 次
+    <span class="tk-tg">&lt;/button</span>&gt;
+  );
+}</pre></div>
+  </div>
+</div>
+
+<p>
+  左边你要记住“先找节点，再改文字”；页面复杂之后，哪些地方要跟着改、改的顺序对不对，
+  全靠你自己记着，很容易漏。右边你只说“按钮的文字是 <code>点了 {count} 次</code>”，
+  <code>count</code> 一变，React 自动算出需要改的地方并更新。这就是首页那句 <strong>UI = f(state)</strong>。
+</p>
+
+<div class="box key">
+  <div class="t">&#9733; 记住这个区别</div>
+  <p>
+    <strong>命令式</strong>：“找到按钮，把文字改成 3。”<br>
+    <strong>声明式</strong>：“按钮的文字等于 count。”<br>
+    React 的几乎所有 API 都是声明式的；少数需要“命令式”操作 DOM 的场景（比如让输入框获得焦点），
+    第 17 章会讲怎么安全地做。
+  </p>
+</div>
+
+<h2 id="library">React 是库还是框架？</h2>
+
+<p>
+  严格说，React 本身只是一个<strong>界面库</strong>：它只管“把组件渲染成界面”。
+  路由、数据请求、样式、构建工具都不在 React 的核心里，需要从生态里挑选。
+  这让 React 很灵活，但也意味着“怎么开始一个项目”一直是个问题。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">过去 <span class="ver old">已废弃</span></div>
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-cm"># Create React App（CRA）曾是官方推荐的脚手架</span>
+<span class="tk-kw">npx</span> create-react-app my-app</pre></div>
+  </div>
+  <div class="new"><div class="h">现在 <span class="ver">2025+</span></div>
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-cm"># 纯客户端应用：用 Vite（本教程）</span>
+<span class="tk-kw">npm</span> create vite@latest my-app -- --template react
+
+<span class="tk-cm"># 需要服务端渲染 / 路由 / 全栈：用框架</span>
+<span class="tk-kw">npx</span> create-next-app@latest</pre></div>
+  </div>
+</div>
+
+<p>
+  2025 年 2 月，React 官方正式宣布<strong>弃用 Create React App</strong>。今天的官方建议是：
+  要做完整的产品，优先考虑 Next.js、React Router 这类“React 框架”；
+  想从零学习、或者做纯客户端应用，用 <strong>Vite</strong> 这样的构建工具。本教程选择 Vite ——
+  它几乎零配置，让我们把注意力全部放在 React 本身。
+</p>
+
+<h2 id="requirements">准备工作：你需要的工具</h2>
+
+<h3>编辑器与终端</h3>
+<p>
+  推荐 <a href="https://code.visualstudio.com/">Visual Studio Code</a>（VS Code）：免费、自带终端、React 插件生态最好。
+  本教程里说的“命令行”“终端”都指同一个东西 —— VS Code 里按 <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> 就能打开。
+</p>
+<p>
+  不想在本地装环境，也可以先用在线的 <a href="https://codesandbox.io">CodeSandbox</a> 或
+  <a href="https://stackblitz.com">StackBlitz</a> 体验。但长期学习建议本地开发，迟早用得上。
+</p>
+
+<h3>Node.js 与 npm</h3>
+<p>
+  React 代码最终在浏览器里跑，但<strong>开发工具</strong>（Vite、测试工具、包管理器）跑在 Node.js 上。
+  到 <a href="https://nodejs.org/">nodejs.org</a> 下载 <strong>LTS（长期支持）版本</strong>，
+  安装后会同时得到 <code>npm</code>（Node Package Manager，用来安装第三方库）。检查一下：
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">node</span> --version
+<span class="tk-cm"># v22.x.x（新版 Vite 需要 Node 20.19+ 或 22.12+）</span>
+<span class="tk-kw">npm</span> --version
+<span class="tk-cm"># 10.x.x</span></pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="开发时和运行时的工具分工">
+  <rect class="bx-g" x="20" y="30" width="330" height="150" rx="12"/>
+  <text class="ttl on-g" x="185" y="56" text-anchor="middle">你的电脑（开发时）</text>
+  <rect class="bx" x="40" y="72" width="130" height="40" rx="6"/>
+  <text class="sm" x="105" y="96" text-anchor="middle">Node.js 运行工具</text>
+  <rect class="bx" x="200" y="72" width="130" height="40" rx="6"/>
+  <text class="sm" x="265" y="96" text-anchor="middle">npm 安装依赖</text>
+  <rect class="bx" x="40" y="124" width="290" height="40" rx="6"/>
+  <text class="sm" x="185" y="148" text-anchor="middle">Vite：开发服务器 + 打包器，把 JSX 转成浏览器能懂的 JS</text>
+
+  <path class="ln-a" d="M352 105 H408" marker-end="url(#ar-a)"/>
+  <text class="sm on-a" x="380" y="96" text-anchor="middle">打包</text>
+
+  <rect class="bx-b" x="410" y="30" width="330" height="150" rx="12"/>
+  <text class="ttl on-b" x="575" y="56" text-anchor="middle">用户的浏览器（运行时）</text>
+  <rect class="bx" x="430" y="72" width="290" height="40" rx="6"/>
+  <text class="sm" x="575" y="96" text-anchor="middle">index.html + 打包后的 JS / CSS</text>
+  <rect class="bx-a" x="430" y="124" width="290" height="40" rx="6"/>
+  <text class="sm on-a" x="575" y="148" text-anchor="middle">React 在这里运行，渲染界面</text>
+</svg>
+<figcaption>图 1-4　Node.js 和 npm 只在开发时用；用户的浏览器里跑的是打包好的 JavaScript</figcaption>
+</figure>
+
+<div class="box tip">
+  <div class="t">&#128161; 关于 yarn 和 pnpm</div>
+  <p>
+    你会在别的教程里看到 <code>yarn add</code> 或 <code>pnpm add</code>，它们和 <code>npm install</code> 作用一样，
+    只是另一种包管理器。初学阶段用 npm 就好，知道它们存在即可。
+  </p>
+</div>
+
+<h3>Git（推荐）</h3>
+<p>
+  建议每学完一章就 <code>git commit</code> 一次。改坏了能回退，也方便对照每一步的变化。
+  最后部署到 GitHub Pages 时（第 36 章）也会用到 GitHub。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>多页应用由服务器渲染整页 HTML；单页应用把渲染搬到浏览器，由 JavaScript 画界面。</li>
+  <li>React 是构建界面的库，核心思想是<strong>组件</strong>（可复用的积木）和<strong>声明式</strong>（UI = f(state)）。</li>
+  <li>Create React App 已被官方弃用；学习和纯客户端项目用 Vite，完整产品可以考虑 Next.js 等框架。</li>
+  <li>开发前需要 Node.js（LTS）、npm 和一个编辑器。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>打开任意一个你常用的网站（比如 GitHub），在纸上把首页拆成组件树：哪些部分是重复出现的同一种组件？</li>
+    <li>在终端运行 <code>node --version</code> 和 <code>npm --version</code>，确认版本满足要求。</li>
+    <li>打开浏览器开发者工具的 Network 面板，分别访问一个传统网站和一个 SPA（比如 Gmail），对比点链接时的请求有什么不同。</li>
+    <li>（选读）看看纪录片 <em>React.js: The Documentary</em>，了解 React 诞生时被多少人质疑。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是单页应用（SPA）？它和传统多页应用的主要区别是什么？</summary>
+    <div><p>SPA 首次加载一个小 HTML 和一个 JS 包，之后由 JavaScript 在浏览器中渲染界面并处理页面切换，只向服务器请求数据；多页应用每次跳转都由服务器返回完整的 HTML 页面并整页刷新。</p></div></details>
+  <details><summary>“声明式 UI”是什么意思？</summary>
+    <div><p>开发者描述在某个状态下界面应该是什么样子（UI = f(state)），而不是一步步写出如何修改 DOM；框架负责计算差异并更新 DOM。</p></div></details>
+  <details><summary>React 是框架还是库？</summary>
+    <div><p>React 本身是专注于 UI 渲染的库，路由、数据获取等需要生态中的其他库补充；Next.js、React Router 等在 React 之上构建了完整框架。</p></div></details>
+  <details><summary>为什么今天不再推荐 Create React App？</summary>
+    <div><p>CRA 已停止维护并在 2025 年被官方弃用，它构建慢、配置难扩展。官方建议使用框架（Next.js、React Router 等）或 Vite 等现代构建工具。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

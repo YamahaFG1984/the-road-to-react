@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 10 章 · State 与 useState — React 19 入门教程</title>
+<meta name="description" content="让组件记住会变化的值">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="10">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 10 章 · 交互与数据流</span>
+<h1>State 与 useState</h1>
+<p class="lede">
+  props 负责把数据往下传，但它们是只读的。可界面总有会<strong>变化</strong>的东西：输入框里的字、
+  列表里的数据、一个开关是开是关。React 里用来保存“会随时间变化的数据”的东西叫 <strong>state</strong>（状态）。
+  这一章是整个 React 最核心的一章。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>明白为什么普通变量不能驱动界面更新</li>
+    <li>用 <code>useState</code> 声明状态、读取状态、更新状态</li>
+    <li>理解“状态变化 → 重新渲染”的完整循环</li>
+    <li>了解 Hook 的规则，以及类组件 <code>this.setState</code> 的旧写法</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="why">一个行不通的尝试</h2>
+
+<p>
+  需求：用户在搜索框输入什么，就在下面显示“正在搜索：xxx”。很自然的第一反应是用一个变量：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx（不能工作的版本）</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Search</span> = () =&gt; {
+  <span class="tk-kw">let</span> searchTerm = <span class="tk-st">''</span>;
+
+  <span class="tk-kw">const</span> handleChange = (event) =&gt; {
+    searchTerm = event.target.value;
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> onChange={handleChange} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;p</span>&gt;
+        <span class="tk-tp">Searching</span> <span class="tk-kw">for</span> <span class="tk-tg">&lt;strong</span>&gt;{searchTerm}<span class="tk-tg">&lt;/strong</span>&gt;.
+      <span class="tk-tg">&lt;/p</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>在浏览器里试试：无论输入什么，下面的文字都不会变。为什么？</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="普通变量改变不会触发重新渲染">
+  <rect class="bx" x="20" y="60" width="160" height="80" rx="10"/>
+  <text class="ttl" x="100" y="88" text-anchor="middle">第一次渲染</text>
+  <text class="mono sm" x="100" y="110" text-anchor="middle">searchTerm = ''</text>
+  <text class="sm" x="100" y="128" text-anchor="middle">显示：Searching for .</text>
+
+  <rect class="bx-b" x="240" y="60" width="200" height="80" rx="10"/>
+  <text class="ttl on-b" x="340" y="88" text-anchor="middle">用户输入 "re"</text>
+  <text class="mono sm" x="340" y="110" text-anchor="middle">searchTerm = 're'</text>
+  <text class="sm" x="340" y="128" text-anchor="middle">变量确实变了……</text>
+
+  <rect class="bx-r" x="500" y="40" width="240" height="120" rx="10"/>
+  <text class="ttl on-r" x="620" y="68" text-anchor="middle">但 React 不知道！</text>
+  <text class="sm" x="620" y="92" text-anchor="middle">① 没有人通知 React 重新渲染</text>
+  <text class="sm" x="620" y="112" text-anchor="middle">② 就算重新渲染，函数从头执行，</text>
+  <text class="mono sm" x="620" y="132" text-anchor="middle">let searchTerm = ''</text>
+  <text class="sm" x="620" y="150" text-anchor="middle">又被重置成空字符串</text>
+
+  <path class="ln" d="M182 100 H236" marker-end="url(#ar)"/>
+  <path class="ln-r" d="M442 100 H496" marker-end="url(#ar-r)"/>
+  <text class="sm" x="380" y="196" text-anchor="middle">普通变量既“不会触发更新”，也“活不过下一次渲染”</text>
+</svg>
+<figcaption>图 10-1　普通变量的两个致命问题</figcaption>
+</figure>
+
+<p>我们需要一种变量，它要满足两个条件：</p>
+<ol>
+  <li><strong>值能在多次渲染之间保留下来</strong>（不会每次重置）；</li>
+  <li><strong>值被改变时，能通知 React 重新渲染</strong>。</li>
+</ol>
+<p>这就是 <code>useState</code>。</p>
+
+<h2 id="usestate">useState</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Search</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-kw">const</span> handleChange = (event) =&gt; {
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>: <span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-kw">type</span>=<span class="tk-st">"text"</span> onChange={handleChange} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;p</span>&gt;
+        <span class="tk-tp">Searching</span> <span class="tk-kw">for</span> <span class="tk-tg">&lt;strong</span>&gt;{searchTerm}<span class="tk-tg">&lt;/strong</span>&gt;.
+      <span class="tk-tg">&lt;/p</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<p>现在打字，下面的文字会实时跟着变。拆开这一行看看：</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="useState 返回当前值和更新函数">
+  <rect class="code-bg" x="80" y="30" width="600" height="56" rx="10"/>
+  <text class="code-tx" x="104" y="65" style="font-size:17px">const [<tspan class="fill-b" style="font-weight:700">searchTerm</tspan>, <tspan class="fill-g" style="font-weight:700">setSearchTerm</tspan>] = useState(<tspan class="fill-a" style="font-weight:700">''</tspan>);</text>
+
+  <path class="ln-b" d="M225 88 L150 140" marker-end="url(#ar-b)"/>
+  <rect class="bx-b" x="20" y="144" width="220" height="62" rx="10"/>
+  <text class="ttl on-b" x="130" y="168" text-anchor="middle">当前状态（读）</text>
+  <text class="sm" x="130" y="190" text-anchor="middle">这一次渲染时的值</text>
+
+  <path class="ln-g" d="M378 88 L380 140" marker-end="url(#ar-g)"/>
+  <rect class="bx-g" x="270" y="144" width="220" height="62" rx="10"/>
+  <text class="ttl on-g" x="380" y="168" text-anchor="middle">状态更新函数（写）</text>
+  <text class="sm" x="380" y="190" text-anchor="middle">传入新值，触发重新渲染</text>
+
+  <path class="ln-a" d="M588 88 L630 140" marker-end="url(#ar-a)"/>
+  <rect class="bx-a" x="520" y="144" width="220" height="62" rx="10"/>
+  <text class="ttl on-a" x="630" y="168" text-anchor="middle">初始值</text>
+  <text class="sm" x="630" y="190" text-anchor="middle">只在第一次渲染时使用</text>
+</svg>
+<figcaption>图 10-2　useState 返回一个两项的数组，用数组解构取出来，名字随你起</figcaption>
+</figure>
+
+<ul>
+  <li><code>useState(初始值)</code> 返回一个<strong>数组</strong>：<code>[当前值, 更新函数]</code>。</li>
+  <li>用<strong>数组解构</strong>把两项取出来，名字可以任意取，惯例是 <code>[xxx, setXxx]</code>。</li>
+  <li>初始值<strong>只在第一次渲染时生效</strong>；之后每次渲染，<code>useState</code> 都返回最新的值。</li>
+</ul>
+
+<div class="box note">
+  <div class="t">&#9432; <code>useState</code> 还是 <code>React.useState</code>？</div>
+  <p>
+    原书写的是 <code>import * as React from 'react'</code> 再用 <code>React.useState</code>，
+    本教程和 react.dev 官方文档一样写 <code>import { useState } from 'react'</code>。
+    两者完全等价，选一种在项目里保持一致即可。
+  </p>
+</div>
+
+<h2 id="cycle">状态更新的完整循环</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="状态更新触发重新渲染的循环">
+  <rect class="bx-a" x="280" y="20" width="200" height="66" rx="12"/>
+  <text class="ttl on-a" x="380" y="46" text-anchor="middle">① 渲染</text>
+  <text class="mono sm" x="380" y="68" text-anchor="middle">Search() 执行，返回 JSX</text>
+
+  <rect class="bx-g" x="540" y="130" width="200" height="66" rx="12"/>
+  <text class="ttl on-g" x="640" y="156" text-anchor="middle">② 显示</text>
+  <text class="sm" x="640" y="178" text-anchor="middle">React 更新 DOM</text>
+
+  <rect class="bx-b" x="280" y="240" width="200" height="66" rx="12"/>
+  <text class="ttl on-b" x="380" y="266" text-anchor="middle">③ 用户输入</text>
+  <text class="sm" x="380" y="288" text-anchor="middle">触发 onChange → handleChange</text>
+
+  <rect class="bx-p" x="20" y="130" width="200" height="66" rx="12"/>
+  <text class="ttl on-p" x="120" y="156" text-anchor="middle">④ 更新状态</text>
+  <text class="mono sm" x="120" y="178" text-anchor="middle">setSearchTerm('re')</text>
+
+  <path class="ln-a" d="M482 60 C560 60 640 80 640 126" marker-end="url(#ar-a)"/>
+  <path class="ln-g" d="M640 198 C640 250 560 272 484 272" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M278 272 C180 272 120 250 120 200" marker-end="url(#ar-b)"/>
+  <path class="ln-p" d="M120 128 C120 80 200 54 276 54" marker-end="url(#ar-p)"/>
+  <text class="sm on-p" x="20" y="90">React 安排</text>
+  <text class="sm on-p" x="20" y="106">一次重新渲染</text>
+
+  <text class="ttl" x="380" y="150" text-anchor="middle">这一次渲染时</text>
+  <text class="mono sm" x="380" y="172" text-anchor="middle">useState 返回 're'</text>
+  <text class="sm" x="380" y="194" text-anchor="middle">（不再是初始值 ''）</text>
+</svg>
+<figcaption>图 10-3　React 应用的心跳：渲染 → 显示 → 交互 → 更新状态 → 再次渲染</figcaption>
+</figure>
+
+<p>
+  这就是首页那句 <strong>UI = f(state)</strong> 的完整含义：你从不直接修改界面，你只修改状态；
+  React 用新的状态重新调用组件函数，得到新的界面。
+</p>
+
+<h3>谁会重新渲染？</h3>
+
+<p>
+  动手试试：在 <code>App</code>、<code>Search</code>、<code>List</code> 里各加一句 <code>console.log('X 渲染了')</code>。
+  首次加载时三个都会打印；在搜索框里打字时，<strong>只有 <code>Search</code></strong> 会打印。
+  规则是：<strong>状态变了，拥有这个状态的组件和它的所有后代组件会重新渲染</strong>，其他组件不受影响。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="状态所在组件及其子树会重新渲染">
+  <rect class="bx" x="300" y="20" width="160" height="44" rx="10"/>
+  <text class="ttl" x="380" y="47" text-anchor="middle">App</text>
+  <rect class="bx-a" x="160" y="110" width="200" height="60" rx="10"/>
+  <text class="ttl on-a" x="260" y="134" text-anchor="middle">Search &#128260;</text>
+  <text class="mono sm" x="260" y="156" text-anchor="middle">searchTerm 住在这里</text>
+  <rect class="bx" x="420" y="110" width="160" height="60" rx="10"/>
+  <text class="ttl" x="500" y="138" text-anchor="middle">List</text>
+  <text class="sm" x="500" y="156" text-anchor="middle">不受影响</text>
+  <path class="ln" d="M350 66 L270 108"/>
+  <path class="ln" d="M410 66 L490 108"/>
+  <text class="sm on-a" x="80" y="190">&#128260; = 状态变化后重新渲染（连同它的子组件）</text>
+</svg>
+<figcaption>图 10-4　重新渲染的范围：状态所在组件 + 它的整个子树</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 日志打印了两次？</div>
+  <p>
+    那是 <code>StrictMode</code> 在开发环境下故意双重渲染（第 6 章）。生产环境只会渲染一次。
+  </p>
+</div>
+
+<h2 id="memory">状态存在哪里？</h2>
+
+<p>
+  你可能会疑惑：组件函数每次都从头执行，<code>useState('')</code> 每次都会被调用，为什么没有被重置？
+  答案是：状态并不存在于函数里，而是存在 React 为每个组件实例维护的一块“记忆”里。
+  <code>useState</code> 的作用是在这块记忆里按<strong>调用顺序</strong>取出属于你的那一格：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="React 按调用顺序为每个组件实例保存状态">
+  <rect class="bx-b" x="20" y="30" width="330" height="180" rx="12"/>
+  <text class="ttl on-b" x="185" y="56" text-anchor="middle">组件函数（每次都重新执行）</text>
+  <text class="mono sm" x="40" y="88">const Search = () =&gt; {</text>
+  <text class="mono sm on-a" x="56" y="112">const [a, setA] = useState('');</text>
+  <text class="mono sm on-g" x="56" y="136">const [b, setB] = useState(false);</text>
+  <text class="mono sm" x="56" y="160">return …;</text>
+  <text class="mono sm" x="40" y="184">};</text>
+
+  <rect class="bx-p" x="430" y="30" width="310" height="180" rx="12"/>
+  <text class="ttl on-p" x="585" y="56" text-anchor="middle">React 内部：这个实例的“记忆”</text>
+  <rect class="bx-a" x="460" y="80" width="250" height="36" rx="6"/>
+  <text class="mono sm on-a" x="585" y="103" text-anchor="middle">第 1 格：'re'</text>
+  <rect class="bx-g" x="460" y="126" width="250" height="36" rx="6"/>
+  <text class="mono sm on-g" x="585" y="149" text-anchor="middle">第 2 格：false</text>
+  <text class="sm" x="585" y="190" text-anchor="middle">组件从页面移除时，这块记忆被回收</text>
+
+  <path class="ln-a" d="M300 108 H456" marker-end="url(#ar-a)"/>
+  <path class="ln-g" d="M310 132 H456" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 10-5　React 靠“第几次调用 useState”来对应状态，所以调用顺序必须每次都一样</figcaption>
+</figure>
+
+<p>这直接引出了 Hook 的两条规则：</p>
+
+<div class="box warn">
+  <div class="t">&#9888; Hook 的规则</div>
+  <ol style="margin:0">
+    <li><strong>只在组件（或自定义 Hook）的顶层调用 Hook。</strong>不要在 <code>if</code>、循环、嵌套函数里调用 —— 否则调用顺序会变，状态就对不上号了。</li>
+    <li><strong>只在 React 函数组件或自定义 Hook 里调用 Hook</strong>，不要在普通 JavaScript 函数里调用。</li>
+  </ol>
+  <p style="margin-top:8px">名字以 <code>use</code> 开头的函数就是 Hook。Vite 模板自带的 <code>eslint-plugin-react-hooks</code> 会帮你检查这两条规则。</p>
+</div>
+
+<h2 id="details">几个值得知道的细节</h2>
+
+<h3>一个组件可以有多个状态，状态可以是任何类型</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);        <span class="tk-cm">// 字符串</span>
+<span class="tk-kw">const</span> [count, setCount] = <span class="tk-fn">useState</span>(<span class="tk-nm">0</span>);                   <span class="tk-cm">// 数字</span>
+<span class="tk-kw">const</span> [isOpen, setIsOpen] = <span class="tk-fn">useState</span>(<span class="tk-kw">false</span>);             <span class="tk-cm">// 布尔</span>
+<span class="tk-kw">const</span> [stories, setStories] = <span class="tk-fn">useState</span>([]);              <span class="tk-cm">// 数组</span>
+<span class="tk-kw">const</span> [user, setUser] = <span class="tk-fn">useState</span>({ name: <span class="tk-st">'Robin'</span> });     <span class="tk-cm">// 对象</span></pre></div>
+
+<h3>setState 不会立刻改变当前变量</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> handleChange = (event) =&gt; {
+  <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  console.<span class="tk-fn">log</span>(searchTerm); <span class="tk-cm">// 打印的还是旧值！</span>
+};</pre></div>
+
+<p>
+  <code>searchTerm</code> 是<strong>这一次渲染</strong>时的值，像一张快照。<code>setSearchTerm</code> 只是请求 React
+  安排一次新的渲染，新值要到下一次渲染时才能看到。同一个事件里多次 <code>setState</code> 会被合并成一次渲染（<strong>批处理</strong>）。
+</p>
+
+<h3>基于旧值更新时，传一个函数</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 连续调用三次，只加了 1：三次读到的 count 都是同一个快照</span>
+<span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>);
+<span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>);
+<span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>);
+
+<span class="tk-cm">// 传入“更新函数”，每次拿到的是最新值：加了 3</span>
+<span class="tk-fn">setCount</span>((c) =&gt; c + <span class="tk-nm">1</span>);
+<span class="tk-fn">setCount</span>((c) =&gt; c + <span class="tk-nm">1</span>);
+<span class="tk-fn">setCount</span>((c) =&gt; c + <span class="tk-nm">1</span>);</pre></div>
+
+<p>Vite 模板里的 <code>setCount((count) =&gt; count + 1)</code> 用的就是这种写法。</p>
+
+<h3>对象和数组要“替换”，不要“修改”</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// ❌ 直接修改：React 发现还是同一个对象，可能不会重新渲染</span>
+user.name = <span class="tk-st">'Dennis'</span>;
+<span class="tk-fn">setUser</span>(user);
+
+<span class="tk-cm">// ✅ 创建新对象</span>
+<span class="tk-fn">setUser</span>({ ...user, name: <span class="tk-st">'Dennis'</span> });</pre></div>
+
+<h2 id="old">旧写法：类组件的 this.state</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">类组件 <span class="ver old">旧写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">class</span> <span class="tk-tp">Search</span> <span class="tk-kw">extends</span> <span class="tk-tp">React</span>.<span class="tk-tp">Component</span> {
+  <span class="tk-fn">constructor</span>(props) {
+    <span class="tk-kw">super</span>(props);
+    <span class="tk-kw">this</span>.state = { searchTerm: <span class="tk-st">''</span> };
+    <span class="tk-kw">this</span>.handleChange = <span class="tk-kw">this</span>.handleChange.<span class="tk-fn">bind</span>(<span class="tk-kw">this</span>);
+  }
+
+  <span class="tk-fn">handleChange</span>(event) {
+    <span class="tk-cm">// setState 会“合并”对象</span>
+    <span class="tk-kw">this</span>.<span class="tk-fn">setState</span>({ searchTerm: event.target.value });
+  }
+
+  <span class="tk-fn">render</span>() {
+    <span class="tk-kw">return</span> (
+      <span class="tk-tg">&lt;div</span>&gt;
+        <span class="tk-tg">&lt;input</span> onChange={<span class="tk-kw">this</span>.handleChange} <span class="tk-tg">/&gt;</span>
+        <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Searching</span> <span class="tk-kw">for</span> {<span class="tk-kw">this</span>.state.searchTerm}<span class="tk-tg">&lt;/p</span>&gt;
+      <span class="tk-tg">&lt;/div</span>&gt;
+    );
+  }
+}</pre></div>
+  </div>
+  <div class="new"><div class="h">函数组件 + useState <span class="ver">现在</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Search</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-kw">const</span> handleChange = (event) =&gt; {
+    <span class="tk-cm">// useState 的 setter 是“替换”，不是合并</span>
+    <span class="tk-fn">setSearchTerm</span>(event.target.value);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;input</span> onChange={handleChange} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Searching</span> <span class="tk-kw">for</span> {searchTerm}<span class="tk-tg">&lt;/p</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+  </div>
+</div>
+
+<ul>
+  <li>类组件只有一个 <code>this.state</code> 对象，<code>setState</code> 会把新字段<strong>浅合并</strong>进去；函数组件可以有多个独立的 <code>useState</code>，每个 setter 是<strong>整体替换</strong>。</li>
+  <li><strong>自动批处理</strong>：React 17 及以前，只有在 React 事件处理函数里的多次 setState 会合并；在 <code>setTimeout</code>、Promise 回调里每次 setState 都会单独渲染一次。React 18 起（使用 <code>createRoot</code>）<strong>所有地方</strong>都自动批处理。</li>
+</ul>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>普通变量改变不会触发渲染，而且每次渲染都会被重置。</li>
+  <li><code>const [value, setValue] = useState(initial)</code>：读 <code>value</code>，用 <code>setValue(新值)</code> 更新并触发重新渲染。</li>
+  <li>状态变化 → 拥有状态的组件及其子树重新渲染 → 界面更新。</li>
+  <li>Hook 只能在组件顶层调用，不能放进条件或循环。</li>
+  <li>setState 后当前变量不变（快照）；依赖旧值更新时用函数形式 <code>setX(x =&gt; …)</code>。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在每个组件里加 <code>console.log</code>，验证“只有状态所在的组件及其子组件重新渲染”。</li>
+    <li>在 <code>Search</code> 里再加一个布尔状态 <code>isVisible</code> 和一个按钮，点击按钮时切换是否显示 “Searching for …” 这一行（提示：<code>{isVisible &amp;&amp; &lt;p&gt;…&lt;/p&gt;}</code>）。</li>
+    <li>做一个计数器，分别用 <code>setCount(count + 1)</code> 连续调用三次和 <code>setCount(c =&gt; c + 1)</code> 连续调用三次，比较结果。</li>
+    <li>（选读）复习 JavaScript 的数组解构。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 useState？</summary>
+    <div><p>让函数组件拥有状态的 Hook。<code>const [state, setState] = useState(initialState)</code>，返回当前值和更新函数；调用更新函数会触发重新渲染。</p></div></details>
+  <details><summary>什么会触发组件重新渲染？</summary>
+    <div><p>组件自身的状态改变、父组件重新渲染（进而传入的 props 可能改变）、以及它使用的 Context 值改变。</p></div></details>
+  <details><summary>调用 setState 后状态会立即更新吗？</summary>
+    <div><p>不会。React 会批量处理更新并安排一次重新渲染；当前渲染中的状态变量仍是旧值，新值在下一次渲染时可见。</p></div></details>
+  <details><summary>为什么不能在 if 语句里调用 Hook？</summary>
+    <div><p>React 依赖 Hook 的调用顺序来对应每个状态；条件调用会导致不同渲染之间顺序不一致，状态错乱。</p></div></details>
+  <details><summary>多个 useState 和一个存对象的 useState 有什么区别？</summary>
+    <div><p>多个 useState 是相互独立的状态；一个对象状态把多个值放在一起，但更新时需要手动展开旧对象（setter 不会合并）。相关性强的多个值也可以考虑 useReducer（第 20 章）。</p></div></details>
+  <details><summary>可以直接修改 useState 返回的状态吗？</summary>
+    <div><p>不可以。应始终通过 setter 并以不可变的方式（创建新对象/数组）更新，否则 React 可能检测不到变化。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

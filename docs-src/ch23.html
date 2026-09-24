@@ -1,0 +1,241 @@
+<p class="lede">
+  React 只是一个界面库，其余的事情常常交给第三方库。这一章用流行的 HTTP 库 <strong>axios</strong> 替换 <code>fetch</code>，
+  学会从 npm 安装和使用一个库；然后把 <code>.then().catch()</code> 链改写成更易读的 <strong>async/await</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 npm 安装第三方库并在组件中使用</li>
+    <li>对比 <code>fetch</code> 和 axios</li>
+    <li>把 Promise 链改写为 <code>async/await</code> + <code>try/catch</code></li>
+    <li>知道为什么不能把 <code>useEffect</code> 的回调直接写成 async 函数</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="why">为什么考虑换掉 fetch</h2>
+
+<p>
+  <code>fetch</code> 是浏览器原生 API，零依赖，简单场景完全够用。但它有几处不太顺手：
+  要手动 <code>response.json()</code>；HTTP 404/500 不会被当作错误（第 21 章）；
+  没有请求/响应拦截器、超时配置等高级功能。早些年，老浏览器和测试环境（无头浏览器）里甚至没有 <code>fetch</code>，还需要 polyfill。
+  <a href="https://axios-http.com/">axios</a> 是解决这些问题最流行的库之一。
+</p>
+
+<h2 id="install">安装与使用 axios</h2>
+
+```bash
+npm install axios
+```
+
+<p>安装后它会出现在 <code>package.json</code> 的 <code>dependencies</code> 里。在文件顶部导入：</p>
+
+```jsx src/App.jsx
+import { useState, useEffect, useRef, useReducer, useCallback } from 'react';
+import axios from 'axios';
+```
+
+<p>用法和 <code>fetch</code> 几乎一样：传入地址，返回 Promise。区别是 axios 已经把 JSON 解析好，放在响应对象的 <code>data</code> 属性里：</p>
+
+```jsx src/App.jsx
+const handleFetchStories = useCallback(() => {
+  dispatchStories({ type: 'STORIES_FETCH_INIT' });
+
+  axios
+    .get(url)
+    .then((result) => {
+      dispatchStories({
+        type: 'STORIES_FETCH_SUCCESS',
+        payload: result.data.hits,
+      });
+    })
+    .catch(() =>
+      dispatchStories({ type: 'STORIES_FETCH_FAILURE' })
+    );
+}, [url]);
+```
+
+<div class="vs">
+  <div class="old"><div class="h">fetch</div>
+```jsx
+fetch(url)
+  .then((response) => {
+    if (!response.ok) throw new Error();
+    return response.json();   // 手动解析
+  })
+  .then((result) => {
+    use(result.hits);
+  });
+```
+  </div>
+  <div class="new"><div class="h">axios</div>
+```jsx
+axios
+  .get(url)                   // 非 2xx 自动 reject
+  .then((result) => {
+    use(result.data.hits);    // 已解析，在 data 里
+  });
+```
+  </div>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th></th><th><code>fetch</code></th><th>axios</th></tr>
+  <tr><td>安装</td><td>浏览器 / Node 18+ 内置</td><td><code>npm install axios</code>（增加包体积）</td></tr>
+  <tr><td>JSON 解析</td><td>手动 <code>response.json()</code></td><td>自动，结果在 <code>result.data</code></td></tr>
+  <tr><td>HTTP 错误状态</td><td>不会 reject，要查 <code>response.ok</code></td><td>非 2xx 自动 reject</td></tr>
+  <tr><td>其他方法</td><td><code>fetch(url, { method: 'POST', body })</code></td><td><code>axios.post(url, data)</code>、<code>axios.put</code>…</td></tr>
+  <tr><td>高级功能</td><td>需要自己封装</td><td>拦截器、超时、全局配置</td></tr>
+</table>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; 今天还需要 axios 吗？</div>
+  <p>
+    今天所有现代浏览器和 Node.js 都内置了 <code>fetch</code>，“兼容性”已不再是换 axios 的理由。选择它主要是因为 API 更顺手。
+    很多项目直接用 <code>fetch</code> 再封装一个小函数，也有很多项目用 axios —— 两者都是合理的选择。
+    本教程跟随原书使用 axios，第 31 章的测试也会用到它。
+  </p>
+</div>
+
+<h2 id="async-await">async/await</h2>
+
+<p>
+  <code>.then().catch()</code> 链在步骤多时会层层嵌套。<code>async/await</code> 让异步代码读起来像同步代码。
+  先不考虑错误处理：
+</p>
+
+```jsx src/App.jsx
+const handleFetchStories = useCallback(async () => {
+  dispatchStories({ type: 'STORIES_FETCH_INIT' });
+
+  const result = await axios.get(url);
+
+  dispatchStories({
+    type: 'STORIES_FETCH_SUCCESS',
+    payload: result.data.hits,
+  });
+}, [url]);
+```
+
+<p>
+  函数前加 <code>async</code>，就可以在里面用 <code>await</code> 等待 Promise。<code>await</code> 之后的代码会等 Promise 兑现后才执行。
+  错误处理用普通的 <code>try/catch</code>：
+</p>
+
+```jsx src/App.jsx
+const handleFetchStories = useCallback(async () => {
+  dispatchStories({ type: 'STORIES_FETCH_INIT' });
+
+  try {
+    const result = await axios.get(url);
+
+    dispatchStories({
+      type: 'STORIES_FETCH_SUCCESS',
+      payload: result.data.hits,
+    });
+  } catch {
+    dispatchStories({ type: 'STORIES_FETCH_FAILURE' });
+  }
+}, [url]);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="Promise 链与 async/await 的对应关系">
+  <rect class="bx-b" x="20" y="20" width="330" height="210" rx="12"/>
+  <text class="ttl on-b" x="185" y="46" text-anchor="middle">Promise 链</text>
+  <text class="mono sm" x="40" y="80">axios.get(url)</text>
+  <text class="mono sm on-g" x="56" y="106">.then((result) =&gt; {</text>
+  <text class="mono sm" x="72" y="126">dispatch(SUCCESS)</text>
+  <text class="mono sm on-g" x="56" y="146">})</text>
+  <text class="mono sm on-r" x="56" y="172">.catch(() =&gt; {</text>
+  <text class="mono sm" x="72" y="192">dispatch(FAILURE)</text>
+  <text class="mono sm on-r" x="56" y="212">});</text>
+
+  <rect class="bx-a" x="410" y="20" width="330" height="210" rx="12"/>
+  <text class="ttl on-a" x="575" y="46" text-anchor="middle">async / await</text>
+  <text class="mono sm on-g" x="430" y="80">try {</text>
+  <text class="mono sm" x="446" y="106">const result =</text>
+  <text class="mono sm" x="462" y="126">await axios.get(url);</text>
+  <text class="mono sm" x="446" y="146">dispatch(SUCCESS)</text>
+  <text class="mono sm on-r" x="430" y="172">} catch {</text>
+  <text class="mono sm" x="446" y="192">dispatch(FAILURE)</text>
+  <text class="mono sm on-r" x="430" y="212">}</text>
+
+  <path class="ln-g" d="M300 120 C360 120 360 110 426 110" marker-end="url(#ar-g)"/>
+  <path class="ln-r" d="M300 186 H426" marker-end="url(#ar-r)"/>
+  <text class="sm on-g" x="380" y="100" text-anchor="middle">成功路径</text>
+  <text class="sm on-r" x="380" y="178" text-anchor="middle">失败路径</text>
+</svg>
+<figcaption>图 23-1　同样的逻辑，两种写法。async/await 从上往下读，就像同步代码</figcaption>
+</figure>
+
+<p>
+  两种写法都没错，团队统一一种即可。多数现代代码偏向 <code>async/await</code>，因为不需要嵌套回调。
+  （<code>catch {</code> 后面省略 <code>(error)</code> 是 ES2019 的写法，不需要用到错误对象时可以这样写。）
+</p>
+
+<h2 id="effect-async">不能把 effect 回调写成 async</h2>
+
+<p>一个非常常见的错误写法：</p>
+
+<div class="vs">
+  <div class="old"><div class="h">&#10060; 错误</div>
+```jsx
+useEffect(async () => {
+  const result = await axios.get(url);
+  setData(result.data);
+}, [url]);
+```
+  </div>
+  <div class="new"><div class="h">&#9989; 正确</div>
+```jsx
+useEffect(() => {
+  const fetchData = async () => {
+    const result = await axios.get(url);
+    setData(result.data);
+  };
+
+  fetchData();
+}, [url]);
+```
+  </div>
+</div>
+
+<p>
+  原因：async 函数总是返回一个 Promise，而 effect 的返回值必须是<strong>清理函数或 undefined</strong>。
+  React 会发出警告，而且你也没法再返回清理函数了。正确做法是在 effect 里面定义一个 async 函数然后调用它
+  —— 或者像本书这样，把 async 函数定义在 effect 外面（用 <code>useCallback</code> 包裹），在 effect 里调用。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li><code>npm install 包名</code> 安装第三方库，<code>import</code> 后即可使用。</li>
+  <li>axios 自动解析 JSON（结果在 <code>result.data</code>）、非 2xx 状态自动视为错误；fetch 是零依赖的原生选择。</li>
+  <li><code>async/await</code> + <code>try/catch</code> 让异步代码像同步代码一样从上往下读。</li>
+  <li>不要把 <code>useEffect</code> 的回调直接写成 async 函数，在内部定义并调用 async 函数。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>完成 axios 替换和 async/await 改写，确认成功与失败两种情况都正常。</li>
+    <li>把 URL 故意写成一个会返回 404 的地址，对比 fetch（不检查 <code>ok</code>）和 axios 的不同表现。</li>
+    <li>（选读）了解 <code>Promise.all</code>：同时请求 “react” 和 “vue” 两个搜索结果，都返回后合并显示。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>axios 和 fetch 有什么区别？</summary>
+    <div><p>fetch 是原生 API，需要手动解析 JSON，HTTP 错误状态不会 reject；axios 是第三方库，自动解析 JSON、非 2xx 自动 reject，并提供拦截器、超时等功能。</p></div></details>
+  <details><summary>async/await 和 .then() 有什么区别？</summary>
+    <div><p>本质相同，都基于 Promise。async/await 语法让异步代码像同步代码一样书写，用 try/catch 处理错误，可读性通常更好。</p></div></details>
+  <details><summary>为什么 useEffect 的回调不能是 async 函数？</summary>
+    <div><p>async 函数返回 Promise，而 effect 只能返回清理函数或 undefined。应在 effect 内部定义 async 函数并调用。</p></div></details>
+  <details><summary>如何并发执行多个异步请求？</summary>
+    <div><p>使用 <code>Promise.all([...])</code>（或 <code>Promise.allSettled</code>）等待多个 Promise。</p></div></details>
+</div>

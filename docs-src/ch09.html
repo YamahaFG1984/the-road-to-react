@@ -1,0 +1,286 @@
+<p class="lede">
+  现在 <code>list</code> 是一个全局变量，谁都能直接用。这在一个文件、一个组件时还凑合，
+  组件一多、分散到不同文件里就行不通了。React 给组件之间传递数据的方式叫 <strong>props</strong>：
+  就像给 HTML 标签写属性一样，给组件写属性。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 props 把数据从父组件传给子组件</li>
+    <li>理解 props 就是组件函数的第一个参数 —— 一个对象</li>
+    <li>提取出 <code>Item</code> 组件，完成上一章留下的练习</li>
+    <li>记住 props 是只读的，数据只能从上往下流</li>
+    <li>知道 PropTypes 在 React 19 中已经不再生效</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="move">先把数据搬进 App</h2>
+
+<p>
+  把全局的 <code>list</code> 挪进 <code>App</code> 组件内部，并改个更有意义的名字 <code>stories</code>。
+  别忘了 <code>App</code> 要从简洁体改回块体：
+</p>
+
+```jsx src/App.jsx
+const App = () => {
+  const stories = [
+    {
+      title: 'React',
+      url: 'https://react.dev/',
+      author: 'Jordan Walke',
+      num_comments: 3,
+      points: 4,
+      objectID: 0,
+    },
+    {
+      title: 'Redux',
+      url: 'https://redux.js.org/',
+      author: 'Dan Abramov, Andrew Clark',
+      num_comments: 2,
+      points: 5,
+      objectID: 1,
+    },
+  ];
+
+  return ( ... );
+};
+```
+
+<p>
+  现在 <code>List</code> 组件访问不到 <code>stories</code> 了 —— 它是 <code>App</code> 函数里的局部变量。
+  这正是我们要解决的问题。
+</p>
+
+<h2 id="pass">通过属性传递数据</h2>
+
+<p>在使用 <code>List</code> 的地方，像写 HTML 属性一样把数据传进去：</p>
+
+```jsx src/App.jsx
+const App = () => {
+  const stories = [ ... ];
+
+  return (
+    <div>
+      ...
+      <List list={stories} />
+    </div>
+  );
+};
+```
+
+<p>在 <code>List</code> 组件里，这些属性会被打包成一个对象，作为函数的第一个参数传进来：</p>
+
+```jsx src/App.jsx
+const List = (props) => (
+  <ul>
+    {props.list.map((item) => (
+      <li key={item.objectID}>
+        ...
+      </li>
+    ))}
+  </ul>
+);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 280" role="img" aria-label="父组件的属性变成子组件函数的 props 参数">
+  <rect class="bx-a" x="20" y="30" width="300" height="110" rx="12"/>
+  <text class="ttl on-a" x="170" y="56" text-anchor="middle">父组件 App</text>
+  <text class="mono sm" x="40" y="86">const stories = [ … ];</text>
+  <rect class="code-bg" x="36" y="98" width="268" height="30" rx="6"/>
+  <text class="code-tx" x="48" y="118">&lt;List <tspan fill="#9fd3c7">list</tspan>={<tspan class="fill-a">stories</tspan>} /&gt;</text>
+
+  <path class="ln-a flow" d="M322 110 C400 110 380 200 436 200" marker-end="url(#ar-a)"/>
+  <text class="sm on-a" x="340" y="236">React 调用</text>
+  <text class="mono sm on-a" x="340" y="254">List(props)</text>
+
+  <rect class="bx-p" x="440" y="30" width="300" height="80" rx="12"/>
+  <text class="ttl on-p" x="590" y="56" text-anchor="middle">props 对象</text>
+  <text class="mono sm" x="590" y="86" text-anchor="middle">{ list: stories }</text>
+  <text class="sm" x="590" y="102" text-anchor="middle">属性名 → 对象的键</text>
+
+  <rect class="bx-b" x="440" y="150" width="300" height="110" rx="12"/>
+  <text class="ttl on-b" x="590" y="176" text-anchor="middle">子组件 List</text>
+  <text class="mono sm" x="458" y="206">const List = (<tspan class="fill-p" style="font-weight:700">props</tspan>) =&gt; (</text>
+  <text class="mono sm" x="474" y="226"><tspan class="fill-p">props.list</tspan>.map(…)</text>
+  <text class="mono sm" x="458" y="246">);</text>
+  <path class="ln-p" d="M590 112 V146" marker-end="url(#ar-p)"/>
+
+  <text class="sm" x="20" y="180">写在组件元素上的每一个属性，</text>
+  <text class="sm" x="20" y="198">都会成为子组件 props 对象的一个属性。</text>
+  <text class="sm" x="20" y="226">值可以是任何东西：字符串、数字、</text>
+  <text class="sm" x="20" y="244">数组、对象、函数、甚至 JSX。</text>
+</svg>
+<figcaption>图 9-1　<code>&lt;List list={stories} /&gt;</code> 相当于调用 <code>List({ list: stories })</code></figcaption>
+</figure>
+
+<p>
+  这就是 props（properties 的缩写）的全部机制。你已经成功地把数据从一个组件传到了另一个组件。
+  现在回头看第 6 章的思考题：两个 <code>&lt;List list={a} /&gt;</code> 和 <code>&lt;List list={b} /&gt;</code>
+  就能显示不同的数据了。
+</p>
+
+<h2 id="item">提取 Item 组件</h2>
+
+<p>
+  第 6 章我们想从 <code>List</code> 里拆出 <code>Item</code>，却不知道怎么把每一项数据交给它。
+  有了 props，这就很简单了：在 <code>map()</code> 里把每个 <code>item</code> 当作 prop 传下去。
+</p>
+
+```jsx src/App.jsx
+const List = (props) => (
+  <ul>
+    {props.list.map((item) => (
+      <Item key={item.objectID} item={item} />
+    ))}
+  </ul>
+);
+
+const Item = (props) => (
+  <li>
+    <span>
+      <a href={props.item.url}>{props.item.title}</a>
+    </span>
+    <span>{props.item.author}</span>
+    <span>{props.item.num_comments}</span>
+    <span>{props.item.points}</span>
+  </li>
+);
+```
+
+<p>
+  注意 <code>key</code> 现在写在 <code>&lt;Item&gt;</code> 上 —— <strong>key 要放在 <code>map()</code> 直接返回的那个元素上</strong>，
+  而不是 <code>Item</code> 组件内部的 <code>&lt;li&gt;</code> 上。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="数据从 App 经 List 流向 Item">
+  <rect class="bx-a" x="300" y="20" width="160" height="50" rx="10"/>
+  <text class="ttl on-a" x="380" y="42" text-anchor="middle">App</text>
+  <text class="sm" x="380" y="60" text-anchor="middle">拥有 stories</text>
+
+  <rect class="bx-b" x="300" y="106" width="160" height="50" rx="10"/>
+  <text class="ttl on-b" x="380" y="128" text-anchor="middle">List</text>
+  <text class="sm" x="380" y="146" text-anchor="middle">props.list</text>
+
+  <rect class="bx-g" x="120" y="190" width="160" height="46" rx="10"/>
+  <text class="ttl on-g" x="200" y="210" text-anchor="middle">Item</text>
+  <text class="sm" x="200" y="227" text-anchor="middle">props.item = React</text>
+  <rect class="bx-g" x="300" y="190" width="160" height="46" rx="10"/>
+  <text class="ttl on-g" x="380" y="210" text-anchor="middle">Item</text>
+  <text class="sm" x="380" y="227" text-anchor="middle">props.item = Redux</text>
+  <rect class="bx-g" x="480" y="190" width="160" height="46" rx="10"/>
+  <text class="ttl on-g" x="560" y="210" text-anchor="middle">Item</text>
+  <text class="sm" x="560" y="227" text-anchor="middle">props.item = …</text>
+
+  <path class="ln-a" d="M380 72 V102" marker-end="url(#ar-a)"/>
+  <text class="mono sm on-a" x="390" y="92">list={stories}</text>
+  <path class="ln-b" d="M340 158 L220 186" marker-end="url(#ar-b)"/>
+  <path class="ln-b" d="M380 158 V186" marker-end="url(#ar-b)"/>
+  <path class="ln-b" d="M420 158 L540 186" marker-end="url(#ar-b)"/>
+  <text class="mono sm on-b" x="600" y="164">item={item}</text>
+
+  <text class="ttl" x="680" y="100" text-anchor="middle">单向数据流</text>
+  <path class="ln-a" d="M680 110 V220" marker-end="url(#ar-a)"/>
+  <text class="sm" x="690" y="160">只能</text>
+  <text class="sm" x="690" y="176">向下</text>
+</svg>
+<figcaption>图 9-2　props 沿着组件树从上往下传：App → List → Item</figcaption>
+</figure>
+
+<h2 id="readonly">props 是只读的</h2>
+
+<div class="box key">
+  <div class="t">&#9733; 关于 props 最重要的一条规则</div>
+  <p>
+    <strong>组件绝不能修改自己的 props。</strong>props 是父组件交给你的数据，就像函数参数一样，
+    只能读、不能写。写 <code>props.item.title = 'x'</code> 这样的代码，是 React 里的大忌：
+    它会让数据的来源变得混乱，界面也不会因此更新。
+  </p>
+  <p>
+    同时，props <strong>只能从父组件流向子组件</strong>，反过来不行。那子组件想“告诉”父组件点什么怎么办？
+    比如 <code>Search</code> 想把用户输入的内容交给 <code>App</code> 去过滤列表？第 11 章揭晓。
+  </p>
+</div>
+
+<h2 id="proptypes">关于 PropTypes 和 ESLint 警告</h2>
+
+<p>
+  如果你的项目启用了 <code>eslint-plugin-react</code>，可能会看到这样的提示：
+  <em>“'list' is missing in props validation”</em>。它希望你用 <code>PropTypes</code> 声明每个 prop 的类型。
+  但在今天，这条规则已经不值得遵守了：
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">PropTypes 运行时检查 <span class="ver old">React 19 中不再生效</span></div>
+```jsx
+import PropTypes from 'prop-types';
+
+const List = (props) => ( ... );
+
+List.propTypes = {
+  list: PropTypes.array.isRequired,
+};
+
+List.defaultProps = {
+  list: [],
+};
+```
+  </div>
+  <div class="new"><div class="h">TypeScript 编译期检查 <span class="ver">推荐</span></div>
+```tsx
+type ListProps = {
+  list: Story[];
+};
+
+// 默认值直接用参数默认值
+const List = ({ list = [] }: ListProps) => ( ... );
+```
+  </div>
+</div>
+
+<p>
+  React 19 已经<strong>移除了 <code>propTypes</code> 的检查</strong>（写了也会被静默忽略），
+  也移除了函数组件的 <code>defaultProps</code>（改用 ES6 参数默认值，第 13 章会讲）。
+  类型检查交给 TypeScript（第 29 章）。如果 ESLint 报这个错，在 <code>eslint.config.js</code> 里关掉这条规则即可：
+</p>
+
+```js eslint.config.js
+rules: {
+  // ...
+  'react/prop-types': 'off',
+},
+```
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>在组件元素上写属性 <code>&lt;List list={stories} /&gt;</code>，子组件通过第一个参数 <code>props</code> 读取：<code>props.list</code>。</li>
+  <li>props 可以是任何值：字符串、数组、对象、函数、JSX。</li>
+  <li>在 <code>map()</code> 里给子组件传 <code>item</code>，就能拆出 <code>Item</code> 这样的“单项组件”；<code>key</code> 写在 map 返回的元素上。</li>
+  <li>props 只读，只能从父到子单向流动。</li>
+  <li>PropTypes / defaultProps 是旧的做法，React 19 中已失效；用 TypeScript 和参数默认值代替。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>App</code> 里再定义一个 <code>otherStories</code> 数组，渲染两个 <code>List</code> 分别显示两份数据。</li>
+    <li>给 <code>List</code> 再传一个 <code>title</code> 字符串 prop，在列表上方显示出来。</li>
+    <li>试着在 <code>Item</code> 里写 <code>props.item.title = 'Hacked'</code>，观察发生了什么，再思考为什么这样做是坏主意。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 props？</summary>
+    <div><p>props（properties）是父组件传给子组件的数据，子组件以函数参数（一个对象）的形式接收。</p></div></details>
+  <details><summary>子组件能修改 props 吗？</summary>
+    <div><p>不能。props 应被视为只读（不可变）的数据；要改变数据，应由拥有该数据的组件通过 state 修改。</p></div></details>
+  <details><summary>什么是单向数据流？</summary>
+    <div><p>数据只能沿组件树自上而下通过 props 传递。子组件想影响父组件，需要父组件传下一个回调函数。</p></div></details>
+  <details><summary>React 19 中 propTypes 和 defaultProps 有什么变化？</summary>
+    <div><p>propTypes 检查被移除（被静默忽略）；函数组件的 defaultProps 被移除，应改用 ES6 默认参数。推荐用 TypeScript 做类型检查。</p></div></details>
+</div>

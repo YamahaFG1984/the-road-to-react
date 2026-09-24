@@ -1,0 +1,293 @@
+<p class="lede">
+  上一章我们用 <code>useState</code> + <code>useEffect</code> 实现了“状态自动同步到 localStorage”。
+  这套组合很可能在别处还要用（记住主题、记住排序方式……）。React 允许你把 Hook 的组合打包成自己的 Hook ——
+  <strong>自定义 Hook</strong>，这是 React 复用逻辑的主要方式。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>把 useState + useEffect 提取成自定义 Hook <code>useStorageState</code></li>
+    <li>掌握自定义 Hook 的约定：<code>use</code> 前缀、返回数组、通用命名</li>
+    <li>理解为什么每次调用都有独立的状态</li>
+    <li>知道自定义 Hook 取代了哪些旧的复用模式</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="goal">先想好怎么用</h2>
+
+<p>先写出理想中的用法：像 <code>useState</code> 一样返回“值 + 设置函数”，只是背后会自动同步到 localStorage：</p>
+
+```jsx src/App.jsx
+const App = () => {
+  const stories = [ ... ];
+
+  const [searchTerm, setSearchTerm] = useStorageState('React');
+
+  const handleSearch = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const searchedStories = stories.filter((story) =>
+    story.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return ( ... );
+};
+```
+
+<p><code>App</code> 里的 localStorage 细节全部消失了。接下来实现这个 Hook。</p>
+
+<h2 id="extract">一步步提取</h2>
+
+<p><strong>第一步</strong>：把原来的代码原封不动地搬进一个以 <code>use</code> 开头的函数：</p>
+
+```jsx src/App.jsx
+const useStorageState = () => {
+  const [searchTerm, setSearchTerm] = useState(
+    localStorage.getItem('search') ?? ''
+  );
+
+  useEffect(() => {
+    localStorage.setItem('search', searchTerm);
+  }, [searchTerm]);
+};
+```
+
+<p><strong>第二步</strong>：接收初始值参数，并把 <code>App</code> 需要的东西以数组形式返回：</p>
+
+```jsx src/App.jsx
+const useStorageState = (initialState) => {
+  const [searchTerm, setSearchTerm] = useState(
+    localStorage.getItem('search') ?? initialState
+  );
+
+  useEffect(() => {
+    localStorage.setItem('search', searchTerm);
+  }, [searchTerm]);
+
+  return [searchTerm, setSearchTerm];
+};
+```
+
+<p><strong>第三步</strong>：内部名字还带着“search”这个业务含义。把它改成通用的 <code>value</code>，Hook 就和具体业务无关了：</p>
+
+```jsx src/App.jsx
+const useStorageState = (initialState) => {
+  const [value, setValue] = useState(
+    localStorage.getItem('value') ?? initialState
+  );
+
+  useEffect(() => {
+    localStorage.setItem('value', value);
+  }, [value]);
+
+  return [value, setValue];
+};
+```
+
+<p>
+  <strong>第四步</strong>：还有个问题 —— localStorage 的键写死成了 <code>'value'</code>。如果在应用里用两次这个 Hook，
+  两者会互相覆盖。把键也作为参数传进来。因为键来自外部、可能会变，它也要加进 effect 的依赖数组：
+</p>
+
+```jsx src/App.jsx
+const useStorageState = (key, initialState) => {
+  const [value, setValue] = useState(
+    localStorage.getItem(key) ?? initialState
+  );
+
+  useEffect(() => {
+    localStorage.setItem(key, value);
+  }, [value, key]);
+
+  return [value, setValue];
+};
+
+const App = () => {
+  ...
+
+  const [searchTerm, setSearchTerm] = useStorageState('search', 'React');
+
+  ...
+};
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="自定义 Hook 封装了 useState 和 useEffect">
+  <rect class="bx-b" x="20" y="30" width="250" height="230" rx="12"/>
+  <text class="ttl on-b" x="145" y="56" text-anchor="middle">App 组件</text>
+  <text class="mono sm" x="36" y="90">const [searchTerm,</text>
+  <text class="mono sm" x="52" y="108">setSearchTerm] =</text>
+  <text class="mono sm on-a" x="36" y="126">useStorageState(</text>
+  <text class="mono sm on-a" x="52" y="144">'search', 'React');</text>
+  <text class="sm" x="36" y="184">只关心：“我要一个会被</text>
+  <text class="sm" x="36" y="202">记住的 searchTerm”</text>
+  <text class="sm" x="36" y="226">不关心 localStorage 细节</text>
+
+  <rect class="bx-a" x="330" y="30" width="410" height="230" rx="12"/>
+  <text class="ttl on-a" x="535" y="56" text-anchor="middle">useStorageState(key, initialState)</text>
+  <rect class="bx-g" x="350" y="74" width="370" height="56" rx="8"/>
+  <text class="mono sm on-g" x="366" y="96">useState(localStorage.getItem(key)</text>
+  <text class="mono sm on-g" x="382" y="114">?? initialState)</text>
+  <rect class="bx-p" x="350" y="142" width="370" height="56" rx="8"/>
+  <text class="mono sm on-p" x="366" y="164">useEffect(() =&gt; localStorage.setItem(</text>
+  <text class="mono sm on-p" x="382" y="182">key, value), [value, key])</text>
+  <text class="mono sm" x="366" y="228">return [value, setValue];</text>
+
+  <path class="ln-a" d="M272 135 H326" marker-end="url(#ar-a)"/>
+  <path class="ln-g" d="M326 224 H272" marker-end="url(#ar-g)"/>
+  <text class="sm on-a" x="299" y="126" text-anchor="middle">参数</text>
+  <text class="sm on-g" x="299" y="242" text-anchor="middle">返回</text>
+</svg>
+<figcaption>图 15-1　自定义 Hook 把“怎么做”藏起来，组件只表达“要什么”</figcaption>
+</figure>
+
+<p>你刚刚写出了第一个自定义 Hook。</p>
+
+<h2 id="rules">自定义 Hook 的约定</h2>
+
+<ul>
+  <li><strong>名字以 <code>use</code> 开头。</strong>这不只是风格：React 和 ESLint 靠这个前缀识别 Hook，并对它应用 Hook 的规则（只能在顶层调用等）。</li>
+  <li><strong>可以调用其他 Hook。</strong>这正是它和普通函数的区别 —— 普通函数里不能调用 <code>useState</code>。</li>
+  <li><strong>返回什么由你决定。</strong>模仿 <code>useState</code> 返回数组，调用方可以自由命名；返回值很多时返回对象更清楚。</li>
+  <li><strong>尽量通用。</strong>内部不要出现具体业务的名字，这样才能在别处复用。</li>
+</ul>
+
+<h2 id="independent">每次调用，状态各自独立</h2>
+
+<p>
+  一个常见误解是“自定义 Hook 让多个组件<strong>共享</strong>状态”。并不是 —— 它共享的是<strong>逻辑</strong>，
+  每次调用都会得到一份全新、独立的状态：
+</p>
+
+```jsx
+const [searchTerm, setSearchTerm] = useStorageState('search', 'React');
+const [theme, setTheme] = useStorageState('theme', 'light');
+// 两份完全独立的状态，分别存在 localStorage 的 'search' 和 'theme' 下
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="两次调用自定义 Hook 得到两份独立状态">
+  <rect class="bx-a" x="280" y="20" width="200" height="50" rx="10"/>
+  <text class="ttl on-a" x="380" y="50" text-anchor="middle">useStorageState</text>
+  <text class="sm" x="380" y="88" text-anchor="middle">同一份逻辑（代码）</text>
+
+  <rect class="bx-b" x="80" y="120" width="260" height="60" rx="10"/>
+  <text class="mono sm on-b" x="210" y="144" text-anchor="middle">useStorageState('search', 'React')</text>
+  <text class="sm" x="210" y="164" text-anchor="middle">状态 ①：'React' ↔ localStorage.search</text>
+  <rect class="bx-g" x="420" y="120" width="260" height="60" rx="10"/>
+  <text class="mono sm on-g" x="550" y="144" text-anchor="middle">useStorageState('theme', 'light')</text>
+  <text class="sm" x="550" y="164" text-anchor="middle">状态 ②：'light' ↔ localStorage.theme</text>
+  <path class="ln-d" d="M330 72 L240 116" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M430 72 L520 116" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 15-2　自定义 Hook 复用的是逻辑，不是数据</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 同一个 key 会怎样？</div>
+  <p>
+    两个组件都调用 <code>useStorageState('search', …)</code> 时，它们的 React 状态仍然是独立的，
+    只是都往 localStorage 的同一个键里写 —— 谁最后写就留下谁的值。所以 key 应当唯一。
+  </p>
+</div>
+
+<h2 id="history">自定义 Hook 取代了什么</h2>
+
+<p>
+  在 Hooks 出现之前，React 里复用“带状态的逻辑”要靠两种比较绕的模式：
+  <strong>高阶组件</strong>（HOC，一个接收组件、返回新组件的函数）和 <strong>render props</strong>（通过一个函数 prop 把数据交出来）。
+</p>
+
+<div class="vs">
+  <div class="old"><div class="h">高阶组件（HOC） <span class="ver old">旧模式</span></div>
+```jsx
+const withStorageState = (key, initial) => (Component) =>
+  class extends React.Component {
+    state = { value: localStorage.getItem(key) ?? initial };
+    componentDidUpdate() {
+      localStorage.setItem(key, this.state.value);
+    }
+    render() {
+      return (
+        <Component
+          {...this.props}
+          value={this.state.value}
+          setValue={(value) => this.setState({ value })}
+        />
+      );
+    }
+  };
+
+// 组件被一层层包起来，数据从 props 里“冒出来”
+export default withStorageState('search', 'React')(App);
+```
+  </div>
+  <div class="new"><div class="h">自定义 Hook <span class="ver">现在</span></div>
+```jsx
+const useStorageState = (key, initialState) => {
+  const [value, setValue] = useState(
+    localStorage.getItem(key) ?? initialState
+  );
+
+  useEffect(() => {
+    localStorage.setItem(key, value);
+  }, [value, key]);
+
+  return [value, setValue];
+};
+
+// 在组件里直接调用，数据从哪来一目了然
+const [searchTerm, setSearchTerm] =
+  useStorageState('search', 'React');
+```
+  </div>
+</div>
+
+<p>
+  HOC 和 render props 会让组件树里多出很多“包装层”（俗称 wrapper hell），多个 HOC 之间还可能 prop 重名冲突。
+  自定义 Hook 就是普通函数调用，没有这些问题。今天你仍会在一些库里见到 HOC（比如一些老的路由、国际化库），知道它是什么就够了。
+</p>
+
+<div class="box tip">
+  <div class="t">&#128161; 社区里有大量现成的 Hook</div>
+  <p>
+    搜索 “react hooks library” 会找到成百上千个现成的 Hook：<code>useLocalStorage</code>、<code>useDebounce</code>、<code>useMediaQuery</code>……
+    自己写一遍 <code>useStorageState</code> 能帮你理解它们是怎么工作的。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>自定义 Hook 是以 <code>use</code> 开头、内部调用其他 Hook 的函数，用来复用有状态的逻辑。</li>
+  <li><code>useStorageState(key, initialState)</code> 封装了 useState + useEffect，返回 <code>[value, setValue]</code>。</li>
+  <li>来自外部参数的值（如 <code>key</code>）要加进 effect 依赖数组。</li>
+  <li>每次调用 Hook 都得到独立的状态；Hook 共享逻辑，不共享数据。</li>
+  <li>自定义 Hook 取代了 HOC 和 render props 这两种旧的逻辑复用模式。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>useStorageState</code> 再存一个值，比如用户是否展开了某个区域（注意 localStorage 只能存字符串，布尔值要怎么处理？）。</li>
+    <li>挑战：让 <code>useStorageState</code> 支持任意可序列化的值（提示：<code>JSON.stringify</code> / <code>JSON.parse</code>）。</li>
+    <li>写一个 <code>useToggle(initial)</code> Hook，返回 <code>[on, toggle]</code>。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是自定义 Hook？如何创建？</summary>
+    <div><p>以 <code>use</code> 开头、内部使用其他 Hook 的 JavaScript 函数，用于封装和复用有状态的逻辑。</p></div></details>
+  <details><summary>多个组件使用同一个自定义 Hook，会共享状态吗？</summary>
+    <div><p>不会。每次调用都有独立的状态；共享的是逻辑。要共享状态需要状态提升、Context 或外部状态库。</p></div></details>
+  <details><summary>自定义 Hook 能访问组件的 props 吗？</summary>
+    <div><p>不能直接访问，需要通过参数把需要的数据传进去。</p></div></details>
+  <details><summary>为什么自定义 Hook 必须以 use 开头？</summary>
+    <div><p>这是 React 识别 Hook 的约定，linter 据此检查 Hook 规则；不以 use 开头，就无法保证它只在组件顶层被调用。</p></div></details>
+  <details><summary>自定义 Hook 相比 HOC / render props 有什么优势？</summary>
+    <div><p>没有额外的组件嵌套层级，数据来源清晰，不存在 prop 命名冲突，组合多个 Hook 也很自然。</p></div></details>
+</div>
