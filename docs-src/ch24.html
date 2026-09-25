@@ -394,7 +394,8 @@ const [message, formAction, isPending] =
     <li><code>useFormStatus</code> 从 <code>react-dom</code> 导入，并且必须在 <code>&lt;form&gt;</code> <strong>内部</strong>的子组件中调用，它读取的是“所在的那个表单”的状态。</li>
     <li>React 19 早期的 Canary 版本里 <code>useActionState</code> 叫 <code>useFormState</code>，老文章里看到它就是同一个东西。</li>
     <li>按钮也可以有自己的 action：<code>&lt;button formAction={fn}&gt;</code>，一个表单里的多个按钮可以做不同的事。</li>
-    <li>在 Next.js 等框架里，action 还可以是运行在服务器上的<strong>服务端函数</strong>（Server Functions），第 25 章会提到。</li>
+    <li>在 Next.js 等框架里，action 还可以是运行在服务器上的<strong>服务端函数</strong>（Server Functions），第 25 章会提到，第 51 章会实际用到。</li>
+    <li><code>useOptimistic</code> 的完整例子以及表单校验，见第 41 章。</li>
   </ul>
 </div>
 

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 46 章 · 数据请求库选型 — React 19 入门教程</title>
+<meta name="description" content="TanStack Query、SWR、RTK Query、Apollo、tRPC">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="46">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 46 章 · 生态与选型</span>
+<h1>数据请求库选型</h1>
+<p class="lede">
+  第 40 章用 TanStack Query 重写了数据层。但你还会听到 SWR、RTK Query、Apollo、tRPC、axios、ky……
+  它们并不都是同一类东西。这一章把“数据请求”拆成几层，搞清楚每个库在哪一层，再比较同一层里的几个选择。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清 HTTP 客户端、服务端状态缓存、API 类型三个层次</li>
+    <li>比较 TanStack Query、SWR、RTK Query、Apollo Client</li>
+    <li>了解如何让前端拿到后端 API 的类型（OpenAPI 生成、tRPC、GraphQL codegen）</li>
+    <li>知道使用框架时，数据获取会发生什么变化</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="layers">数据请求的三层</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="数据请求的三个层次及各层的库">
+  <rect class="bx-g" x="20" y="20" width="720" height="76" rx="12"/>
+  <text class="ttl on-g" x="36" y="44">③ 缓存层：服务端状态管理</text>
+  <text class="sm" x="36" y="66">缓存、去重、后台刷新、分页、乐观更新、加载与错误状态</text>
+  <text class="mono sm on-g" x="36" y="86">TanStack Query · SWR · RTK Query · Apollo Client（GraphQL）· urql</text>
+
+  <rect class="bx-b" x="20" y="112" width="720" height="76" rx="12"/>
+  <text class="ttl on-b" x="36" y="136">② 类型层：API 的“合同”</text>
+  <text class="sm" x="36" y="158">请求参数、返回数据的结构和类型从哪来？</text>
+  <text class="mono sm on-b" x="36" y="178">手写 TS 类型 · OpenAPI 生成（openapi-typescript、Orval）· tRPC · GraphQL codegen</text>
+
+  <rect class="bx-a" x="20" y="204" width="720" height="76" rx="12"/>
+  <text class="ttl on-a" x="36" y="228">① 传输层：HTTP 客户端</text>
+  <text class="sm" x="36" y="250">真正把请求发出去：URL、方法、请求头、超时、拦截器</text>
+  <text class="mono sm on-a" x="36" y="270">fetch（内置）· axios · ky · ofetch</text>
+</svg>
+<figcaption>图 46-1　三层各管一件事，所以它们经常组合使用：比如 TanStack Query + axios</figcaption>
+</figure>
+
+<p>
+  所以“TanStack Query 还是 axios？”是个伪问题 —— 它们不在同一层。第 40 章的 <code>queryFn</code> 里用的就是 axios。
+  真正需要比较的，是<strong>同一层</strong>里的几个候选。
+</p>
+
+<h2 id="http">第一层：HTTP 客户端</h2>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>fetch</th><th>axios</th><th>ky</th></tr>
+  <tr><td>安装</td><td>内置</td><td>~13 KB</td><td>~4 KB（基于 fetch）</td></tr>
+  <tr><td>JSON</td><td>手动 <code>.json()</code></td><td>自动</td><td>链式 <code>.json()</code></td></tr>
+  <tr><td>HTTP 错误状态</td><td>不抛错</td><td>抛错</td><td>抛错</td></tr>
+  <tr><td>重试 / 超时</td><td>自己实现</td><td>超时有，重试需插件</td><td>内置</td></tr>
+  <tr><td>拦截器</td><td>无</td><td>有</td><td>hooks</td></tr>
+</table>
+</div>
+
+<p>
+  用了 TanStack Query 之后，重试、取消、错误状态它都会处理，HTTP 客户端的差别就不大了。
+  一个常见做法是用 <code>fetch</code> 自己封装一个十几行的小函数（统一加 baseURL、token、错误处理），既无依赖又够用：
+</p>
+
+<div class="code" data-lang="js"><div class="bar"><span class="tag">src/http.js</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">API_BASE</span> = <span class="tk-st">'https://hn.algolia.com/api/v1'</span>;
+
+<span class="tk-kw">const</span> http = <span class="tk-kw">async</span> (path, { params, ...options } = {}) =&gt; {
+  <span class="tk-kw">const</span> url = <span class="tk-kw">new</span> <span class="tk-tp">URL</span>(<span class="tk-tp">API_BASE</span> + path);
+  <span class="tk-tp">Object</span>.<span class="tk-fn">entries</span>(params ?? {}).<span class="tk-fn">forEach</span>(([key, value]) =&gt;
+    url.searchParams.<span class="tk-fn">set</span>(key, value)
+  );
+
+  <span class="tk-kw">const</span> response = <span class="tk-kw">await</span> <span class="tk-fn">fetch</span>(url, options);
+
+  <span class="tk-kw">if</span> (!response.ok) {
+    <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Error</span>(<span class="tk-st">`HTTP ${response.status}`</span>);
+  }
+
+  <span class="tk-kw">return</span> response.<span class="tk-fn">json</span>();
+};
+
+<span class="tk-cm">// 用法</span>
+<span class="tk-fn">http</span>(<span class="tk-st">'/search'</span>, { params: { query: <span class="tk-st">'react'</span>, page: <span class="tk-nm">0</span> }, signal });</pre></div>
+
+<h2 id="cache">第三层：服务端状态库</h2>
+
+<p>先看同一个“获取搜索结果”的功能，在几个库里分别怎么写：</p>
+
+<div class="vs">
+  <div class="old"><div class="h">TanStack Query</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">const</span> { data, isPending, error } = <span class="tk-fn">useQuery</span>({
+  queryKey: [<span class="tk-st">'stories'</span>, query],
+  queryFn: ({ signal }) =&gt;
+    <span class="tk-fn">http</span>(<span class="tk-st">'/search'</span>, { params: { query }, signal }),
+});</pre></div>
+  </div>
+  <div class="new"><div class="h">SWR</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> useSWR <span class="tk-kw">from</span> <span class="tk-st">'swr'</span>;
+
+<span class="tk-kw">const</span> { data, isLoading, error } = <span class="tk-fn">useSWR</span>(
+  [<span class="tk-st">'/search'</span>, query],               <span class="tk-cm">// key</span>
+  ([path, query]) =&gt;               <span class="tk-cm">// fetcher</span>
+    <span class="tk-fn">http</span>(path, { params: { query } })
+);</pre></div>
+  </div>
+</div>
+
+<div class="vs">
+  <div class="old"><div class="h">RTK Query（Redux Toolkit 自带）</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { createApi, fetchBaseQuery } <span class="tk-kw">from</span> <span class="tk-st">'@reduxjs/toolkit/query/react'</span>;
+
+<span class="tk-kw">const</span> hnApi = <span class="tk-fn">createApi</span>({
+  reducerPath: <span class="tk-st">'hnApi'</span>,
+  baseQuery: <span class="tk-fn">fetchBaseQuery</span>({
+    baseUrl: <span class="tk-st">'https://hn.algolia.com/api/v1'</span>,
+  }),
+  endpoints: (build) =&gt; ({
+    searchStories: build.<span class="tk-fn">query</span>({
+      query: (query) =&gt; <span class="tk-st">`/search?query=${query}`</span>,
+    }),
+  }),
+});
+
+<span class="tk-cm">// 自动生成的 Hook</span>
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> { useSearchStoriesQuery } = hnApi;
+
+<span class="tk-kw">const</span> { data, isLoading } = <span class="tk-fn">useSearchStoriesQuery</span>(query);</pre></div>
+  </div>
+  <div class="new"><div class="h">Apollo Client（GraphQL API）</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { gql, useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@apollo/client'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">SEARCH_STORIES</span> = gql<span class="tk-st">`
+  query SearchStories($query: String!) {
+    stories(query: $query) {
+      id
+      title
+      points
+    }
+  }
+`</span>;
+
+<span class="tk-kw">const</span> { data, loading, error } = <span class="tk-fn">useQuery</span>(
+  <span class="tk-tp">SEARCH_STORIES</span>,
+  { variables: { query } }
+);
+<span class="tk-cm">// （Hacker News 的这个 API 不是 GraphQL，仅作写法示意）</span></pre></div>
+  </div>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>TanStack Query</th><th>SWR</th><th>RTK Query</th><th>Apollo Client</th></tr>
+  <tr><td>作者</td><td>TanStack（社区）</td><td>Vercel</td><td>Redux 团队</td><td>Apollo</td></tr>
+  <tr><td>API 类型</td><td>任意（REST、GraphQL…）</td><td>任意</td><td>任意（偏 REST）</td><td>GraphQL</td></tr>
+  <tr><td>体积</td><td>中</td><td>小</td><td>随 RTK 一起</td><td>大</td></tr>
+  <tr><td>功能</td><td>最全：mutation、无限查询、乐观更新、预取、DevTools</td><td>精简，核心的缓存与刷新</td><td>与 Redux store 集成，接口集中定义</td><td>规范化缓存、订阅、GraphQL 专属特性</td></tr>
+  <tr><td>最适合</td><td>大多数项目的默认选择</td><td>需求简单、Next.js 项目</td><td>已经在用 Redux Toolkit</td><td>后端是 GraphQL</td></tr>
+</table>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 选择建议</div>
+  <ul style="margin:0">
+    <li>没有特殊情况：<strong>TanStack Query</strong>。它不绑定框架（还有 Vue、Solid、Svelte 版本），生态和文档最好。</li>
+    <li>已经用了 Redux Toolkit：用自带的 <strong>RTK Query</strong>，不必再引入一个库。</li>
+    <li>后端是 GraphQL：<strong>Apollo Client</strong> 或更轻量的 <strong>urql</strong>；也可以 TanStack Query + graphql-request。</li>
+    <li>只需要最基本的缓存和刷新：<strong>SWR</strong>。</li>
+  </ul>
+</div>
+
+<h2 id="types">第二层：让前端拿到 API 的类型</h2>
+
+<p>
+  第 29 章我们手写了 <code>Story</code> 类型。手写的类型只是“我认为 API 会返回这个”，后端一改，前端并不知道。
+  更可靠的做法是让类型<strong>从后端自动来</strong>：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="三种获取 API 类型的方式">
+  <rect class="bx-b" x="20" y="20" width="230" height="230" rx="12"/>
+  <text class="ttl on-b" x="135" y="46" text-anchor="middle">OpenAPI 生成</text>
+  <rect class="bx" x="40" y="62" width="190" height="36" rx="6"/>
+  <text class="sm" x="135" y="85" text-anchor="middle">后端提供 openapi.json</text>
+  <rect class="bx" x="40" y="118" width="190" height="36" rx="6"/>
+  <text class="sm" x="135" y="141" text-anchor="middle">openapi-typescript / Orval</text>
+  <rect class="bx-g" x="40" y="174" width="190" height="36" rx="6"/>
+  <text class="sm on-g" x="135" y="197" text-anchor="middle">生成 TS 类型 / 请求函数</text>
+  <path class="ln" d="M135 100 V114" marker-end="url(#ar)"/><path class="ln" d="M135 156 V170" marker-end="url(#ar)"/>
+  <text class="sm" x="135" y="236" text-anchor="middle">任何语言的 REST 后端</text>
+
+  <rect class="bx-p" x="265" y="20" width="230" height="230" rx="12"/>
+  <text class="ttl on-p" x="380" y="46" text-anchor="middle">tRPC</text>
+  <rect class="bx" x="285" y="62" width="190" height="36" rx="6"/>
+  <text class="sm" x="380" y="85" text-anchor="middle">TypeScript 后端定义路由</text>
+  <rect class="bx" x="285" y="118" width="190" height="36" rx="6"/>
+  <text class="sm" x="380" y="141" text-anchor="middle">前端直接导入“类型”</text>
+  <rect class="bx-g" x="285" y="174" width="190" height="36" rx="6"/>
+  <text class="sm on-g" x="380" y="197" text-anchor="middle">像调用函数一样调用 API</text>
+  <path class="ln" d="M380 100 V114" marker-end="url(#ar)"/><path class="ln" d="M380 156 V170" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="236" text-anchor="middle">前后端都是 TS 的全栈项目</text>
+
+  <rect class="bx-a" x="510" y="20" width="230" height="230" rx="12"/>
+  <text class="ttl on-a" x="625" y="46" text-anchor="middle">GraphQL codegen</text>
+  <rect class="bx" x="530" y="62" width="190" height="36" rx="6"/>
+  <text class="sm" x="625" y="85" text-anchor="middle">GraphQL schema + 查询语句</text>
+  <rect class="bx" x="530" y="118" width="190" height="36" rx="6"/>
+  <text class="sm" x="625" y="141" text-anchor="middle">graphql-codegen</text>
+  <rect class="bx-g" x="530" y="174" width="190" height="36" rx="6"/>
+  <text class="sm on-g" x="625" y="197" text-anchor="middle">每个查询的精确类型</text>
+  <path class="ln" d="M625 100 V114" marker-end="url(#ar)"/><path class="ln" d="M625 156 V170" marker-end="url(#ar)"/>
+  <text class="sm" x="625" y="236" text-anchor="middle">GraphQL 后端</text>
+</svg>
+<figcaption>图 46-2　让类型从后端流向前端：后端改了字段，前端编译时就会报错</figcaption>
+</figure>
+
+<p>tRPC 的体验最接近“调用本地函数”，并且和 TanStack Query 深度集成：</p>
+
+<div class="code" data-lang="ts"><div class="bar"><span class="tag">TypeScript</span></div><pre><span class="tk-cm">// 服务端（Node / Next.js）</span>
+<span class="tk-kw">const</span> appRouter = <span class="tk-fn">router</span>({
+  searchStories: publicProcedure
+    .<span class="tk-fn">input</span>(z.<span class="tk-fn">object</span>({ query: z.<span class="tk-fn">string</span>() }))
+    .<span class="tk-fn">query</span>(({ input }) =&gt; db.stories.<span class="tk-fn">search</span>(input.query)),
+});
+<span class="tk-kw">export</span> <span class="tk-kw">type</span> <span class="tk-tp">AppRouter</span> = <span class="tk-kw">typeof</span> appRouter;
+
+<span class="tk-cm">// 客户端：导入的只是类型，不会把后端代码打包进来</span>
+<span class="tk-kw">const</span> trpc = <span class="tk-fn">useTRPC</span>();
+<span class="tk-kw">const</span> { data } = <span class="tk-fn">useQuery</span>(trpc.searchStories.<span class="tk-fn">queryOptions</span>({ query }));
+<span class="tk-cm">//      ^? data 的类型自动推导，参数写错会直接报错</span></pre></div>
+
+<h2 id="framework">使用框架时的变化</h2>
+
+<p>如果项目使用框架，数据获取的“主战场”会部分转移到路由和服务器：</p>
+
+<div class="tw">
+<table>
+  <tr><th>环境</th><th>首选的数据获取方式</th><th>还需要 TanStack Query 吗</th></tr>
+  <tr><td>Vite SPA（本教程）</td><td>组件内 <code>useQuery</code></td><td>需要</td></tr>
+  <tr><td>React Router 数据模式 / 框架模式</td><td>路由 <code>loader</code>（第 36 章）</td><td>可选：需要缓存、无限滚动、轮询时配合使用</td></tr>
+  <tr><td>Next.js App Router</td><td>服务端组件里直接 <code>await</code>（第 51 章）</td><td>可选：客户端交互多的部分（无限滚动、实时刷新）再用</td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>数据请求分三层：HTTP 客户端（fetch / axios / ky）、类型（手写 / OpenAPI / tRPC / GraphQL codegen）、缓存（TanStack Query / SWR / RTK Query / Apollo）。</li>
+  <li>不同层的库经常组合使用，只有同一层的库才需要比较。</li>
+  <li>缓存层默认选 TanStack Query；已用 RTK 选 RTK Query；GraphQL 选 Apollo / urql；需求简单选 SWR。</li>
+  <li>尽量让 API 类型从后端自动生成，而不是手写。</li>
+  <li>使用框架时，首屏数据多由 loader 或服务端组件获取，客户端缓存库作为补充。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>fetch</code> 封装一个 <code>http()</code> 函数替换 axios，并在 TanStack Query 中使用。</li>
+    <li>新建一个分支，用 SWR 实现 Hacker Stories 的搜索，对比和 TanStack Query 的差别。</li>
+    <li>找一个提供 OpenAPI 描述的公开 API（很多 API 都有 <code>/openapi.json</code>），用 <code>openapi-typescript</code> 生成类型。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>axios 和 TanStack Query 是什么关系？</summary>
+    <div><p>不同层次：axios 是 HTTP 客户端，负责发送请求；TanStack Query 管理请求结果的缓存和状态，可以在 queryFn 里使用 axios 或 fetch。</p></div></details>
+  <details><summary>SWR 和 TanStack Query 怎么选？</summary>
+    <div><p>两者理念相同（stale-while-revalidate）。TanStack Query 功能更全（mutation、无限查询、DevTools 等）；SWR 更轻量，适合需求简单的场景。</p></div></details>
+  <details><summary>什么是 tRPC？</summary>
+    <div><p>一种在 TypeScript 全栈项目中实现端到端类型安全的方案：后端定义过程（procedure），前端通过导入类型直接获得参数和返回值类型，无需手写或生成 API 类型。</p></div></details>
+  <details><summary>如何保证前端的 API 类型与后端一致？</summary>
+    <div><p>从单一数据源生成类型：OpenAPI 规范生成、GraphQL schema codegen，或使用 tRPC 等共享类型的方案，避免手写类型与实际不符。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

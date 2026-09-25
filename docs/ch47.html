@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 47 章 · UI 组件库与样式选型 — React 19 入门教程</title>
+<meta name="description" content="shadcn/ui、Ant Design、MUI、Mantine 等">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="47">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 47 章 · 生态与选型</span>
+<h1>UI 组件库与样式选型</h1>
+<p class="lede">
+  按钮、输入框、下拉菜单、对话框、表格、日期选择器……每个项目都要用，自己从零写又费时又难做好（尤其是第 43 章讲的可访问性）。
+  UI 组件库就是为此而生的。但 React 的组件库也分好几种“流派”，选错了，要么改不动样式，要么要写太多代码。
+  这一章把它们分类讲清楚，并给出不同场景的推荐。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清三类组件库：完整设计系统、无样式组件（headless）、复制粘贴式（shadcn/ui）</li>
+    <li>认识 Ant Design、MUI、Mantine、shadcn/ui、Radix、React Aria 等主流选择</li>
+    <li>了解组件库与样式方案（第 26–27 章）如何搭配</li>
+    <li>根据项目类型做出选择，并避开常见的坑</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="kinds">三种流派</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="组件库的三种流派：从开箱即用到完全自定义">
+  <defs>
+    <linearGradient id="uispec" x1="0" x2="1">
+      <stop offset="0" stop-color="var(--blue)"/>
+      <stop offset="1" stop-color="var(--purple)"/>
+    </linearGradient>
+  </defs>
+  <rect x="40" y="40" width="680" height="10" rx="5" fill="url(#uispec)"/>
+  <text class="ttl on-b" x="40" y="28">开箱即用、风格统一</text>
+  <text class="ttl on-p" x="720" y="28" text-anchor="end">完全掌控外观</text>
+
+  <rect class="bx-b" x="20" y="70" width="230" height="200" rx="12"/>
+  <text class="ttl on-b" x="135" y="96" text-anchor="middle">① 完整设计系统</text>
+  <text class="sm" x="135" y="118" text-anchor="middle">组件 + 样式 + 主题全部提供</text>
+  <text class="mono sm" x="135" y="146" text-anchor="middle">Ant Design · MUI</text>
+  <text class="mono sm" x="135" y="164" text-anchor="middle">Mantine · Chakra UI</text>
+  <text class="sm on-g" x="135" y="198" text-anchor="middle">✓ 最快出活，组件最全</text>
+  <text class="sm on-r" x="135" y="218" text-anchor="middle">✗ 长得像“那个库”</text>
+  <text class="sm on-r" x="135" y="238" text-anchor="middle">✗ 深度定制样式较难</text>
+
+  <rect class="bx-a" x="265" y="70" width="230" height="200" rx="12"/>
+  <text class="ttl on-a" x="380" y="96" text-anchor="middle">② 复制粘贴式</text>
+  <text class="sm" x="380" y="118" text-anchor="middle">组件代码直接复制进你的项目</text>
+  <text class="mono sm" x="380" y="146" text-anchor="middle">shadcn/ui</text>
+  <text class="sm" x="380" y="164" text-anchor="middle">（底层：Radix + Tailwind）</text>
+  <text class="sm on-g" x="380" y="198" text-anchor="middle">✓ 代码归你，随意修改</text>
+  <text class="sm on-g" x="380" y="218" text-anchor="middle">✓ 默认样式就很好看</text>
+  <text class="sm on-r" x="380" y="238" text-anchor="middle">✗ 升级要自己合并改动</text>
+
+  <rect class="bx-p" x="510" y="70" width="230" height="200" rx="12"/>
+  <text class="ttl on-p" x="625" y="96" text-anchor="middle">③ 无样式组件（headless）</text>
+  <text class="sm" x="625" y="118" text-anchor="middle">只提供行为和可访问性，没有样式</text>
+  <text class="mono sm" x="625" y="146" text-anchor="middle">Radix UI · React Aria</text>
+  <text class="mono sm" x="625" y="164" text-anchor="middle">Headless UI · Base UI</text>
+  <text class="sm on-g" x="625" y="198" text-anchor="middle">✓ 设计完全自由</text>
+  <text class="sm on-g" x="625" y="218" text-anchor="middle">✓ 键盘、焦点、ARIA 都做好了</text>
+  <text class="sm on-r" x="625" y="238" text-anchor="middle">✗ 样式全要自己写</text>
+</svg>
+<figcaption>图 47-1　三种流派在“开发速度”和“外观自由度”之间取舍</figcaption>
+</figure>
+
+<h2 id="systems">完整设计系统</h2>
+
+<h3>Ant Design</h3>
+<p>
+  蚂蚁集团开源，国内中后台项目的事实标准。组件极其丰富（表格、表单、树、穿梭框、日期范围……），
+  中文文档完善，还有 Ant Design Pro / ProComponents 提供整套后台模板和“高级组件”。
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install antd</pre></div>
+
+<p>看看它的 <code>Table</code> —— 第 33 章手写的排序，在这里只是一个配置项：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Table</span>, <span class="tk-tp">Button</span> } <span class="tk-kw">from</span> <span class="tk-st">'antd'</span>;
+
+<span class="tk-kw">const</span> columns = [
+  {
+    title: <span class="tk-st">'Title'</span>,
+    dataIndex: <span class="tk-st">'title'</span>,
+    render: (title, story) =&gt; <span class="tk-tg">&lt;a</span> href={story.url}&gt;{title}<span class="tk-tg">&lt;/a</span>&gt;,
+    sorter: (a, b) =&gt; a.title.<span class="tk-fn">localeCompare</span>(b.title),
+  },
+  { title: <span class="tk-st">'Author'</span>, dataIndex: <span class="tk-st">'author'</span> },
+  { title: <span class="tk-st">'Comments'</span>, dataIndex: <span class="tk-st">'num_comments'</span>, sorter: (a, b) =&gt; a.num_comments - b.num_comments },
+  { title: <span class="tk-st">'Points'</span>, dataIndex: <span class="tk-st">'points'</span>, sorter: (a, b) =&gt; a.points - b.points },
+  {
+    title: <span class="tk-st">'Actions'</span>,
+    render: (_, story) =&gt; (
+      <span class="tk-tg">&lt;Button</span> size=<span class="tk-st">"small"</span> onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(story)}&gt;<span class="tk-tp">Dismiss</span><span class="tk-tg">&lt;/Button</span>&gt;
+    ),
+  },
+];
+
+<span class="tk-tg">&lt;Table</span>
+  rowKey=<span class="tk-st">"objectID"</span>
+  columns={columns}
+  dataSource={stories}
+  loading={isLoading}
+  pagination={{ pageSize: <span class="tk-nm">20</span> }}
+<span class="tk-tg">/&gt;</span></pre></div>
+
+<h3>MUI</h3>
+<p>
+  实现了 Google 的 Material Design，全球使用最广的 React 组件库之一，海外企业项目常见。
+  有免费的核心组件和付费的高级组件（MUI X：数据表格、日期选择器等）。
+</p>
+
+<h3>Mantine、Chakra UI</h3>
+<p>
+  API 友好、上手快，Mantine 自带大量 Hooks（表单、通知、快捷键等），适合快速搭建完整应用。
+  国内还有 Arco Design（字节）、TDesign（腾讯）、Semi Design（抖音）等，思路和 Ant Design 类似。
+</p>
+
+<h2 id="shadcn">shadcn/ui：复制粘贴式</h2>
+
+<p>
+  shadcn/ui 近两年最火，但它严格来说<strong>不是一个 npm 包</strong>：用命令行把组件的源代码复制到你的项目里，
+  之后这些代码就归你所有，想怎么改就怎么改。它的组件基于 Radix（行为和可访问性）+ Tailwind（样式）。
+</p>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npx</span> shadcn@latest init          <span class="tk-cm"># 初始化（需要项目已配置 Tailwind）</span>
+<span class="tk-kw">npx</span> shadcn@latest add button    <span class="tk-cm"># 把 Button 组件复制到 src/components/ui/button.jsx</span>
+<span class="tk-kw">npx</span> shadcn@latest add dialog table</pre></div>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Button</span> } <span class="tk-kw">from</span> <span class="tk-st">'@/components/ui/button'</span>;
+
+<span class="tk-tg">&lt;Button</span> variant=<span class="tk-st">"outline"</span> size=<span class="tk-st">"sm"</span> onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}&gt;
+  <span class="tk-tp">Dismiss</span>
+<span class="tk-tg">&lt;/Button</span>&gt;</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="npm 包式组件库与 shadcn/ui 复制粘贴式的区别">
+  <rect class="bx-b" x="20" y="20" width="340" height="180" rx="12"/>
+  <text class="ttl on-b" x="190" y="46" text-anchor="middle">传统组件库（npm 包）</text>
+  <rect class="bx" x="40" y="62" width="140" height="46" rx="6"/>
+  <text class="sm" x="110" y="90" text-anchor="middle">node_modules/antd</text>
+  <rect class="bx" x="200" y="62" width="140" height="46" rx="6"/>
+  <text class="sm" x="270" y="90" text-anchor="middle">你的代码</text>
+  <path class="ln" d="M198 85 H182" marker-end="url(#ar)"/>
+  <text class="sm" x="190" y="136" text-anchor="middle">import { Button } from 'antd'</text>
+  <text class="sm" x="190" y="158" text-anchor="middle">升级：改版本号即可</text>
+  <text class="sm" x="190" y="178" text-anchor="middle">定制：通过主题 / props，受库的限制</text>
+
+  <rect class="bx-a" x="400" y="20" width="340" height="180" rx="12"/>
+  <text class="ttl on-a" x="570" y="46" text-anchor="middle">shadcn/ui（复制源码）</text>
+  <rect class="bx" x="420" y="62" width="140" height="46" rx="6"/>
+  <text class="sm" x="490" y="80" text-anchor="middle">node_modules/</text>
+  <text class="sm" x="490" y="98" text-anchor="middle">@radix-ui（行为）</text>
+  <rect class="bx-a" x="580" y="62" width="140" height="46" rx="6"/>
+  <text class="sm on-a" x="650" y="80" text-anchor="middle">src/components/ui/</text>
+  <text class="sm" x="650" y="98" text-anchor="middle">button.jsx（你的）</text>
+  <path class="ln" d="M578 85 H562" marker-end="url(#ar)"/>
+  <text class="sm" x="570" y="136" text-anchor="middle">import { Button } from '@/components/ui/button'</text>
+  <text class="sm" x="570" y="158" text-anchor="middle">定制：直接改源码，没有任何限制</text>
+  <text class="sm" x="570" y="178" text-anchor="middle">升级：需要自己对比合并</text>
+</svg>
+<figcaption>图 47-2　shadcn/ui 把“组件库”变成了“组件代码的起点”</figcaption>
+</figure>
+
+<h2 id="headless">无样式组件：Radix、React Aria</h2>
+
+<p>
+  如果你有自己的设计稿、不想要任何默认样式，但又不想自己处理键盘交互和 ARIA，就用无样式组件库。
+  例如 Radix 的对话框：焦点管理、Esc 关闭、滚动锁定、ARIA 属性全都做好了，外观完全由你的 className 决定：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> * <span class="tk-kw">as</span> <span class="tk-tp">Dialog</span> <span class="tk-kw">from</span> <span class="tk-st">'@radix-ui/react-dialog'</span>;
+
+<span class="tk-tg">&lt;Dialog.Root</span>&gt;
+  <span class="tk-tg">&lt;Dialog.Trigger</span> className=<span class="tk-st">"button"</span>&gt;<span class="tk-tp">Delete</span> all favorites<span class="tk-tg">&lt;/Dialog.Trigger</span>&gt;
+  <span class="tk-tg">&lt;Dialog.Portal</span>&gt;
+    <span class="tk-tg">&lt;Dialog.Overlay</span> className=<span class="tk-st">"overlay"</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;Dialog.Content</span> className=<span class="tk-st">"dialog"</span>&gt;
+      <span class="tk-tg">&lt;Dialog.Title</span>&gt;<span class="tk-tp">Are</span> you sure?<span class="tk-tg">&lt;/Dialog.Title</span>&gt;
+      <span class="tk-tg">&lt;Dialog.Description</span>&gt;<span class="tk-tp">This</span> cannot be undone.<span class="tk-tg">&lt;/Dialog.Description</span>&gt;
+      <span class="tk-tg">&lt;Dialog.Close</span> className=<span class="tk-st">"button"</span>&gt;<span class="tk-tp">Cancel</span><span class="tk-tg">&lt;/Dialog.Close</span>&gt;
+      <span class="tk-tg">&lt;button</span> className=<span class="tk-st">"button danger"</span> onClick={clearFavorites}&gt;<span class="tk-tp">Delete</span><span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/Dialog.Content</span>&gt;
+  <span class="tk-tg">&lt;/Dialog.Portal</span>&gt;
+<span class="tk-tg">&lt;/Dialog.Root</span>&gt;</pre></div>
+
+<p>
+  <strong>React Aria</strong>（Adobe）是可访问性做得最严谨的方案，适合对无障碍有严格要求的产品；
+  <strong>Base UI</strong> 由 MUI 团队和 Radix 的原作者共同打造；<strong>Headless UI</strong> 来自 Tailwind 团队。
+</p>
+
+<h2 id="pairing">和样式方案怎么搭配</h2>
+
+<div class="tw">
+<table>
+  <tr><th>组件库</th><th>自身的样式方式</th><th>你的其他样式建议用</th></tr>
+  <tr><td>Ant Design</td><td>内置 CSS-in-JS，通过 <code>ConfigProvider</code> 的 theme token 定制</td><td>CSS Modules 或 Tailwind（注意与其样式优先级的配合）</td></tr>
+  <tr><td>MUI</td><td>默认基于 Emotion（CSS-in-JS），<code>sx</code> prop</td><td>跟随 MUI 的 <code>sx</code> / <code>styled</code></td></tr>
+  <tr><td>Mantine</td><td>CSS Modules + CSS 变量</td><td>CSS Modules</td></tr>
+  <tr><td>shadcn/ui</td><td>Tailwind</td><td>Tailwind（必需）</td></tr>
+  <tr><td>Radix / React Aria / Base UI</td><td>无</td><td>任意：Tailwind、CSS Modules 都行</td></tr>
+</table>
+</div>
+
+<h2 id="choose">按场景选择</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="按项目场景选择组件库">
+  <rect class="bx-b" x="20" y="20" width="350" height="76" rx="10"/>
+  <text class="ttl on-b" x="36" y="44">中后台 / 管理系统 / 数据密集</text>
+  <text class="sm" x="36" y="66">表格、表单、筛选特别多，风格统一即可</text>
+  <text class="mono sm on-b" x="36" y="86">→ Ant Design（+ ProComponents）</text>
+
+  <rect class="bx-a" x="390" y="20" width="350" height="76" rx="10"/>
+  <text class="ttl on-a" x="406" y="44">面向用户的产品 / 有设计稿 / 品牌感</text>
+  <text class="sm" x="406" y="66">外观要独特，代码要可控</text>
+  <text class="mono sm on-a" x="406" y="86">→ shadcn/ui 或 Radix + Tailwind</text>
+
+  <rect class="bx-g" x="20" y="112" width="350" height="76" rx="10"/>
+  <text class="ttl on-g" x="36" y="136">Material 风格 / 海外企业</text>
+  <text class="sm" x="36" y="158">需要成熟的数据表格、日期组件</text>
+  <text class="mono sm on-g" x="36" y="178">→ MUI（+ MUI X）</text>
+
+  <rect class="bx-p" x="390" y="112" width="350" height="76" rx="10"/>
+  <text class="ttl on-p" x="406" y="136">无障碍要求严格（政府、教育、金融）</text>
+  <text class="sm" x="406" y="158">需要严谨的键盘和读屏支持</text>
+  <text class="mono sm on-p" x="406" y="178">→ React Aria（或 React Spectrum）</text>
+
+  <rect class="bx" x="20" y="204" width="350" height="76" rx="10"/>
+  <text class="ttl" x="36" y="228">个人项目 / 快速原型 / 黑客松</text>
+  <text class="sm" x="36" y="250">越快越好，组件要全</text>
+  <text class="mono sm" x="36" y="270">→ Mantine 或 shadcn/ui</text>
+
+  <rect class="bx" x="390" y="204" width="350" height="76" rx="10"/>
+  <text class="ttl" x="406" y="228">学习阶段</text>
+  <text class="sm" x="406" y="250">先用原生 HTML + CSS 自己写几个组件</text>
+  <text class="sm" x="406" y="270">再用库，才知道它帮你做了什么（第 53 章）</text>
+</svg>
+<figcaption>图 47-3　没有“最好的组件库”，只有“适合这个项目的”</figcaption>
+</figure>
+
+<h3>图标</h3>
+<ul>
+  <li><strong>lucide-react</strong>：简洁统一的线性图标，shadcn/ui 默认使用。</li>
+  <li><strong>react-icons</strong>：把多个图标集（Font Awesome、Material、Heroicons…）打包在一起，按需导入。</li>
+  <li>使用 Ant Design、MUI 时，优先用它们自带的图标包，风格一致。</li>
+</ul>
+
+<div class="box warn">
+  <div class="t">&#9888; 常见的坑</div>
+  <ul style="margin:0">
+    <li><strong>混用多个组件库</strong>：两套设计语言、两套主题、双倍体积。一个项目选定一个。</li>
+    <li><strong>和组件库对着干</strong>：用大量 <code>!important</code> 覆盖 Ant Design 的样式，说明它不适合这个设计 —— 考虑换成 headless 方案。</li>
+    <li><strong>没有按需加载</strong>：确认打包后只包含用到的组件（现代组件库大多默认支持 tree-shaking）。</li>
+    <li><strong>以为用了组件库就不用管可访问性</strong>：组件本身做好了，但 label、alt、焦点顺序仍然要你负责。</li>
+  </ul>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>组件库三种流派：完整设计系统（Ant Design、MUI、Mantine）、复制粘贴式（shadcn/ui）、无样式组件（Radix、React Aria、Base UI）。</li>
+  <li>越偏向完整设计系统，开发越快、外观越受限；越偏向 headless，外观越自由、工作量越大。</li>
+  <li>选择要考虑与样式方案的搭配：shadcn/ui 需要 Tailwind，MUI 自带 CSS-in-JS。</li>
+  <li>中后台优先 Ant Design；有设计稿的 C 端产品优先 shadcn/ui 或 Radix + Tailwind。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>新建分支，用 Ant Design 的 <code>Table</code> 重写 Hacker Stories 的列表，体验内置的排序和分页。</li>
+    <li>另一个分支，配置 Tailwind 并用 shadcn/ui 的 <code>Button</code>、<code>Input</code>、<code>Table</code> 重写界面，然后修改 <code>button.jsx</code> 的源码改变按钮样式。</li>
+    <li>用 Radix 的 <code>Dialog</code> 做一个“清空收藏”的确认框，用键盘测试焦点和 Esc。</li>
+    <li>用 bundlephobia 或构建产物对比两个分支的 JS 体积。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是 headless 组件库？有什么优势？</summary>
+    <div><p>只提供组件的行为、状态和可访问性（键盘交互、焦点管理、ARIA），不提供样式的库。优势是外观完全可定制，同时不必自己实现复杂的交互和无障碍细节。</p></div></details>
+  <details><summary>shadcn/ui 和传统组件库有什么不同？</summary>
+    <div><p>它不是作为依赖安装，而是把组件源码复制到项目中，开发者完全拥有和修改这些代码；底层依赖 Radix 等无样式组件和 Tailwind。</p></div></details>
+  <details><summary>中后台项目为什么常用 Ant Design？</summary>
+    <div><p>组件覆盖面广（复杂表格、表单、树形控件等），交互规范统一，中文文档和生态完善，有 Pro 系列模板，开发效率高。</p></div></details>
+  <details><summary>一个项目中可以混用多个 UI 组件库吗？</summary>
+    <div><p>技术上可以，但通常不推荐：设计风格不一致、主题和样式可能冲突、包体积增大、维护成本上升。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

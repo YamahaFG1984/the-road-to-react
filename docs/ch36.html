@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>第 36 章 · 构建与部署 — React 19 入门教程</title>
-<meta name="description" content="npm run build、Firebase 与 GitHub Pages">
+<title>第 36 章 · 路由：React Router — React 19 入门教程</title>
+<meta name="description" content="多页面、URL 参数、搜索参数与文章详情页">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
 <script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <link rel="stylesheet" href="assets/style.css">
@@ -13,308 +13,499 @@
 <div id="app">
 <aside id="sidebar"></aside>
 <main>
-<span class="chapter-eyebrow">第 36 章 · 上线</span>
-<h1>构建与部署</h1>
+<span class="chapter-eyebrow">第 36 章 · 进阶专题</span>
+<h1>路由：React Router</h1>
 <p class="lede">
-  到目前为止，应用只运行在你电脑上的开发服务器里，别人看不到。这一章把它<strong>构建</strong>成可以发布的静态文件，
-  然后<strong>部署</strong>到互联网上。原书用的是 Firebase Hosting；鉴于很多读者（包括本教程本身）使用 GitHub，这里同时介绍如何部署到 <strong>GitHub Pages</strong>。
+  到目前为止，Hacker Stories 只有一个页面。真实应用几乎都有多个“页面”：列表页、详情页、设置页……
+  而单页应用只有一个 <code>index.html</code>。<strong>客户端路由</strong>负责把浏览器地址栏里的 URL 映射到不同的组件，
+  并且切换时不刷新页面。这一章用 React 生态里最主流的路由库 <strong>React Router</strong>，给 Hacker Stories 加上文章详情页。
 </p>
 
 <div class="goals">
   <h4>本章目标</h4>
   <ul>
-    <li>理解开发环境和生产环境的区别，用 <code>npm run build</code> 生成 <code>dist/</code></li>
-    <li>用 <code>npm run preview</code> 在本地验证构建结果</li>
-    <li>部署到 Firebase Hosting</li>
-    <li>用 GitHub Actions 自动部署到 GitHub Pages</li>
+    <li>理解客户端路由的原理：URL 变了，页面不刷新，渲染的组件换了</li>
+    <li>用 <code>createBrowserRouter</code> 配置路由、嵌套路由和布局</li>
+    <li>用 <code>Link</code> 导航，用 <code>useParams</code> 读取 URL 参数，用 <code>loader</code> 加载页面数据</li>
+    <li>把搜索词放进 URL（<code>useSearchParams</code>），让搜索结果可以分享</li>
+    <li>解决部署到 GitHub Pages 子路径时的 404 问题</li>
   </ul>
 </div>
 
 <div id="chapter-toc"></div>
 
-<h2 id="build">构建</h2>
+<h2 id="why">客户端路由是怎么回事</h2>
 
 <p>
-  开发时，Vite 的开发服务器按需编译每个文件，方便调试、支持热更新，但文件多、体积大、没有优化。
-  上线前要做一次<strong>构建</strong>（build）：把所有代码打包（bundling）、去掉开发用的代码、压缩（minification），
-  生成尽可能少、尽可能小的几个文件。
+  第 1 章说过，传统网站每个 URL 对应服务器上的一个页面，点链接就整页刷新。单页应用只有一个 HTML，
+  但我们仍然希望：地址栏能反映当前在看什么、能收藏和分享链接、浏览器的前进后退按钮能用。客户端路由就是做这件事的：
 </p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> run build</pre></div>
-
-<div class="code console" data-lang="console"><div class="bar"><span class="tag">控制台输出</span></div><pre>vite vX.Y.Z building for production...
-✓ 95 modules transformed.
-dist/index.html                   0.46 kB │ gzip:  0.30 kB
-dist/assets/index-DiwrgTda.css    1.39 kB │ gzip:  0.72 kB
-dist/assets/index-C9Xk3pLq.js   234.51 kB │ gzip: 75.61 kB
-✓ built in 1.02s</pre></div>
 
 <figure>
-<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="构建过程：源文件经过打包、压缩变成 dist 目录">
-  <rect class="bx" x="20" y="30" width="180" height="200" rx="12"/>
-  <text class="ttl" x="110" y="56" text-anchor="middle">src/ + node_modules/</text>
-  <text class="mono sm" x="40" y="86">App.jsx</text>
-  <text class="mono sm" x="40" y="106">main.jsx</text>
-  <text class="mono sm" x="40" y="126">App.css / index.css</text>
-  <text class="mono sm" x="40" y="146">check.svg</text>
-  <text class="mono sm" x="40" y="166">react, react-dom</text>
-  <text class="mono sm" x="40" y="186">axios, lodash …</text>
-  <text class="sm" x="110" y="214" text-anchor="middle">几十到上千个文件</text>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="客户端路由根据 URL 选择渲染的组件">
+  <rect class="bx-b" x="20" y="30" width="230" height="200" rx="12"/>
+  <text class="ttl on-b" x="135" y="56" text-anchor="middle">浏览器地址栏</text>
+  <rect class="bx" x="36" y="74" width="198" height="30" rx="6"/>
+  <text class="mono sm" x="46" y="94">/</text>
+  <rect class="bx" x="36" y="114" width="198" height="30" rx="6"/>
+  <text class="mono sm" x="46" y="134">/story/42</text>
+  <rect class="bx" x="36" y="154" width="198" height="30" rx="6"/>
+  <text class="mono sm" x="46" y="174">/whatever</text>
+  <text class="sm" x="135" y="212" text-anchor="middle">点 &lt;Link&gt; 或按后退：URL 变化</text>
 
-  <rect class="bx-a" x="270" y="60" width="220" height="140" rx="14"/>
-  <text class="ttl on-a" x="380" y="88" text-anchor="middle">vite build</text>
-  <text class="sm" x="380" y="114" text-anchor="middle">① JSX → JS</text>
-  <text class="sm" x="380" y="134" text-anchor="middle">② 打包：合并模块</text>
-  <text class="sm" x="380" y="154" text-anchor="middle">③ tree-shaking：去掉没用到的代码</text>
-  <text class="sm" x="380" y="174" text-anchor="middle">④ 压缩 + 文件名加哈希</text>
+  <rect class="bx-a" x="290" y="80" width="180" height="100" rx="14"/>
+  <text class="ttl on-a" x="380" y="108" text-anchor="middle">React Router</text>
+  <text class="sm" x="380" y="130" text-anchor="middle">用 History API 改 URL</text>
+  <text class="sm" x="380" y="148" text-anchor="middle">不向服务器请求页面</text>
+  <text class="sm" x="380" y="166" text-anchor="middle">匹配路由表</text>
 
-  <rect class="bx-g" x="560" y="30" width="180" height="200" rx="12"/>
-  <text class="ttl on-g" x="650" y="56" text-anchor="middle">dist/</text>
-  <text class="mono sm" x="576" y="90">index.html</text>
-  <text class="mono sm" x="576" y="114">assets/</text>
-  <text class="mono sm" x="592" y="134">index-C9Xk.js</text>
-  <text class="mono sm" x="592" y="154">index-Diwr.css</text>
-  <text class="sm" x="650" y="196" text-anchor="middle">几个静态文件</text>
-  <text class="sm" x="650" y="214" text-anchor="middle">放到任何静态服务器都能跑</text>
+  <rect class="bx-g" x="510" y="64" width="230" height="44" rx="8"/>
+  <text class="mono sm on-g" x="625" y="91" text-anchor="middle">&lt;StoriesPage /&gt;（列表）</text>
+  <rect class="bx-g" x="510" y="118" width="230" height="44" rx="8"/>
+  <text class="mono sm on-g" x="625" y="145" text-anchor="middle">&lt;StoryPage /&gt;（详情）</text>
+  <rect class="bx-r" x="510" y="172" width="230" height="44" rx="8"/>
+  <text class="mono sm on-r" x="625" y="199" text-anchor="middle">&lt;NotFound /&gt;（404）</text>
 
-  <path class="ln" d="M202 130 H266" marker-end="url(#ar)"/>
-  <path class="ln-g" d="M492 130 H556" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M252 130 H286" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M472 110 L506 88" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M472 130 H506" marker-end="url(#ar-g)"/>
+  <path class="ln-r" d="M472 150 L506 190" marker-end="url(#ar-r)"/>
+  <text class="sm" x="380" y="256" text-anchor="middle">同一个 index.html、同一份 JS，只是根据 URL 渲染了不同的组件</text>
 </svg>
-<figcaption>图 36-1　构建：把开发时的源代码变成适合上线的静态文件</figcaption>
+<figcaption>图 36-1　客户端路由：URL → 路由表 → 组件</figcaption>
 </figure>
 
-<p>
-  文件名里的哈希（<code>C9Xk3pLq</code>）根据内容生成，内容一变名字就变。这样服务器可以让浏览器长期缓存这些文件，
-  发布新版本时浏览器又会自动下载新文件。
-</p>
+<h2 id="install">安装与三种用法</h2>
 
-<p>部署之前，先在本地预览构建结果：</p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> run preview</pre></div>
-
-<p>它会启动一个本地静态服务器（通常是 <code>http://localhost:4173</code>）来提供 <code>dist/</code> 里的文件。看起来应该和 <code>npm run dev</code> 时一模一样。</p>
-
-<div class="box key">
-  <div class="t">&#9733; 纯客户端 React 应用 = 静态文件</div>
-  <p>
-    <code>dist/</code> 里只有 HTML、JS、CSS 和图片，不需要 Node.js 服务器来运行。所以它可以部署到任何静态托管服务：
-    GitHub Pages、Firebase Hosting、Netlify、Vercel、Cloudflare Pages，甚至任何 Nginx 服务器。
-    （使用了服务端组件等特性的 Next.js 应用则需要支持服务端运行的平台。）
-  </p>
-</div>
-
-<h2 id="firebase">部署到 Firebase Hosting</h2>
-
-<p>先全局安装 Firebase 命令行工具（以后更新也用同一条命令）：</p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install -g firebase-tools</pre></div>
-
-<p>在 <a href="https://console.firebase.google.com">Firebase 控制台</a> 注册并创建一个项目，然后在命令行登录：</p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">firebase</span> login</pre></div>
-
-<p>在项目目录里初始化 Hosting：</p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">firebase</span> init</pre></div>
-
-<p>按提示选择：</p>
-
-<div class="code" data-lang="text"><div class="bar"><span class="tag">输出</span></div><pre>? Which Firebase features do you want to set up for this directory?
-  ◉ Hosting: Configure files for Firebase Hosting ...
-
-? Please select an option:
-  ❯ Use an existing project        （或 Create a new project）
-
-? What do you want to use as your public directory? dist
-? Configure as a single-page app (rewrite all urls to /index.html)? Yes
-? Set up automatic builds and deploys with GitHub? No</pre></div>
-
-<ul>
-  <li><strong>public 目录填 <code>dist</code></strong>：这是 Vite 的构建输出目录（Firebase 默认是 <code>public</code>，千万别选错）。</li>
-  <li><strong>单页应用选 Yes</strong>：所有路径都返回 <code>index.html</code>，以后加了客户端路由也能正常工作。</li>
-</ul>
-
-<p>然后构建并部署：</p>
-
-<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> run build
-<span class="tk-kw">firebase</span> deploy</pre></div>
-
-<div class="code console" data-lang="console"><div class="bar"><span class="tag">控制台输出</span></div><pre>✔  Deploy complete!
-
-Project Console: https://console.firebase.google.com/project/my-react-project-abc123/overview
-Hosting URL: https://my-react-project-abc123.web.app</pre></div>
-
-<div class="box warn">
-  <div class="t">&#9888; 打开是空白页？</div>
-  <p>
-    检查 <code>firebase.json</code> 里的 <code>"public"</code> 是不是 <code>"dist"</code>；确认部署前执行过 <code>npm run build</code>；
-    再打开浏览器控制台看看是不是有 404 的资源文件。
-  </p>
-</div>
-
-<h2 id="github-pages">部署到 GitHub Pages</h2>
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install react-router</pre></div>
 
 <p>
-  GitHub Pages 免费托管静态网站，地址是 <code>https://用户名.github.io/仓库名/</code>。注意这个地址带有<strong>子路径</strong> <code>/仓库名/</code>，
-  这是部署时最容易踩的坑。
+  React Router v7 起，包名统一成了 <code>react-router</code>（以前叫 <code>react-router-dom</code>，现在它只是一个转发包）。
+  v7 还合并了 Remix 框架，提供三种用法，从简单到完整：
 </p>
-
-<h3>第一步：配置 base 路径</h3>
-
-<p>
-  Vite 默认假设网站部署在域名根目录，生成的资源路径是 <code>/assets/index.js</code>。部署在子路径下时，
-  浏览器会去 <code>https://用户名.github.io/assets/index.js</code> 找文件 —— 找不到，于是白屏。在配置里告诉 Vite 真实的基础路径：
-</p>
-
-<div class="code" data-lang="js"><div class="bar"><span class="tag">vite.config.js</span></div><pre><span class="tk-kw">import</span> { defineConfig } <span class="tk-kw">from</span> <span class="tk-st">'vite'</span>;
-<span class="tk-kw">import</span> react <span class="tk-kw">from</span> <span class="tk-st">'@vitejs/plugin-react'</span>;
-
-<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-fn">defineConfig</span>({
-  plugins: [<span class="tk-fn">react</span>()],
-  base: <span class="tk-st">'/hacker-stories/'</span>, <span class="tk-cm">// ← 改成你的仓库名，前后都要有斜杠</span>
-});</pre></div>
-
-<figure>
-<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="base 配置对资源路径的影响">
-  <rect class="bx-r" x="20" y="20" width="350" height="160" rx="12"/>
-  <text class="ttl on-r" x="195" y="46" text-anchor="middle">没配 base</text>
-  <text class="mono sm" x="36" y="78">&lt;script src="/assets/index.js"&gt;</text>
-  <text class="sm" x="36" y="110">浏览器请求：</text>
-  <text class="mono sm on-r" x="36" y="132">user.github.io/assets/index.js</text>
-  <text class="sm on-r" x="36" y="160">404 → 白屏 ✗</text>
-
-  <rect class="bx-g" x="390" y="20" width="350" height="160" rx="12"/>
-  <text class="ttl on-g" x="565" y="46" text-anchor="middle">base: '/hacker-stories/'</text>
-  <text class="mono sm" x="406" y="78">&lt;script src="/hacker-stories/assets/…"&gt;</text>
-  <text class="sm" x="406" y="110">浏览器请求：</text>
-  <text class="mono sm on-g" x="406" y="132">user.github.io/hacker-stories/assets/…</text>
-  <text class="sm on-g" x="406" y="160">200 → 正常 ✓</text>
-</svg>
-<figcaption>图 36-2　部署在子路径时，必须用 base 告诉 Vite 资源的真实位置</figcaption>
-</figure>
-
-<h3>第二步：用 GitHub Actions 自动构建和部署</h3>
-
-<p>在项目里新建 <code>.github/workflows/deploy.yml</code>：</p>
-
-<div class="code" data-lang="text"><div class="bar"><span class="tag">.github/workflows/deploy.yml</span></div><pre>name: Deploy to GitHub Pages
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4</pre></div>
-
-<h3>第三步：在仓库设置里启用 Pages</h3>
-
-<ol class="steps">
-  <li>把代码推送到 GitHub 仓库的 <code>main</code> 分支。</li>
-  <li>打开仓库的 <strong>Settings → Pages</strong>，把 <strong>Source</strong> 设为 <strong>GitHub Actions</strong>。</li>
-  <li>在 <strong>Actions</strong> 标签页查看运行进度。完成后，访问 <code>https://用户名.github.io/hacker-stories/</code>。</li>
-  <li>以后每次 <code>git push</code> 到 main，都会自动重新构建和部署。</li>
-</ol>
-
-<figure>
-<svg class="dgm" viewBox="0 0 760 180" role="img" aria-label="推送代码后 GitHub Actions 自动构建并部署">
-  <rect class="bx" x="20" y="60" width="130" height="60" rx="10"/>
-  <text class="ttl" x="85" y="86" text-anchor="middle">git push</text>
-  <text class="sm" x="85" y="106" text-anchor="middle">推送到 main</text>
-  <rect class="bx-b" x="200" y="50" width="340" height="80" rx="12"/>
-  <text class="ttl on-b" x="370" y="74" text-anchor="middle">GitHub Actions</text>
-  <text class="mono sm" x="370" y="98" text-anchor="middle">npm ci → npm run build</text>
-  <text class="mono sm" x="370" y="118" text-anchor="middle">→ 上传 dist/ → deploy-pages</text>
-  <rect class="bx-g" x="590" y="60" width="150" height="60" rx="10"/>
-  <text class="ttl on-g" x="665" y="86" text-anchor="middle">GitHub Pages</text>
-  <text class="sm" x="665" y="106" text-anchor="middle">全世界都能访问 &#127881;</text>
-  <path class="ln" d="M152 90 H196" marker-end="url(#ar)"/>
-  <path class="ln-g" d="M542 90 H586" marker-end="url(#ar-g)"/>
-  <text class="sm" x="380" y="166" text-anchor="middle">持续部署：代码一合并，线上就自动更新</text>
-</svg>
-<figcaption>图 36-3　用 GitHub Actions 实现持续部署</figcaption>
-</figure>
-
-<div class="box note">
-  <div class="t">&#9432; 以后加了客户端路由怎么办？</div>
-  <p>
-    GitHub Pages 不支持“所有路径都回退到 index.html”的配置。如果用户直接访问 <code>/hacker-stories/about</code>，会得到 404。
-    常见的解决办法是在构建后把 <code>index.html</code> 复制一份为 <code>404.html</code>，或者使用 hash 路由。
-    Firebase、Netlify、Vercel 等平台可以直接配置重写规则。
-  </p>
-</div>
-
-<h2 id="others">其他选择</h2>
 
 <div class="tw">
 <table>
-  <tr><th>平台</th><th>特点</th></tr>
-  <tr><td>GitHub Pages</td><td>免费，与 GitHub 仓库结合紧密，适合个人项目、文档站</td></tr>
-  <tr><td>Firebase Hosting</td><td>Google 提供，CDN 快，易于和 Firebase 数据库、认证集成</td></tr>
-  <tr><td>Netlify / Vercel / Cloudflare Pages</td><td>连接 Git 仓库即可自动部署，每个 PR 生成预览地址；Vercel 对 Next.js 支持最好</td></tr>
-  <tr><td>自己的服务器（DigitalOcean、Hetzner 等）</td><td>控制力最强，工作量最大；可搭配 Coolify 之类的工具简化运维</td></tr>
+  <tr><th>模式</th><th>写法</th><th>特点</th></tr>
+  <tr><td>声明式（Declarative）</td><td><code>&lt;BrowserRouter&gt;</code> + <code>&lt;Routes&gt;</code> + <code>&lt;Route&gt;</code></td><td>最简单，只负责 URL ↔ 组件</td></tr>
+  <tr><td>数据式（Data）<span class="ver">本章</span></td><td><code>createBrowserRouter</code> + <code>&lt;RouterProvider&gt;</code></td><td>在此基础上增加 <code>loader</code>（加载数据）、<code>action</code>（提交）、<code>errorElement</code>（错误处理）</td></tr>
+  <tr><td>框架式（Framework）</td><td>Vite 插件 + 文件路由</td><td>就是以前的 Remix：服务端渲染、代码分割、类型生成（第 49 章）</td></tr>
 </table>
 </div>
 
+<h2 id="setup">配置路由</h2>
+
+<p>
+  先把现在的 <code>App</code> 改名为 <code>StoriesPage</code>（它就是列表页），再新建一个布局组件和详情页。
+  路由在入口文件里配置：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/main.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StrictMode</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+<span class="tk-kw">import</span> { createBrowserRouter, <span class="tk-tp">RouterProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">import</span> <span class="tk-st">'./index.css'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">Layout</span> } <span class="tk-kw">from</span> <span class="tk-st">'./Layout'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">StoriesPage</span> } <span class="tk-kw">from</span> <span class="tk-st">'./StoriesPage'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">StoryPage</span>, storyLoader } <span class="tk-kw">from</span> <span class="tk-st">'./StoryPage'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">NotFound</span> } <span class="tk-kw">from</span> <span class="tk-st">'./NotFound'</span>;
+
+<span class="tk-kw">const</span> router = <span class="tk-fn">createBrowserRouter</span>(
+  [
+    {
+      path: <span class="tk-st">'/'</span>,
+      element: <span class="tk-tg">&lt;Layout</span> <span class="tk-tg">/&gt;</span>,
+      children: [
+        { index: <span class="tk-kw">true</span>, element: <span class="tk-tg">&lt;StoriesPage</span> <span class="tk-tg">/&gt;</span> },
+        {
+          path: <span class="tk-st">'story/:storyId'</span>,
+          element: <span class="tk-tg">&lt;StoryPage</span> <span class="tk-tg">/&gt;</span>,
+          loader: storyLoader,
+        },
+        { path: <span class="tk-st">'*'</span>, element: <span class="tk-tg">&lt;NotFound</span> <span class="tk-tg">/&gt;</span> },
+      ],
+    },
+  ],
+  { basename: <span class="tk-kw">import</span>.meta.env.<span class="tk-tp">BASE_URL</span> }
+);
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;RouterProvider</span> router={router} <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<ul>
+  <li><code>path: '/'</code> + <code>children</code>：<strong>嵌套路由</strong>。所有子页面共享 <code>Layout</code>。</li>
+  <li><code>index: true</code>：父路径本身（<code>/</code>）显示什么。</li>
+  <li><code>:storyId</code>：<strong>动态参数</strong>，匹配 <code>/story/42</code>、<code>/story/abc</code> 等，值可以在组件里读取。</li>
+  <li><code>path: '*'</code>：兜底，所有没匹配上的地址都显示 404 页。</li>
+  <li><code>basename</code>：应用部署在子路径时的前缀。<code>import.meta.env.BASE_URL</code> 就是 <code>vite.config.js</code> 里的 <code>base</code>（第 52 章）。</li>
+</ul>
+
+<h3>布局与 Outlet</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/Layout.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">NavLink</span>, <span class="tk-tp">Outlet</span> } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Layout</span> = () =&gt; (
+  <span class="tk-tg">&lt;div</span> className=<span class="tk-st">"container"</span>&gt;
+    <span class="tk-tg">&lt;header</span>&gt;
+      <span class="tk-tg">&lt;nav</span>&gt;
+        <span class="tk-tg">&lt;NavLink</span> to=<span class="tk-st">"/"</span> end&gt;
+          <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span>
+        <span class="tk-tg">&lt;/NavLink</span>&gt;
+      <span class="tk-tg">&lt;/nav</span>&gt;
+    <span class="tk-tg">&lt;/header</span>&gt;
+
+    <span class="tk-tg">&lt;main</span>&gt;
+      <span class="tk-cm">{/* 子路由匹配到的组件渲染在这里 */}</span>
+      <span class="tk-tg">&lt;Outlet</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/main</span>&gt;
+  <span class="tk-tg">&lt;/div</span>&gt;
+);
+
+<span class="tk-kw">export</span> { <span class="tk-tp">Layout</span> };</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="嵌套路由：Layout 通过 Outlet 渲染子路由">
+  <rect class="bx-a" x="20" y="20" width="330" height="210" rx="12"/>
+  <text class="ttl on-a" x="36" y="44">Layout（path: '/'）</text>
+  <rect class="bx" x="36" y="56" width="298" height="30" rx="6"/>
+  <text class="sm" x="46" y="76">&lt;nav&gt; Hacker Stories —— 所有页面共享</text>
+  <rect class="bx-g" x="36" y="98" width="298" height="118" rx="8" stroke-dasharray="6 4"/>
+  <text class="mono sm on-g" x="185" y="150" text-anchor="middle">&lt;Outlet /&gt;</text>
+  <text class="sm" x="185" y="172" text-anchor="middle">这里换成子路由的组件</text>
+
+  <rect class="bx-g" x="440" y="30" width="300" height="50" rx="10"/>
+  <text class="mono sm on-g" x="590" y="52" text-anchor="middle">/ → index</text>
+  <text class="mono sm" x="590" y="70" text-anchor="middle">&lt;StoriesPage /&gt;</text>
+  <rect class="bx-g" x="440" y="100" width="300" height="50" rx="10"/>
+  <text class="mono sm on-g" x="590" y="122" text-anchor="middle">/story/:storyId</text>
+  <text class="mono sm" x="590" y="140" text-anchor="middle">&lt;StoryPage /&gt;</text>
+  <rect class="bx-r" x="440" y="170" width="300" height="50" rx="10"/>
+  <text class="mono sm on-r" x="590" y="192" text-anchor="middle">*</text>
+  <text class="mono sm" x="590" y="210" text-anchor="middle">&lt;NotFound /&gt;</text>
+  <path class="ln-g" d="M438 55 C390 55 380 140 338 150" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M438 125 C400 125 380 150 338 155"/>
+  <path class="ln-g" d="M438 195 C400 195 380 162 338 160"/>
+</svg>
+<figcaption>图 36-2　嵌套路由：父路由提供外壳，<code>&lt;Outlet /&gt;</code> 是子路由内容的插槽（和第 16 章的 children 很像）</figcaption>
+</figure>
+
+<h2 id="link">用 Link 导航</h2>
+
+<p>在列表的每一项加一个“详情”链接：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/StoriesPage.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Link</span> } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; (
+  <span class="tk-tg">&lt;li</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;
+      <span class="tk-tg">&lt;a</span> href={item.url}&gt;{item.title}<span class="tk-tg">&lt;/a</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.author}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.num_comments}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;{item.points}<span class="tk-tg">&lt;/span</span>&gt;
+    <span class="tk-tg">&lt;span</span>&gt;
+      <span class="tk-tg">&lt;Link</span> to={<span class="tk-st">`/story/${item.objectID}`</span>}&gt;<span class="tk-tp">Details</span><span class="tk-tg">&lt;/Link</span>&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">onRemoveItem</span>(item)}&gt;
+        <span class="tk-tp">Dismiss</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/span</span>&gt;
+  <span class="tk-tg">&lt;/li</span>&gt;
+);</pre></div>
+
+<div class="vs">
+  <div class="old"><div class="h">&lt;a href&gt;：整页刷新</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;a</span> href=<span class="tk-st">"/story/42"</span>&gt;<span class="tk-tp">Details</span><span class="tk-tg">&lt;/a</span>&gt;
+<span class="tk-cm">// 浏览器向服务器请求 /story/42</span>
+<span class="tk-cm">// 所有 JS 重新下载、所有状态丢失</span></pre></div>
+  </div>
+  <div class="new"><div class="h">&lt;Link to&gt;：客户端导航</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;Link</span> to=<span class="tk-st">"/story/42"</span>&gt;<span class="tk-tp">Details</span><span class="tk-tg">&lt;/Link</span>&gt;
+<span class="tk-cm">// 渲染成 &lt;a&gt;，但点击时被拦截</span>
+<span class="tk-cm">// 只改 URL、切换组件，状态保留</span></pre></div>
+  </div>
+</div>
+
+<p>
+  站内跳转用 <code>Link</code>，指向外部网站用普通 <code>&lt;a&gt;</code>（比如文章标题链接到原文）。
+  <code>NavLink</code> 是会自动给“当前页面”加上 <code>active</code> 类名的 <code>Link</code>，适合导航菜单；
+  需要在代码里跳转（比如提交成功后）时用 <code>useNavigate()</code>：<code>navigate('/')</code>、<code>navigate(-1)</code>（后退）。
+</p>
+
+<h2 id="detail">详情页：useParams 与 loader</h2>
+
+<p>
+  Hacker News API 提供了单篇文章的接口：<code>https://hn.algolia.com/api/v1/items/42</code>，返回文章及其评论树。
+  详情页需要：从 URL 拿到 <code>storyId</code>，再用它请求数据。按照前面学的，可以这样写：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/StoryPage.jsx（effect 版）</span></div><pre><span class="tk-kw">import</span> { useEffect, useState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { useParams } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StoryPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> { storyId } = <span class="tk-fn">useParams</span>();
+  <span class="tk-kw">const</span> [story, setStory] = <span class="tk-fn">useState</span>(<span class="tk-kw">null</span>);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-fn">fetch</span>(<span class="tk-st">`https://hn.algolia.com/api/v1/items/${storyId}`</span>)
+      .<span class="tk-fn">then</span>((response) =&gt; response.<span class="tk-fn">json</span>())
+      .<span class="tk-fn">then</span>(setStory);
+  }, [storyId]);
+
+  <span class="tk-kw">if</span> (!story) <span class="tk-kw">return</span> <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> ...<span class="tk-tg">&lt;/p</span>&gt;;
+
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;h2</span>&gt;{story.title}<span class="tk-tg">&lt;/h2</span>&gt;;
+};</pre></div>
+
+<p>
+  能用，但数据要等组件<strong>渲染之后</strong>才开始请求。数据式路由提供了更好的办法：<strong>loader</strong>。
+  它在路由匹配上的那一刻（组件渲染之前）就开始加载数据：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/StoryPage.jsx（loader 版）</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Link</span>, useLoaderData, useNavigate } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> storyLoader = <span class="tk-kw">async</span> ({ params }) =&gt; {
+  <span class="tk-kw">const</span> response = <span class="tk-kw">await</span> <span class="tk-fn">fetch</span>(
+    <span class="tk-st">`https://hn.algolia.com/api/v1/items/${params.storyId}`</span>
+  );
+
+  <span class="tk-kw">if</span> (!response.ok) {
+    <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Response</span>(<span class="tk-st">'Story not found'</span>, { status: <span class="tk-nm">404</span> });
+  }
+
+  <span class="tk-kw">return</span> response.<span class="tk-fn">json</span>();
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">StoryPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> story = <span class="tk-fn">useLoaderData</span>();
+  <span class="tk-kw">const</span> navigate = <span class="tk-fn">useNavigate</span>();
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;article</span>&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={() =&gt; <span class="tk-fn">navigate</span>(-<span class="tk-nm">1</span>)}&gt;
+        ← <span class="tk-tp">Back</span>
+      <span class="tk-tg">&lt;/button</span>&gt;
+
+      <span class="tk-tg">&lt;h2</span>&gt;
+        <span class="tk-tg">&lt;a</span> href={story.url}&gt;{story.title}<span class="tk-tg">&lt;/a</span>&gt;
+      <span class="tk-tg">&lt;/h2</span>&gt;
+      <span class="tk-tg">&lt;p</span>&gt;
+        by {story.author} · {story.points} points ·{<span class="tk-st">' '</span>}
+        {story.children.length} top-level comments
+      <span class="tk-tg">&lt;/p</span>&gt;
+
+      <span class="tk-tg">&lt;ul</span>&gt;
+        {story.children.<span class="tk-fn">map</span>((comment) =&gt; (
+          <span class="tk-tg">&lt;li</span> key={comment.id}&gt;{comment.author}<span class="tk-tg">&lt;/li</span>&gt;
+        ))}
+      <span class="tk-tg">&lt;/ul</span>&gt;
+
+      <span class="tk-tg">&lt;Link</span> to=<span class="tk-st">"/"</span>&gt;<span class="tk-tp">All</span> stories<span class="tk-tg">&lt;/Link</span>&gt;
+    <span class="tk-tg">&lt;/article</span>&gt;
+  );
+};
+
+<span class="tk-kw">export</span> { <span class="tk-tp">StoryPage</span>, storyLoader };</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="effect 请求与 loader 请求的时序对比">
+  <text class="ttl" x="20" y="24">effect：先渲染，再请求（瀑布）</text>
+  <rect class="bx" x="20" y="36" width="130" height="32" rx="6"/><text class="sm" x="85" y="57" text-anchor="middle">点击 Link</text>
+  <rect class="bx-a" x="160" y="36" width="140" height="32" rx="6"/><text class="sm on-a" x="230" y="57" text-anchor="middle">渲染 StoryPage</text>
+  <rect class="bx" x="310" y="36" width="140" height="32" rx="6"/><text class="sm" x="380" y="57" text-anchor="middle">显示 Loading</text>
+  <rect class="bx-b" x="460" y="36" width="160" height="32" rx="6"/><text class="sm on-b" x="540" y="57" text-anchor="middle">effect 才发请求 ⏳</text>
+  <rect class="bx-g" x="630" y="36" width="110" height="32" rx="6"/><text class="sm on-g" x="685" y="57" text-anchor="middle">再渲染</text>
+
+  <text class="ttl on-g" x="20" y="120">loader：路由匹配时立即请求</text>
+  <rect class="bx" x="20" y="132" width="130" height="32" rx="6"/><text class="sm" x="85" y="153" text-anchor="middle">点击 Link</text>
+  <rect class="bx-b" x="160" y="132" width="200" height="32" rx="6"/><text class="sm on-b" x="260" y="153" text-anchor="middle">loader 立即请求 ⏳</text>
+  <rect class="bx-g" x="370" y="132" width="200" height="32" rx="6"/><text class="sm on-g" x="470" y="153" text-anchor="middle">带着数据渲染 StoryPage</text>
+
+  <text class="sm" x="20" y="196">• 组件里不再需要 loading 状态和 effect，useLoaderData() 拿到的一定是加载好的数据</text>
+  <text class="sm" x="20" y="216">• 加载期间旧页面保持显示；可用 useNavigation() 的 state 显示全局加载指示</text>
+  <text class="sm" x="20" y="236">• loader 抛出错误时，交给路由的 errorElement 处理（第 38 章）</text>
+</svg>
+<figcaption>图 36-3　loader 把数据请求从“组件渲染之后”提前到“路由切换之时”</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 评论内容是 HTML</div>
+  <p>
+    API 返回的评论正文 <code>comment.text</code> 是一段 HTML 字符串。直接 <code>{comment.text}</code> 会显示出一堆标签；
+    用 <code>dangerouslySetInnerHTML</code> 则有 XSS 风险（第 4 章）。所以示例里只显示作者。真要显示正文，应先用 DOMPurify 之类的库做净化。
+  </p>
+</div>
+
+<h2 id="search-params">URL 也是状态：useSearchParams</h2>
+
+<p>
+  现在搜索 “vue” 后，地址栏还是 <code>/</code>。把链接发给朋友，他看到的是默认的 React 搜索结果。
+  如果把搜索词放进 URL 的查询参数 —— <code>/?query=vue</code> —— 搜索结果就可以被收藏、分享、前进后退了：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/StoriesPage.jsx</span></div><pre><span class="tk-kw">import</span> { useSearchParams } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">StoriesPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchParams, setSearchParams] = <span class="tk-fn">useSearchParams</span>();
+  <span class="tk-kw">const</span> query = searchParams.<span class="tk-fn">get</span>(<span class="tk-st">'query'</span>) ?? <span class="tk-st">'React'</span>;
+
+  <span class="tk-cm">// 输入框里正在编辑的文字，仍然是普通的组件状态</span>
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(query);
+
+  <span class="tk-kw">const</span> searchAction = () =&gt; {
+    <span class="tk-cm">// 提交时写进 URL，URL 一变，下面的请求就会重新执行</span>
+    <span class="tk-fn">setSearchParams</span>({ query: searchTerm });
+  };
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-cm">// 根据 URL 里的 query 请求数据 ...</span>
+  }, [query]);
+
+  ...
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="搜索词作为 URL 状态">
+  <rect class="bx-p" x="20" y="60" width="180" height="70" rx="10"/>
+  <text class="ttl on-p" x="110" y="86" text-anchor="middle">输入框</text>
+  <text class="mono sm" x="110" y="108" text-anchor="middle" style="font-size:10.5px">searchTerm（useState）</text>
+  <text class="sm" x="110" y="124" text-anchor="middle">正在编辑的草稿</text>
+
+  <rect class="bx-a" x="270" y="50" width="220" height="90" rx="12"/>
+  <text class="ttl on-a" x="380" y="76" text-anchor="middle">地址栏</text>
+  <text class="mono sm" x="380" y="100" text-anchor="middle">/?query=vue</text>
+  <text class="sm" x="380" y="122" text-anchor="middle">已提交的搜索（可分享）</text>
+
+  <rect class="bx-g" x="560" y="60" width="180" height="70" rx="10"/>
+  <text class="ttl on-g" x="650" y="86" text-anchor="middle">请求数据</text>
+  <text class="mono sm" x="650" y="108" text-anchor="middle">effect([query])</text>
+
+  <path class="ln-p" d="M202 95 H266" marker-end="url(#ar-p)"/>
+  <text class="sm on-p" x="234" y="86" text-anchor="middle">提交</text>
+  <path class="ln-g" d="M492 95 H556" marker-end="url(#ar-g)"/>
+  <text class="sm" x="380" y="176" text-anchor="middle">浏览器的前进 / 后退会改变 URL → 自动触发对应的搜索</text>
+</svg>
+<figcaption>图 36-4　第 22 章的 url 状态，现在搬进了真正的 URL</figcaption>
+</figure>
+
+<p>
+  这是第 45 章要讲的一个重要观点：<strong>状态有不同的“家”</strong>。“当前搜索的是什么”这种希望被分享、被收藏的状态，最适合放在 URL 里。
+</p>
+
+<h2 id="github-pages">部署到 GitHub Pages 时的 404 问题</h2>
+
+<p>
+  在本地一切正常，部署到 GitHub Pages 后，直接打开 <code>https://用户名.github.io/hacker-stories/story/42</code> 却是 GitHub 的 404 页面。
+  原因是：服务器上根本不存在 <code>story/42</code> 这个文件，它不知道应该返回 <code>index.html</code> 交给前端路由处理。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="直接访问深层路径时的 404 问题及解决">
+  <rect class="bx" x="20" y="70" width="170" height="60" rx="10"/>
+  <text class="sm" x="105" y="96" text-anchor="middle">直接访问 / 刷新</text>
+  <text class="mono sm" x="105" y="116" text-anchor="middle">/story/42</text>
+  <rect class="bx-r" x="280" y="20" width="200" height="60" rx="10"/>
+  <text class="ttl on-r" x="380" y="46" text-anchor="middle">GitHub Pages</text>
+  <text class="sm" x="380" y="66" text-anchor="middle">找不到文件 → 返回 404.html</text>
+  <rect class="bx-g" x="280" y="120" width="200" height="70" rx="10"/>
+  <text class="ttl on-g" x="380" y="146" text-anchor="middle">404.html = index.html 的副本</text>
+  <text class="sm" x="380" y="168" text-anchor="middle">React 启动，Router 读取 URL</text>
+  <rect class="bx-g" x="560" y="120" width="180" height="70" rx="10"/>
+  <text class="mono sm on-g" x="650" y="160" text-anchor="middle">&lt;StoryPage /&gt; ✓</text>
+  <path class="ln-r" d="M192 90 L276 56" marker-end="url(#ar-r)"/>
+  <path class="ln-g" d="M380 82 V116" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M482 155 H556" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 36-5　GitHub Pages 找不到文件时会返回 404.html。把 index.html 复制一份成 404.html，React Router 就能接管</figcaption>
+</figure>
+
+<div class="code" data-lang="json"><div class="bar"><span class="tag">package.json</span></div><pre>{
+  <span class="tk-pr">"scripts"</span>: {
+    <span class="tk-pr">"build"</span>: <span class="tk-st">"vite build &amp;&amp; cp dist/index.html dist/404.html"</span>
+  }
+}</pre></div>
+
+<p>
+  另一种办法是改用 <code>createHashRouter</code>：地址变成 <code>/#/story/42</code>，<code>#</code> 后面的部分不会发给服务器，永远不会 404，代价是网址不太好看。
+  Firebase、Netlify、Vercel 等平台则可以直接配置“所有路径重写到 index.html”。
+</p>
+
+<h2 id="history">新旧对照</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">React Router v5 <span class="ver old">旧写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> {
+  <span class="tk-tp">BrowserRouter</span>, <span class="tk-tp">Switch</span>, <span class="tk-tp">Route</span>, useHistory,
+} <span class="tk-kw">from</span> <span class="tk-st">'react-router-dom'</span>;
+
+<span class="tk-tg">&lt;BrowserRouter</span>&gt;
+  <span class="tk-tg">&lt;Switch</span>&gt;
+    <span class="tk-tg">&lt;Route</span> exact path=<span class="tk-st">"/"</span> component={<span class="tk-tp">StoriesPage</span>} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;Route</span> path=<span class="tk-st">"/story/:storyId"</span> component={<span class="tk-tp">StoryPage</span>} <span class="tk-tg">/&gt;</span>
+  <span class="tk-tg">&lt;/Switch</span>&gt;
+<span class="tk-tg">&lt;/BrowserRouter</span>&gt;
+
+<span class="tk-kw">const</span> history = <span class="tk-fn">useHistory</span>();
+history.<span class="tk-fn">push</span>(<span class="tk-st">'/'</span>);</pre></div>
+  </div>
+  <div class="new"><div class="h">React Router v7 <span class="ver">现在</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> {
+  createBrowserRouter, <span class="tk-tp">RouterProvider</span>, useNavigate,
+} <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">const</span> router = <span class="tk-fn">createBrowserRouter</span>([
+  { path: <span class="tk-st">'/'</span>, element: <span class="tk-tg">&lt;StoriesPage</span> <span class="tk-tg">/&gt;</span> },
+  { path: <span class="tk-st">'/story/:storyId'</span>, element: <span class="tk-tg">&lt;StoryPage</span> <span class="tk-tg">/&gt;</span> },
+]);
+
+<span class="tk-tg">&lt;RouterProvider</span> router={router} <span class="tk-tg">/&gt;</span>
+
+<span class="tk-kw">const</span> navigate = <span class="tk-fn">useNavigate</span>();
+<span class="tk-fn">navigate</span>(<span class="tk-st">'/'</span>);</pre></div>
+  </div>
+</div>
+
+<ul>
+  <li><code>Switch</code> → <code>Routes</code>（v6 起），不再需要 <code>exact</code>，匹配规则更智能。</li>
+  <li><code>component={X}</code> → <code>element={&lt;X /&gt;}</code>，可以直接传 props。</li>
+  <li><code>useHistory</code> → <code>useNavigate</code>。</li>
+  <li>v6.4 起加入 loader / action 等数据 API；v7 合并 Remix，包名简化为 <code>react-router</code>。</li>
+</ul>
+
 <h2 id="summary">小结</h2>
 <ul>
-  <li><code>npm run build</code> 把源代码打包、压缩成 <code>dist/</code> 里的静态文件；<code>npm run preview</code> 在本地验证。</li>
-  <li>纯客户端 React 应用可以部署到任何静态托管平台。</li>
-  <li>Firebase：<code>firebase init</code> 时 public 目录选 <code>dist</code>、配置为单页应用，然后 <code>firebase deploy</code>。</li>
-  <li>GitHub Pages：在 <code>vite.config.js</code> 设置 <code>base: '/仓库名/'</code>，用 GitHub Actions 构建并部署。</li>
+  <li>客户端路由在不刷新页面的情况下，把 URL 映射到组件；React Router 是最常用的方案。</li>
+  <li><code>createBrowserRouter</code> 定义路由表；嵌套路由 + <code>&lt;Outlet /&gt;</code> 实现共享布局；<code>:param</code> 定义动态参数，<code>*</code> 兜底。</li>
+  <li>站内跳转用 <code>Link</code> / <code>NavLink</code> / <code>useNavigate</code>；读取参数用 <code>useParams</code>。</li>
+  <li><code>loader</code> 在路由切换时就开始加载数据，组件里用 <code>useLoaderData()</code> 读取。</li>
+  <li>可分享的状态（如搜索词）适合放进 URL：<code>useSearchParams</code>。</li>
+  <li>部署到 GitHub Pages：设置 <code>basename</code>，并复制 <code>index.html</code> 为 <code>404.html</code>。</li>
 </ul>
 
 <div class="exercise">
   <h3>动手练习</h3>
   <ol>
-    <li>构建项目，打开 <code>dist/</code> 看看生成了哪些文件，与 <code>src/</code> 对比。</li>
-    <li>把 Hacker Stories 部署到 GitHub Pages（或 Firebase），把链接发给朋友看看。</li>
-    <li>在 workflow 里 <code>npm run build</code> 之前加一步 <code>npm test -- --run</code>，让测试不通过时不部署。</li>
-    <li>（选读）为 Firebase 或 GitHub Pages 绑定一个自己的域名。</li>
+    <li>完成详情页，并在详情页显示原文域名（提示：<code>new URL(story.url).hostname</code>，注意有的帖子没有 url）。</li>
+    <li>加一个 “About” 页面，并在导航里用 <code>NavLink</code> 高亮当前页。</li>
+    <li>把搜索词改为存放在 URL 中，测试浏览器的前进后退按钮。</li>
+    <li>故意访问一个不存在的文章 id，观察 loader 抛出错误时发生了什么 —— 第 38 章会处理它。</li>
   </ol>
 </div>
 
 <h2 id="qa">面试题</h2>
 <div class="qa">
-  <details><summary>开发构建和生产构建有什么区别？</summary>
-    <div><p>开发构建注重反馈速度和调试信息，不压缩、支持热更新和 StrictMode 检查；生产构建会打包、压缩、tree-shaking、去除开发代码，并为文件名加内容哈希以便缓存。</p></div></details>
-  <details><summary>为什么构建出的文件名带有哈希？</summary>
-    <div><p>便于长期缓存：内容不变文件名不变，浏览器可以一直用缓存；内容一变文件名就变，浏览器会下载新版本。</p></div></details>
-  <details><summary>部署到子路径（如 GitHub Pages）时需要注意什么？</summary>
-    <div><p>配置构建工具的基础路径（Vite 的 <code>base</code>），否则资源引用会指向域名根路径而 404；客户端路由还需处理刷新时的 404 回退。</p></div></details>
-  <details><summary>什么是单页应用的“重写”（rewrite）配置？</summary>
-    <div><p>让服务器对所有路径都返回 index.html，由前端路由根据 URL 渲染页面，避免直接访问深层路径时出现 404。</p></div></details>
+  <details><summary>客户端路由的原理是什么？</summary>
+    <div><p>拦截站内链接点击，用 History API（pushState）修改 URL 而不向服务器请求新页面，再根据 URL 匹配路由表渲染对应组件；监听 popstate 以支持前进后退。</p></div></details>
+  <details><summary>Link 和 a 标签有什么区别？</summary>
+    <div><p>Link 渲染为 a 标签，但点击时阻止默认的整页跳转，改为客户端导航，保留应用状态；外部链接仍用 a。</p></div></details>
+  <details><summary>什么是 loader？相比在 useEffect 中请求有什么好处？</summary>
+    <div><p>路由级的数据加载函数，在路由匹配时（组件渲染前）执行，避免“先渲染再请求”的瀑布；组件无需管理加载状态，错误可统一交给路由的错误元素处理。</p></div></details>
+  <details><summary>为什么部署 SPA 后直接访问子路径会 404？</summary>
+    <div><p>服务器上没有该路径对应的文件。需要配置服务器把所有路径回退到 index.html，或在 GitHub Pages 上提供与 index.html 相同的 404.html，或使用 hash 路由。</p></div></details>
+  <details><summary>哪些状态适合放在 URL 里？</summary>
+    <div><p>需要分享、收藏、刷新后保留、或与前进后退关联的状态，如搜索词、筛选条件、分页、当前选中的标签页。</p></div></details>
 </div>
 
 <div id="pager"></div>

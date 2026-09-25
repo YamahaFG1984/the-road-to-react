@@ -1,0 +1,351 @@
+<p class="lede">
+  除了状态、数据和 UI 这些“大块”，日常开发还会遇到一堆具体的小需求：表单校验、日期显示、多语言、动画、图表、长列表、拖拽、消息提示……
+  每一类都有好几个候选库。这一章按需求逐类介绍<strong>主流选择</strong>、<strong>什么时候不需要库</strong>，并把它们用在 Hacker Stories 上。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>了解表单、校验、日期、国际化、动画、图表等方向的主流库</li>
+    <li>知道每一类“用浏览器内置能力就够了”的边界</li>
+    <li>给 Hacker Stories 加上相对时间、多语言、删除动画和统计图表</li>
+    <li>拿到一张“需求 → 推荐库”的速查表</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="forms">表单与校验</h2>
+
+<p>第 41 章已经实际用过，这里做个横向比较：</p>
+
+<div class="tw">
+<table>
+  <tr><th>表单</th><th>特点</th><th>适合</th></tr>
+  <tr><td>原生 form Actions（React 19）</td><td>零依赖，<code>useActionState</code> + FormData</td><td>简单表单、配合服务端函数</td></tr>
+  <tr><td><strong>React Hook Form</strong></td><td>非受控、性能好、生态最大</td><td>大多数复杂表单的默认选择</td></tr>
+  <tr><td>TanStack Form</td><td>类型推导极强、跨框架</td><td>重度 TypeScript、复杂联动</td></tr>
+  <tr><td>Formik</td><td>老牌，受控写法</td><td>维护老项目</td></tr>
+</table>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th>校验</th><th>特点</th></tr>
+  <tr><td><strong>Zod</strong></td><td>最流行，API 直观，推导 TS 类型，前后端通用</td></tr>
+  <tr><td>Valibot</td><td>API 类似但按函数拆分，tree-shaking 后体积极小，适合对包体积敏感的前端</td></tr>
+  <tr><td>Yup</td><td>老牌，常见于 Formik 项目</td></tr>
+</table>
+</div>
+
+<p>
+  这些校验库大多实现了 <strong>Standard Schema</strong> 标准接口，React Hook Form、TanStack Form 等可以统一接入，换校验库的成本很低。
+</p>
+
+<h2 id="dates">日期与时间</h2>
+
+<p>
+  Hacker News API 返回的 <code>created_at</code> 是 ISO 字符串（如 <code>2025-06-01T08:30:00.000Z</code>）。
+  我们想显示成“3 小时前”。先看内置的 <code>Intl</code> 能做到什么程度：
+</p>
+
+```js src/format.js
+const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+
+const UNITS = [
+  ['year', 60 * 60 * 24 * 365],
+  ['month', 60 * 60 * 24 * 30],
+  ['day', 60 * 60 * 24],
+  ['hour', 60 * 60],
+  ['minute', 60],
+];
+
+const timeAgo = (isoString) => {
+  const seconds = (new Date(isoString) - Date.now()) / 1000;
+
+  for (const [unit, unitSeconds] of UNITS) {
+    if (Math.abs(seconds) >= unitSeconds) {
+      return rtf.format(Math.round(seconds / unitSeconds), unit);
+    }
+  }
+  return rtf.format(Math.round(seconds), 'second');
+};
+
+timeAgo('2025-06-01T08:30:00.000Z'); // "3小时前" / "昨天" / "2个月前"
+
+// 普通的日期格式化也不需要库
+new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date());
+// "2025年6月1日"
+```
+
+<p>需要日期<strong>计算</strong>（加减、比较、区间、时区）时，再引入库：</p>
+
+<div class="vs">
+  <div class="old"><div class="h">date-fns：函数式、按需导入</div>
+```js
+import { formatDistanceToNow, addDays } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
+
+formatDistanceToNow(new Date(story.created_at), {
+  addSuffix: true,
+  locale: zhCN,
+}); // "大约 3 小时前"
+
+addDays(new Date(), 7);
+```
+  </div>
+  <div class="new"><div class="h">Day.js：moment 风格、2KB</div>
+```js
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/zh-cn';
+
+dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
+
+dayjs(story.created_at).fromNow(); // "3 小时前"
+dayjs().add(7, 'day');
+```
+  </div>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th>方案</th><th>什么时候用</th></tr>
+  <tr><td><code>Intl</code>（内置）</td><td>只需要格式化显示（日期、相对时间、数字、货币）</td></tr>
+  <tr><td>date-fns</td><td>日期计算多，喜欢纯函数、不可变</td></tr>
+  <tr><td>Day.js</td><td>从 moment 迁移、喜欢链式 API、在意体积</td></tr>
+  <tr><td>Luxon</td><td>时区处理复杂</td></tr>
+  <tr><td>moment</td><td>&#10060; 维护模式，新项目不要用</td></tr>
+</table>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; Temporal</div>
+  <p>
+    JavaScript 正在引入新的日期时间 API <code>Temporal</code>，用来彻底取代设计糟糕的 <code>Date</code>，浏览器正陆续支持。
+    等它普及后，很多日期库都可能不再需要。
+  </p>
+</div>
+
+<h2 id="i18n">国际化（i18n）</h2>
+
+<p>让界面支持中英文切换。最流行的是 <strong>react-i18next</strong>：</p>
+
+```bash
+npm install i18next react-i18next
+```
+
+```js src/i18n.js
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+i18n.use(initReactI18next).init({
+  lng: 'zh',
+  fallbackLng: 'en',
+  resources: {
+    en: {
+      translation: {
+        title: 'My Hacker Stories',
+        search: 'Search:',
+        found: '{{count}} stories found',
+      },
+    },
+    zh: {
+      translation: {
+        title: '我的 Hacker 新闻',
+        search: '搜索：',
+        found: '找到 {{count}} 篇文章',
+      },
+    },
+  },
+});
+
+export { i18n };
+```
+
+```jsx src/App.jsx
+import './i18n';
+import { useTranslation } from 'react-i18next';
+
+const App = () => {
+  const { t, i18n } = useTranslation();
+
+  return (
+    <div>
+      <h1>{t('title')}</h1>
+      <p role="status">{t('found', { count: stories.length })}</p>
+
+      <button onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}>
+        中 / EN
+      </button>
+      ...
+    </div>
+  );
+};
+```
+
+<p>
+  其他选择：<strong>FormatJS（react-intl）</strong>基于 ICU 消息格式，复数、性别等语法规则处理得更规范；
+  <strong>Lingui</strong> 支持从代码中自动提取文案。使用 Next.js 时常用 <strong>next-intl</strong>。
+  实际项目里翻译文件通常放在单独的 JSON 文件中按需加载，并配合翻译平台管理。
+</p>
+
+<h2 id="animation">动画</h2>
+
+<p>
+  简单的 hover、展开收起，用 CSS <code>transition</code> 就够了。但有一种动画 CSS 很难做：<strong>元素被移除时的退出动画</strong>
+  —— 比如点 Dismiss 后文章淡出再消失。React 一删除元素它就立即从 DOM 中没了，来不及播放动画。
+  <strong>Motion</strong>（原名 Framer Motion）用 <code>AnimatePresence</code> 解决了这个问题：
+</p>
+
+```bash
+npm install motion
+```
+
+```jsx src/App.jsx
+import { AnimatePresence, motion } from 'motion/react';
+
+const List = ({ list, onRemoveItem }) => (
+  <ul>
+    <AnimatePresence initial={false}>
+      {list.map((item) => (
+        <motion.li
+          key={item.objectID}
+          layout                                  // 其余项平滑补位
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, x: 40 }}            // 被移除时向右淡出
+          transition={{ duration: 0.2 }}
+        >
+          ...
+        </motion.li>
+      ))}
+    </AnimatePresence>
+  </ul>
+);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="AnimatePresence 让被移除的元素先播放退出动画">
+  <rect class="bx" x="20" y="30" width="200" height="140" rx="10"/>
+  <text class="ttl" x="120" y="54" text-anchor="middle">点击 Dismiss</text>
+  <rect class="bx" x="40" y="68" width="160" height="26" rx="5"/><text class="sm" x="120" y="86" text-anchor="middle">React</text>
+  <rect class="bx-r" x="40" y="100" width="160" height="26" rx="5"/><text class="sm on-r" x="120" y="118" text-anchor="middle">Redux ✕</text>
+  <rect class="bx" x="40" y="132" width="160" height="26" rx="5"/><text class="sm" x="120" y="150" text-anchor="middle">Vite</text>
+
+  <rect class="bx-a" x="280" y="30" width="200" height="140" rx="10"/>
+  <text class="ttl on-a" x="380" y="54" text-anchor="middle">AnimatePresence</text>
+  <rect class="bx" x="300" y="68" width="160" height="26" rx="5"/><text class="sm" x="380" y="86" text-anchor="middle">React</text>
+  <rect class="bx-r" x="330" y="100" width="160" height="26" rx="5" opacity="0.45"/><text class="sm on-r" x="410" y="118" text-anchor="middle" opacity="0.6">Redux →</text>
+  <rect class="bx" x="300" y="132" width="160" height="26" rx="5"/><text class="sm" x="380" y="150" text-anchor="middle">Vite</text>
+  <text class="sm" x="380" y="186" text-anchor="middle">元素暂时保留在 DOM，播放 exit 动画</text>
+
+  <rect class="bx-g" x="540" y="30" width="200" height="140" rx="10"/>
+  <text class="ttl on-g" x="640" y="54" text-anchor="middle">动画结束后</text>
+  <rect class="bx" x="560" y="68" width="160" height="26" rx="5"/><text class="sm" x="640" y="86" text-anchor="middle">React</text>
+  <rect class="bx" x="560" y="100" width="160" height="26" rx="5"/><text class="sm" x="640" y="118" text-anchor="middle">Vite ↑（layout 补位）</text>
+  <path class="ln" d="M222 100 H276" marker-end="url(#ar)"/>
+  <path class="ln" d="M482 100 H536" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 48-1　退出动画：AnimatePresence 先让被删除的元素“多留一会儿”，播放完再真正移除</figcaption>
+</figure>
+
+<div class="box tip">
+  <div class="t">&#128161; 尊重“减少动态效果”设置</div>
+  <p>
+    有些用户在系统里开启了“减少动态效果”（晕动症等原因）。CSS 用 <code>@media (prefers-reduced-motion: reduce)</code>，
+    Motion 提供 <code>useReducedMotion()</code> 或全局的 <code>MotionConfig reducedMotion="user"</code>。
+  </p>
+</div>
+
+<h2 id="charts">图表</h2>
+
+<p>给 Hacker Stories 加一张“当前搜索结果的点数分布”柱状图。<strong>Recharts</strong> 是最常用的 React 声明式图表库：</p>
+
+```bash
+npm install recharts
+```
+
+```jsx src/PointsChart.jsx
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+const PointsChart = ({ stories }) => {
+  const data = stories.slice(0, 10).map((story) => ({
+    name: story.title.slice(0, 12),
+    points: story.points,
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart data={data}>
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Bar dataKey="points" fill="#d95602" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+};
+```
+
+<div class="tw">
+<table>
+  <tr><th>图表库</th><th>特点</th><th>适合</th></tr>
+  <tr><td><strong>Recharts</strong></td><td>React 组件式写法，基于 SVG，上手最快</td><td>常规业务图表</td></tr>
+  <tr><td><strong>ECharts</strong>（echarts-for-react）</td><td>功能最强、图表类型最多、Canvas 渲染、中文文档完善</td><td>大数据量、复杂可视化、数据大屏</td></tr>
+  <tr><td>Nivo</td><td>默认样式漂亮，支持 SVG / Canvas</td><td>展示型图表</td></tr>
+  <tr><td>Visx</td><td>底层可视化积木（Airbnb）</td><td>高度定制的可视化</td></tr>
+</table>
+</div>
+
+<h2 id="others">其他常见需求</h2>
+
+<div class="tw">
+<table>
+  <tr><th>需求</th><th>推荐</th><th>说明</th></tr>
+  <tr><td>超长列表（上千行）</td><td>TanStack Virtual、react-window</td><td>虚拟滚动：只渲染可见的几十行（第 39 章的 5000 条场景）</td></tr>
+  <tr><td>复杂表格（排序、筛选、分组、列宽）</td><td>TanStack Table</td><td>headless，逻辑全包，样式自己写；或用 Ant Design / MUI X 的表格</td></tr>
+  <tr><td>拖拽排序</td><td>dnd-kit</td><td>支持键盘和读屏的拖拽</td></tr>
+  <tr><td>消息提示（toast）</td><td>sonner、react-hot-toast</td><td>一行代码弹出提示</td></tr>
+  <tr><td>渲染 Markdown</td><td>react-markdown</td><td>安全地渲染 Markdown，不用 dangerouslySetInnerHTML</td></tr>
+  <tr><td>净化 HTML</td><td>DOMPurify</td><td>第 36 章提到的评论 HTML</td></tr>
+  <tr><td>不可变更新</td><td>Immer（<code>use-immer</code>）</td><td>用“可变写法”更新深层嵌套的状态</td></tr>
+  <tr><td>工具函数</td><td>原生方法优先；es-toolkit</td><td>lodash 的现代替代，体积更小；很多函数已有原生版本</td></tr>
+  <tr><td>类名拼接</td><td>clsx</td><td>第 26 章</td></tr>
+  <tr><td>URL 状态（类型安全）</td><td>nuqs</td><td>像 useState 一样读写查询参数</td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>表单：简单用原生 Actions，复杂用 React Hook Form；校验用 Zod（在意体积用 Valibot）。</li>
+  <li>日期：显示用 <code>Intl</code>，计算用 date-fns 或 Day.js，不要再用 moment。</li>
+  <li>国际化：react-i18next 最普及；需要规范的复数规则用 FormatJS。</li>
+  <li>动画：简单的用 CSS，退出动画和布局动画用 Motion，注意减少动态效果设置。</li>
+  <li>图表：常规用 Recharts，复杂和大数据量用 ECharts。</li>
+  <li>长列表用虚拟滚动，复杂表格用 TanStack Table，拖拽用 dnd-kit。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>Intl.RelativeTimeFormat</code> 在每篇文章旁显示“多久之前发布”。</li>
+    <li>用 react-i18next 让 Hacker Stories 支持中英文切换，并把语言选择存进 localStorage。</li>
+    <li>用 Motion 给 Dismiss 加上退出动画，再用系统设置开启“减少动态效果”测试。</li>
+    <li>用 Recharts 做点数柱状图，再试试 ECharts 实现同样的图，对比写法。</li>
+    <li>把 lodash 的 <code>sortBy</code> 换成原生 <code>toSorted</code>，从 <code>package.json</code> 删掉 lodash。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么不再推荐 moment.js？</summary>
+    <div><p>体积大且无法 tree-shake，API 是可变的（容易产生 bug），官方已进入维护模式。可以用 Intl、date-fns、Day.js 等替代。</p></div></details>
+  <details><summary>在 React 中如何实现元素移除时的动画？</summary>
+    <div><p>元素被移除时会立即从 DOM 删除，需要让它延迟卸载。可以使用 Motion 的 AnimatePresence 配合 exit 属性，或其他过渡库。</p></div></details>
+  <details><summary>渲染上万条数据的列表会有什么问题？如何优化？</summary>
+    <div><p>DOM 节点过多导致渲染和滚动卡顿、内存占用高。使用虚拟滚动（TanStack Virtual、react-window）只渲染可视区域内的行，或分页加载。</p></div></details>
+  <details><summary>如何实现国际化？</summary>
+    <div><p>使用 i18n 库管理多语言文案和当前语言，在组件中通过 t 函数等方式取文案；同时用 Intl 处理日期、数字、货币的本地化格式。</p></div></details>
+</div>

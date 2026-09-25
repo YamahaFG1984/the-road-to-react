@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 43 章 · 可访问性 — React 19 入门教程</title>
+<meta name="description" content="语义化、键盘、焦点与读屏软件">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="43">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 43 章 · 进阶专题</span>
+<h1>可访问性</h1>
+<p class="lede">
+  可访问性（accessibility，常缩写为 <strong>a11y</strong>）指让所有人都能使用你的应用：只用键盘的人、用读屏软件的视障用户、
+  色弱用户、手部不便的用户……这不是锦上添花：很多国家对公共网站有法律要求，而且可访问的应用对所有人都更好用，
+  测试也更容易写（第 30 章的 <code>getByRole</code> 靠的就是它）。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解可访问性树，以及“语义化 HTML 优先”的原则</li>
+    <li>保证键盘可用：Tab 顺序、焦点可见、焦点管理</li>
+    <li>正确使用常见的 ARIA 属性，并知道什么时候不该用</li>
+    <li>让异步更新（加载、结果数量）能被读屏软件播报</li>
+    <li>用工具检查可访问性问题</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="tree">读屏软件看到的是什么</h2>
+
+<p>
+  浏览器除了 DOM 树，还会生成一棵<strong>可访问性树</strong>：每个节点有<strong>角色</strong>（按钮、链接、标题、列表……）、
+  <strong>名称</strong>（按钮上写的字、输入框的 label）和<strong>状态</strong>（是否禁用、是否展开、是否选中）。读屏软件读的就是这棵树。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="DOM 与可访问性树的对应">
+  <rect class="bx" x="20" y="20" width="330" height="210" rx="12"/>
+  <text class="ttl" x="185" y="46" text-anchor="middle">DOM</text>
+  <text class="mono sm" x="36" y="76">&lt;h1&gt;My Hacker Stories&lt;/h1&gt;</text>
+  <text class="mono sm" x="36" y="100">&lt;label for="search"&gt;Search:&lt;/label&gt;</text>
+  <text class="mono sm" x="36" y="120">&lt;input id="search" /&gt;</text>
+  <text class="mono sm" x="36" y="144">&lt;button&gt;Submit&lt;/button&gt;</text>
+  <text class="mono sm" x="36" y="168">&lt;ul&gt;&lt;li&gt;…&lt;/li&gt;&lt;/ul&gt;</text>
+  <text class="mono sm on-r" x="36" y="198">&lt;div onClick={…}&gt;✕&lt;/div&gt;</text>
+
+  <rect class="bx-g" x="410" y="20" width="330" height="210" rx="12"/>
+  <text class="ttl on-g" x="575" y="46" text-anchor="middle">可访问性树（读屏软件读到的）</text>
+  <text class="sm" x="426" y="76">heading level 1 “My Hacker Stories”</text>
+  <text class="sm" x="426" y="110">textbox “Search:”</text>
+  <text class="sm" x="426" y="144">button “Submit”</text>
+  <text class="sm" x="426" y="168">list, 20 items</text>
+  <text class="sm on-r" x="426" y="198">generic “✕” —— 不知道是什么，也点不了</text>
+  <path class="ln-d" d="M352 72 H408"/><path class="ln-d" d="M352 110 H408"/><path class="ln-d" d="M352 140 H408"/>
+  <path class="ln-d" d="M352 164 H408"/><path class="ln-r" d="M352 194 H408"/>
+</svg>
+<figcaption>图 43-1　语义化元素自动获得正确的角色和名称；用 div 冒充的按钮在可访问性树里什么都不是</figcaption>
+</figure>
+
+<h2 id="semantic">第一原则：用对的 HTML 元素</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">&#10060; div 冒充按钮</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;div</span> className=<span class="tk-st">"button"</span> onClick={handleRemove}&gt;
+  <span class="tk-tp">Dismiss</span>
+<span class="tk-tg">&lt;/div</span>&gt;</pre></div>
+  </div>
+  <div class="new"><div class="h">&#9989; 真正的按钮</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={handleRemove}&gt;
+  <span class="tk-tp">Dismiss</span>
+<span class="tk-tg">&lt;/button</span>&gt;</pre></div>
+  </div>
+</div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 200" role="img" aria-label="button 元素自带的能力与 div 需要手动补齐的内容">
+  <rect class="bx-g" x="20" y="20" width="350" height="160" rx="12"/>
+  <text class="ttl on-g" x="195" y="46" text-anchor="middle">&lt;button&gt; 免费获得</text>
+  <text class="sm" x="40" y="76">✓ 角色 button，读屏软件会读“按钮”</text>
+  <text class="sm" x="40" y="98">✓ 可以用 Tab 聚焦</text>
+  <text class="sm" x="40" y="120">✓ 回车和空格都能触发点击</text>
+  <text class="sm" x="40" y="142">✓ disabled 属性、焦点样式</text>
+  <text class="sm" x="40" y="164">✓ 在 form 里能提交表单</text>
+
+  <rect class="bx-r" x="390" y="20" width="350" height="160" rx="12"/>
+  <text class="ttl on-r" x="565" y="46" text-anchor="middle">&lt;div&gt; 要手动补齐</text>
+  <text class="mono sm" x="410" y="76">role="button"</text>
+  <text class="mono sm" x="410" y="98">tabIndex={0}</text>
+  <text class="mono sm" x="410" y="120">onKeyDown={回车 / 空格 → 点击}</text>
+  <text class="mono sm" x="410" y="142">aria-disabled + 自己拦截点击</text>
+  <text class="sm on-r" x="410" y="166">……而且很容易漏掉一项</text>
+</svg>
+<figcaption>图 43-2　原生元素已经把可访问性做好了，重新发明它们既费力又容易出错</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th>要做的事</th><th>用这个元素</th></tr>
+  <tr><td>执行一个操作</td><td><code>&lt;button type="button"&gt;</code></td></tr>
+  <tr><td>跳转到另一个地址</td><td><code>&lt;a href&gt;</code> / <code>&lt;Link&gt;</code>（不要用 button + navigate 冒充链接）</td></tr>
+  <tr><td>页面结构</td><td><code>&lt;header&gt;</code>、<code>&lt;nav&gt;</code>、<code>&lt;main&gt;</code>、<code>&lt;footer&gt;</code>（读屏用户可以按区域跳转）</td></tr>
+  <tr><td>标题</td><td><code>&lt;h1&gt;</code>–<code>&lt;h6&gt;</code>，按层级使用，不要为了字号跳级</td></tr>
+  <tr><td>列表</td><td><code>&lt;ul&gt;</code> / <code>&lt;ol&gt;</code> + <code>&lt;li&gt;</code>（读屏会告诉用户“列表，20 项”）</td></tr>
+  <tr><td>表格数据</td><td><code>&lt;table&gt;</code> + <code>&lt;th&gt;</code>（第 33 章的排序列表其实更适合用表格）</td></tr>
+  <tr><td>弹窗</td><td><code>&lt;dialog&gt;</code></td></tr>
+</table>
+</div>
+
+<h2 id="names">每个控件都要有名字</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">{/* 输入框：label 关联（第 4 章的 htmlFor） */}</span>
+<span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/label</span>&gt;
+<span class="tk-tg">&lt;input</span> id=<span class="tk-st">"search"</span> <span class="tk-tg">/&gt;</span>
+
+<span class="tk-cm">{/* 只有图标的按钮：aria-label 提供名字（第 27 章） */}</span>
+<span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> aria-label=<span class="tk-st">"Dismiss story"</span> onClick={…}&gt;
+  <span class="tk-tg">&lt;Check</span> width=<span class="tk-st">"18"</span> height=<span class="tk-st">"18"</span> aria-hidden=<span class="tk-st">"true"</span> <span class="tk-tg">/&gt;</span>
+<span class="tk-tg">&lt;/button</span>&gt;
+
+<span class="tk-cm">{/* 有意义的图片要有 alt；纯装饰的图片 alt="" */}</span>
+<span class="tk-tg">&lt;img</span> src={logo} alt=<span class="tk-st">"Hacker Stories"</span> <span class="tk-tg">/&gt;</span>
+<span class="tk-tg">&lt;img</span> src={divider} alt=<span class="tk-st">""</span> <span class="tk-tg">/&gt;</span></pre></div>
+
+<p>
+  第 16 章的 <code>InputWithLabel</code> 把 <code>id</code> 做成了 prop，原因之一正是：页面上有两个搜索框时 id 重复，label 就会关联错。
+  React 提供了 <code>useId()</code> 来生成唯一 id：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useId } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">InputWithLabel</span> = ({ children, ...props }) =&gt; {
+  <span class="tk-kw">const</span> id = <span class="tk-fn">useId</span>(); <span class="tk-cm">// 每个实例唯一，服务端渲染时也一致</span>
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;label</span> htmlFor={id}&gt;{children}<span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span> id={id} {...props} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<h2 id="keyboard">键盘可用</h2>
+
+<ul>
+  <li><strong>试试只用键盘</strong>：拔掉鼠标，用 <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> 移动、<kbd>Enter</kbd> / <kbd>Space</kbd> 激活，能不能完成搜索、删除、翻页？</li>
+  <li><strong>焦点要看得见</strong>：永远不要写 <code>outline: none</code> 而不提供替代样式。可以用 <code>:focus-visible</code> 只在键盘操作时显示焦点框。</li>
+  <li><strong>Tab 顺序跟随 DOM 顺序</strong>：不要用 CSS 把元素视觉顺序打乱，也尽量不要写正数的 <code>tabIndex</code>。</li>
+</ul>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">CSS</span></div><pre>button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  <span class="tk-pr">outline</span>: <span class="tk-nm">3px</span> solid <span class="tk-nm">#2b6cb0</span>;
+  <span class="tk-pr">outline-offset</span>: <span class="tk-nm">2px</span>;
+}</pre></div>
+
+<h2 id="focus">单页应用的焦点管理</h2>
+
+<p>
+  传统网站换页时，浏览器会把焦点重置到页面顶部，读屏软件会读出新页面的标题。单页应用只是替换了一部分 DOM，
+  焦点可能停留在一个已经不存在的元素上，用户“迷路”了。这时需要用 ref（第 17 章）手动管理焦点：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="删除列表项后焦点的去向">
+  <rect class="bx" x="20" y="30" width="200" height="150" rx="10"/>
+  <text class="ttl" x="120" y="54" text-anchor="middle">删除前</text>
+  <rect class="bx" x="40" y="66" width="160" height="28" rx="5"/><text class="sm" x="120" y="85" text-anchor="middle">React [Dismiss]</text>
+  <rect class="bx-a" x="40" y="100" width="160" height="28" rx="5"/><text class="sm on-a" x="120" y="119" text-anchor="middle">Redux [Dismiss] ← 焦点</text>
+  <rect class="bx" x="40" y="134" width="160" height="28" rx="5"/><text class="sm" x="120" y="153" text-anchor="middle">Vite [Dismiss]</text>
+
+  <rect class="bx-r" x="280" y="30" width="200" height="150" rx="10"/>
+  <text class="ttl on-r" x="380" y="54" text-anchor="middle">不处理</text>
+  <rect class="bx" x="300" y="66" width="160" height="28" rx="5"/><text class="sm" x="380" y="85" text-anchor="middle">React [Dismiss]</text>
+  <rect class="bx" x="300" y="100" width="160" height="28" rx="5"/><text class="sm" x="380" y="119" text-anchor="middle">Vite [Dismiss]</text>
+  <text class="sm on-r" x="380" y="158" text-anchor="middle">焦点随元素消失，跳回页面开头</text>
+
+  <rect class="bx-g" x="540" y="30" width="200" height="150" rx="10"/>
+  <text class="ttl on-g" x="640" y="54" text-anchor="middle">处理后</text>
+  <rect class="bx" x="560" y="66" width="160" height="28" rx="5"/><text class="sm" x="640" y="85" text-anchor="middle">React [Dismiss]</text>
+  <rect class="bx-a" x="560" y="100" width="160" height="28" rx="5"/><text class="sm on-a" x="640" y="119" text-anchor="middle">Vite [Dismiss] ← 焦点</text>
+  <text class="sm on-g" x="640" y="158" text-anchor="middle">焦点移到下一项，可以连续操作</text>
+  <path class="ln-d" d="M222 105 H276" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M482 105 H536" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 43-3　删除当前聚焦的元素后，要主动把焦点放到合理的位置</figcaption>
+</figure>
+
+<p>路由切换后，把焦点移到新页面的标题上：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/StoryPage.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">StoryPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> story = <span class="tk-fn">useLoaderData</span>();
+  <span class="tk-kw">const</span> headingRef = <span class="tk-fn">useRef</span>(<span class="tk-kw">null</span>);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    headingRef.current?.<span class="tk-fn">focus</span>();
+  }, [story.id]);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;article</span>&gt;
+      <span class="tk-cm">{/* tabIndex={-1}：可以被代码聚焦，但不会进入 Tab 顺序 */}</span>
+      <span class="tk-tg">&lt;h2</span> ref={headingRef} tabIndex={-<span class="tk-nm">1</span>}&gt;
+        {story.title}
+      <span class="tk-tg">&lt;/h2</span>&gt;
+      ...
+    <span class="tk-tg">&lt;/article</span>&gt;
+  );
+};</pre></div>
+
+<h3>弹窗：用原生 dialog</h3>
+
+<p>
+  自己实现一个可访问的弹窗很难：打开时焦点要移进去、Tab 要困在弹窗里、Esc 要能关闭、关闭后焦点要回到触发按钮。
+  原生的 <code>&lt;dialog&gt;</code> 调用 <code>showModal()</code> 时，这些行为浏览器都已经做好了：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">ConfirmDialog</span> = ({ open, onClose, onConfirm, children }) =&gt; {
+  <span class="tk-kw">const</span> dialogRef = <span class="tk-fn">useRef</span>(<span class="tk-kw">null</span>);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-kw">const</span> dialog = dialogRef.current;
+    <span class="tk-kw">if</span> (open) dialog.<span class="tk-fn">showModal</span>();
+    <span class="tk-kw">else</span> dialog.<span class="tk-fn">close</span>();
+  }, [open]);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;dialog</span> ref={dialogRef} onClose={onClose}&gt;
+      <span class="tk-tg">&lt;p</span>&gt;{children}<span class="tk-tg">&lt;/p</span>&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={onClose}&gt;<span class="tk-tp">Cancel</span><span class="tk-tg">&lt;/button</span>&gt;
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"button"</span> onClick={onConfirm}&gt;<span class="tk-tp">Confirm</span><span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/dialog</span>&gt;
+  );
+};</pre></div>
+
+<h2 id="aria">ARIA：必要时的补充</h2>
+
+<div class="box key">
+  <div class="t">&#9733; ARIA 第一原则</div>
+  <p>
+    <strong>能用原生 HTML 元素解决的，就不要用 ARIA。</strong>ARIA 只改变“读屏软件听到什么”，不会增加任何行为（键盘、焦点都要自己做）。
+    错误的 ARIA 比没有 ARIA 更糟糕。
+  </p>
+</div>
+
+<div class="tw">
+<table>
+  <tr><th>属性</th><th>用途</th><th>本教程中的例子</th></tr>
+  <tr><td><code>aria-label</code></td><td>给没有可见文字的元素一个名字</td><td>图标按钮（第 27 章）</td></tr>
+  <tr><td><code>aria-hidden="true"</code></td><td>对读屏软件隐藏纯装饰内容</td><td>按钮里的 SVG 图标</td></tr>
+  <tr><td><code>aria-pressed</code></td><td>切换按钮的开 / 关状态</td><td>收藏按钮 ☆/★（第 37 章）</td></tr>
+  <tr><td><code>aria-sort</code></td><td>表头当前的排序方向</td><td>排序表头（第 33 章）</td></tr>
+  <tr><td><code>aria-invalid</code> + <code>aria-describedby</code></td><td>标记出错的字段并关联错误信息</td><td>表单校验（第 41 章）</td></tr>
+  <tr><td><code>aria-live</code> / <code>role="status"</code></td><td>内容变化时主动播报</td><td>加载状态、结果数量（下文）</td></tr>
+  <tr><td><code>aria-busy</code></td><td>区域正在加载</td><td>列表加载中</td></tr>
+</table>
+</div>
+
+<h2 id="live">播报异步变化</h2>
+
+<p>
+  用户点了 Submit，列表在后台更新了 —— 看得见的用户一目了然，读屏用户却什么也听不到。
+  把状态提示放在一个 live region 里，内容变化时读屏软件会自动读出来：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-tg">&lt;p</span> role=<span class="tk-st">"status"</span>&gt;
+  {stories.isLoading
+    ? <span class="tk-st">'Loading stories…'</span>
+    : <span class="tk-st">`${stories.data.length} stories found for “${query}”`</span>}
+<span class="tk-tg">&lt;/p</span>&gt;
+
+<span class="tk-tg">&lt;ul</span> aria-busy={stories.isLoading}&gt;
+  ...
+<span class="tk-tg">&lt;/ul</span>&gt;</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; live region 要一开始就存在</div>
+  <p>
+    读屏软件监听的是<strong>已存在</strong>的 live region 的内容变化。如果用 <code>{isLoading &amp;&amp; &lt;p role="status"&gt;…}</code> 条件渲染，
+    元素和内容同时出现，往往不会被播报。让容器一直渲染，只改变里面的文字。
+  </p>
+</div>
+
+<h2 id="tools">检查工具</h2>
+
+<div class="cards">
+  <div class="card"><span class="ic">&#129529;</span><h4>eslint-plugin-jsx-a11y</h4><p>写代码时就提示缺少 alt、label、在 div 上加 onClick 等问题。</p></div>
+  <div class="card"><span class="ic">&#128269;</span><h4>axe DevTools / Lighthouse</h4><p>浏览器扩展和 Chrome 内置工具，扫描页面并列出问题与修复建议。</p></div>
+  <div class="card"><span class="ic">&#127911;</span><h4>真实读屏软件</h4><p>macOS 的 VoiceOver（Cmd+F5）、Windows 的 NVDA。亲自听一遍，收获最大。</p></div>
+  <div class="card"><span class="ic">&#129514;</span><h4>getByRole 测试</h4><p>第 30 章的查询如果找不到按钮或输入框，往往说明它的可访问性有问题。</p></div>
+</div>
+
+<div class="box tip">
+  <div class="t">&#128161; 复杂组件交给专业的库</div>
+  <p>
+    下拉菜单、组合框（combobox）、标签页、日期选择器等复杂控件的键盘交互规则很多。Radix UI、React Aria、Headless UI 等“无样式组件库”
+    把这些都做好了，你只负责样式（第 47 章）。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>读屏软件读的是可访问性树：角色、名称、状态。语义化 HTML 自动提供这些信息。</li>
+  <li>优先用原生元素（button、a、label、dialog、ul、table），它们自带键盘和焦点行为。</li>
+  <li>每个控件都要有名字：label、<code>aria-label</code>、alt；用 <code>useId</code> 生成唯一 id。</li>
+  <li>单页应用要主动管理焦点：路由切换、删除元素、弹窗开关。</li>
+  <li>ARIA 只作补充；异步变化用 <code>role="status"</code> / <code>aria-live</code> 播报。</li>
+  <li>用 jsx-a11y、axe、Lighthouse 和真实读屏软件检查。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>只用键盘完成一次“搜索 → 删除一条 → 加载更多”，记录遇到的所有障碍并修复。</li>
+    <li>安装 <code>eslint-plugin-jsx-a11y</code>，修复它报出的问题。</li>
+    <li>给删除操作加上焦点管理：删除后焦点移到下一条的 Dismiss 按钮。</li>
+    <li>用 VoiceOver 或 NVDA 听一遍 Hacker Stories，加上结果数量的 live region 后再听一遍。</li>
+    <li>用 Lighthouse 跑一次 Accessibility 评分，把分数提到 100。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>为什么不应该用 div 加 onClick 实现按钮？</summary>
+    <div><p>div 没有按钮角色，不能被 Tab 聚焦，也不响应回车和空格，读屏软件无法识别。需要手动补齐 role、tabIndex、键盘事件等，远不如直接使用 button。</p></div></details>
+  <details><summary>ARIA 的第一原则是什么？</summary>
+    <div><p>如果原生 HTML 元素或属性已经提供了所需的语义和行为，就使用原生元素，而不是用 ARIA 去改造其他元素。</p></div></details>
+  <details><summary>单页应用中为什么需要焦点管理？</summary>
+    <div><p>SPA 只替换部分 DOM，浏览器不会像整页跳转那样重置焦点；需要在路由切换、元素删除、弹窗开关等时机手动把焦点移到合理位置。</p></div></details>
+  <details><summary>useId 有什么用？</summary>
+    <div><p>为组件实例生成稳定且唯一的 id，常用于关联 label 与 input、aria-describedby 等，并在服务端渲染与客户端之间保持一致。</p></div></details>
+  <details><summary>如何让读屏软件播报动态内容？</summary>
+    <div><p>使用 aria-live 区域（如 role="status"），并确保区域元素一直存在，只更新其中的文字内容。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

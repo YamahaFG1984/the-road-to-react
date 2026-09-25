@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 39 章 · 防抖与并发渲染 — React 19 入门教程</title>
+<meta name="description" content="防抖搜索、useTransition 与 useDeferredValue">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="39">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 39 章 · 进阶专题</span>
+<h1>防抖与并发渲染</h1>
+<p class="lede">
+  第 21 章留下了一个问题：服务端搜索每敲一个键就发一次请求。第 22 章用“点按钮才搜索”绕开了它，
+  但很多应用希望<strong>边打字边出结果</strong>。这一章用<strong>防抖</strong>正面解决请求过多的问题，
+  再介绍 React 18/19 的<strong>并发渲染</strong>工具 <code>useDeferredValue</code> 和 <code>useTransition</code> ——
+  它们解决的是另一个问题：渲染太慢导致输入卡顿。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清防抖（debounce）和节流（throttle）</li>
+    <li>写一个 <code>useDebounce</code> 自定义 Hook，实现“停止输入 500ms 后再搜索”</li>
+    <li>理解“紧急更新”和“非紧急更新”，用 <code>useDeferredValue</code> 让输入保持流畅</li>
+    <li>用 <code>useTransition</code> 标记非紧急更新并显示 pending 状态</li>
+    <li>知道这些工具各自适合什么问题</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="debounce-throttle">防抖与节流</h2>
+
+<p>用户输入 “react” 共 5 次按键。三种处理方式发出的请求数完全不同：</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="逐次请求、防抖、节流的时间线对比">
+  <text class="sm" x="20" y="30">按键</text>
+  <g>
+    <circle class="fill-f" cx="160" cy="26" r="6"/><text class="mono sm" x="160" y="48" text-anchor="middle">r</text>
+    <circle class="fill-f" cx="220" cy="26" r="6"/><text class="mono sm" x="220" y="48" text-anchor="middle">e</text>
+    <circle class="fill-f" cx="270" cy="26" r="6"/><text class="mono sm" x="270" y="48" text-anchor="middle">a</text>
+    <circle class="fill-f" cx="340" cy="26" r="6"/><text class="mono sm" x="340" y="48" text-anchor="middle">c</text>
+    <circle class="fill-f" cx="390" cy="26" r="6"/><text class="mono sm" x="390" y="48" text-anchor="middle">t</text>
+  </g>
+  <path class="ln" d="M120 70 H740"/>
+
+  <text class="ttl on-r" x="20" y="100">每次都请求</text>
+  <circle class="fill-r" cx="160" cy="96" r="7"/><circle class="fill-r" cx="220" cy="96" r="7"/><circle class="fill-r" cx="270" cy="96" r="7"/><circle class="fill-r" cx="340" cy="96" r="7"/><circle class="fill-r" cx="390" cy="96" r="7"/>
+  <text class="sm on-r" x="740" y="100" text-anchor="end">5 次请求</text>
+
+  <text class="ttl on-g" x="20" y="160">防抖 500ms</text>
+  <path class="ln-d" d="M390 156 H640"/>
+  <text class="sm" x="515" y="148" text-anchor="middle">停止输入后等 500ms</text>
+  <circle class="fill-g" cx="640" cy="156" r="8"/>
+  <text class="sm on-g" x="740" y="160" text-anchor="end">1 次请求</text>
+  <text class="sm" x="120" y="180">每次按键都“重新计时”，只有安静下来才执行一次</text>
+
+  <text class="ttl on-b" x="20" y="222">节流 200ms</text>
+  <circle class="fill-b" cx="160" cy="218" r="7"/><circle class="fill-b" cx="360" cy="218" r="7"/><circle class="fill-b" cx="560" cy="218" r="7"/>
+  <text class="sm on-b" x="740" y="222" text-anchor="end">固定频率，最多每 200ms 一次</text>
+  <text class="sm" x="120" y="242">适合滚动、拖拽、窗口缩放这类持续触发的事件</text>
+</svg>
+<figcaption>图 39-1　防抖：等用户停下来；节流：按固定频率执行。搜索框通常用防抖</figcaption>
+</figure>
+
+<h2 id="use-debounce">写一个 useDebounce Hook</h2>
+
+<p>
+  思路：返回一个“延迟跟随”的值。每次输入变化，就设一个定时器；如果在定时器触发前输入又变了，
+  effect 的<strong>清理函数</strong>（第 14 章）会取消上一个定时器 —— 这正好就是防抖的“重新计时”：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/use-debounce.js</span></div><pre><span class="tk-kw">import</span> { useEffect, useState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> useDebounce = (value, delay = <span class="tk-nm">500</span>) =&gt; {
+  <span class="tk-kw">const</span> [debouncedValue, setDebouncedValue] = <span class="tk-fn">useState</span>(value);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-kw">const</span> timerId = <span class="tk-fn">setTimeout</span>(() =&gt; {
+      <span class="tk-fn">setDebouncedValue</span>(value);
+    }, delay);
+
+    <span class="tk-cm">// value 在 delay 之内再次变化 → 取消上一个定时器，重新计时</span>
+    <span class="tk-kw">return</span> () =&gt; <span class="tk-fn">clearTimeout</span>(timerId);
+  }, [value, delay]);
+
+  <span class="tk-kw">return</span> debouncedValue;
+};
+
+<span class="tk-kw">export</span> { useDebounce };</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="useDebounce 内部 effect 与清理函数的时序">
+  <path class="ln" d="M20 100 H740" marker-end="url(#ar)"/>
+  <rect class="bx-b" x="30" y="30" width="140" height="44" rx="8"/>
+  <text class="mono sm on-b" x="100" y="50" text-anchor="middle">value='r'</text>
+  <text class="sm" x="100" y="66" text-anchor="middle">设定时器 ①</text>
+  <rect class="bx-b" x="190" y="30" width="140" height="44" rx="8"/>
+  <text class="mono sm on-b" x="260" y="50" text-anchor="middle">value='re'</text>
+  <text class="sm" x="260" y="66" text-anchor="middle">清除①，设定时器②</text>
+  <rect class="bx-b" x="350" y="30" width="140" height="44" rx="8"/>
+  <text class="mono sm on-b" x="420" y="50" text-anchor="middle">value='rea'</text>
+  <text class="sm" x="420" y="66" text-anchor="middle">清除②，设定时器③</text>
+  <rect class="bx-g" x="560" y="120" width="180" height="60" rx="10"/>
+  <text class="ttl on-g" x="650" y="144" text-anchor="middle">500ms 无新输入</text>
+  <text class="mono sm" x="650" y="166" text-anchor="middle">③ 触发 → 'rea'</text>
+  <path class="ln-g" d="M490 98 C530 98 560 130 560 140" marker-end="url(#ar-g)"/>
+  <text class="sm on-r" x="165" y="140">① ② 被清理函数取消，永远不会触发</text>
+</svg>
+<figcaption>图 39-2　清理函数让“上一个定时器”自动作废，防抖就这样用几行代码实现了</figcaption>
+</figure>
+
+<p>用在服务端搜索上：输入框照常实时更新，请求只跟随防抖后的值：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useStorageState</span>(<span class="tk-st">'search'</span>, <span class="tk-st">'React'</span>);
+  <span class="tk-kw">const</span> debouncedSearchTerm = <span class="tk-fn">useDebounce</span>(searchTerm, <span class="tk-nm">500</span>);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-kw">if</span> (!debouncedSearchTerm) <span class="tk-kw">return</span>;
+
+    <span class="tk-kw">const</span> controller = <span class="tk-kw">new</span> <span class="tk-tp">AbortController</span>();
+    <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_INIT'</span> });
+
+    axios
+      .<span class="tk-fn">get</span>(<span class="tk-st">`${API_ENDPOINT}${debouncedSearchTerm}`</span>, {
+        signal: controller.signal,
+      })
+      .<span class="tk-fn">then</span>((result) =&gt;
+        <span class="tk-fn">dispatchStories</span>({
+          <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_SUCCESS'</span>,
+          payload: result.data.hits,
+        })
+      )
+      .<span class="tk-kw">catch</span>((error) =&gt; {
+        <span class="tk-kw">if</span> (axios.<span class="tk-fn">isCancel</span>(error)) <span class="tk-kw">return</span>;
+        <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'STORIES_FETCH_FAILURE'</span> });
+      });
+
+    <span class="tk-kw">return</span> () =&gt; controller.<span class="tk-fn">abort</span>();
+  }, [debouncedSearchTerm]);
+
+  ...
+};</pre></div>
+
+<div class="box tip">
+  <div class="t">&#128161; 防抖 + 取消请求，两者互补</div>
+  <p>
+    防抖减少了请求<strong>次数</strong>，但用户停顿后又继续输入时，前一个请求可能还在路上。
+    第 21 章的 <code>AbortController</code> 负责取消那个已经过时的请求，避免竞态。axios 同样支持 <code>signal</code> 参数。
+  </p>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 直接用 lodash.debounce 的陷阱</div>
+  <p>
+    <code>const debouncedFetch = debounce(fetchStories, 500)</code> 写在组件里，每次渲染都会创建一个<strong>新的</strong>防抖函数，
+    各自计时，完全起不到防抖作用。要么用 <code>useMemo</code> / <code>useRef</code> 保证它只创建一次，要么用本章“防抖一个值”的思路 —— 后者在 React 里更自然。
+  </p>
+</div>
+
+<h2 id="concurrent">另一个问题：渲染太慢</h2>
+
+<p>
+  防抖解决的是<strong>网络</strong>问题。还有一类问题出在<strong>渲染</strong>上：假设我们在客户端过滤一个很大的列表（比如缓存了 5000 条文章），
+  每次按键都要重新过滤并渲染几千个 <code>Item</code>。渲染需要 200ms，这 200ms 里浏览器被占用，输入框就“卡住”了，打字一顿一顿的。
+</p>
+
+<p>
+  React 18 引入的<strong>并发渲染</strong>（concurrent rendering）让 React 可以区分更新的轻重缓急：
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="紧急更新与非紧急更新：并发渲染可以打断低优先级渲染">
+  <text class="ttl on-r" x="20" y="24">同步渲染（旧）：一旦开始就不能中断</text>
+  <rect class="bx-b" x="20" y="36" width="60" height="30" rx="4"/><text class="sm on-b" x="50" y="56" text-anchor="middle">按键 r</text>
+  <rect class="bx-r" x="84" y="36" width="260" height="30" rx="4"/><text class="sm on-r" x="214" y="56" text-anchor="middle">渲染 5000 项（200ms，输入框卡住）</text>
+  <rect class="bx-b" x="348" y="36" width="60" height="30" rx="4"/><text class="sm on-b" x="378" y="56" text-anchor="middle">按键 e</text>
+  <rect class="bx-r" x="412" y="36" width="260" height="30" rx="4"/><text class="sm on-r" x="542" y="56" text-anchor="middle">渲染 5000 项（又卡）</text>
+
+  <text class="ttl on-g" x="20" y="112">并发渲染（React 18+）：紧急的先做，大渲染可以被打断</text>
+  <rect class="bx-b" x="20" y="124" width="60" height="30" rx="4"/><text class="sm on-b" x="50" y="144" text-anchor="middle">按键 r</text>
+  <rect class="bx-g" x="84" y="124" width="90" height="30" rx="4"/><text class="sm on-g" x="129" y="144" text-anchor="middle">列表渲染…</text>
+  <rect class="bx-b" x="178" y="124" width="60" height="30" rx="4"/><text class="sm on-b" x="208" y="144" text-anchor="middle">按键 e</text>
+  <text class="sm on-r" x="129" y="172" text-anchor="middle">↑ 被中断、丢弃</text>
+  <rect class="bx-b" x="242" y="124" width="60" height="30" rx="4"/><text class="sm on-b" x="272" y="144" text-anchor="middle">按键 a</text>
+  <rect class="bx-g" x="306" y="124" width="260" height="30" rx="4"/><text class="sm on-g" x="436" y="144" text-anchor="middle">用最新值 "rea" 渲染列表</text>
+
+  <rect class="bx-b" x="20" y="200" width="330" height="44" rx="8"/>
+  <text class="ttl on-b" x="185" y="220" text-anchor="middle">紧急更新：输入框的值</text>
+  <text class="sm" x="185" y="236" text-anchor="middle">用户期待立即看到反馈</text>
+  <rect class="bx-g" x="410" y="200" width="330" height="44" rx="8"/>
+  <text class="ttl on-g" x="575" y="220" text-anchor="middle">非紧急更新：过滤后的列表</text>
+  <text class="sm" x="575" y="236" text-anchor="middle">晚一点出现没关系，可以被打断</text>
+</svg>
+<figcaption>图 39-3　并发渲染：把更新分成紧急和非紧急，非紧急的渲染可以让路、可以被丢弃</figcaption>
+</figure>
+
+<h2 id="deferred">useDeferredValue：让一个值“慢半拍”</h2>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { memo, useDeferredValue, useState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">SearchableList</span> = ({ stories }) =&gt; {
+  <span class="tk-kw">const</span> [query, setQuery] = <span class="tk-fn">useState</span>(<span class="tk-st">''</span>);
+
+  <span class="tk-cm">// 输入框用 query（紧急），列表用 deferredQuery（非紧急）</span>
+  <span class="tk-kw">const</span> deferredQuery = <span class="tk-fn">useDeferredValue</span>(query);
+  <span class="tk-kw">const</span> isStale = query !== deferredQuery;
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;input</span> value={query} onChange={(e) =&gt; <span class="tk-fn">setQuery</span>(e.target.value)} <span class="tk-tg">/&gt;</span>
+
+      <span class="tk-tg">&lt;div</span> style={{ opacity: isStale ? <span class="tk-nm">0.5</span> : <span class="tk-nm">1</span> }}&gt;
+        <span class="tk-tg">&lt;SlowList</span> stories={stories} query={deferredQuery} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;/div</span>&gt;
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};
+
+<span class="tk-cm">// 配合 memo：deferredQuery 没变时跳过这个昂贵组件</span>
+<span class="tk-kw">const</span> <span class="tk-tp">SlowList</span> = <span class="tk-fn">memo</span>(({ stories, query }) =&gt; {
+  <span class="tk-kw">const</span> filtered = stories.<span class="tk-fn">filter</span>((story) =&gt;
+    story.title.<span class="tk-fn">toLowerCase</span>().<span class="tk-fn">includes</span>(query.<span class="tk-fn">toLowerCase</span>())
+  );
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;List</span> list={filtered} <span class="tk-tg">/&gt;</span>;
+});</pre></div>
+
+<ul>
+  <li>用户打字时，React 先用新的 <code>query</code> 和<strong>旧的</strong> <code>deferredQuery</code> 渲染一次 —— 输入框立刻更新，列表暂时不变。</li>
+  <li>然后在后台用新的 <code>deferredQuery</code> 渲染列表；如果期间用户又输入了，这次后台渲染会被丢弃，重新开始。</li>
+  <li><code>query !== deferredQuery</code> 表示列表是“过时”的，可以用半透明提示用户。</li>
+  <li>React 19 起可以传初始值：<code>useDeferredValue(query, '')</code>，首次渲染先用初始值，再在后台渲染真实值。</li>
+</ul>
+
+<h2 id="transition">useTransition：把一次更新标记为非紧急</h2>
+
+<p>
+  <code>useDeferredValue</code> 作用于“一个值”；<code>useTransition</code> 作用于“一次状态更新”。
+  比如切换一个会渲染大量内容的标签页：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useState, useTransition } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Tabs</span> = () =&gt; {
+  <span class="tk-kw">const</span> [tab, setTab] = <span class="tk-fn">useState</span>(<span class="tk-st">'stories'</span>);
+  <span class="tk-kw">const</span> [isPending, startTransition] = <span class="tk-fn">useTransition</span>();
+
+  <span class="tk-kw">const</span> selectTab = (nextTab) =&gt; {
+    <span class="tk-fn">startTransition</span>(() =&gt; {
+      <span class="tk-fn">setTab</span>(nextTab); <span class="tk-cm">// 非紧急：可以被打断，旧界面先保持</span>
+    });
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;button</span> onClick={() =&gt; <span class="tk-fn">selectTab</span>(<span class="tk-st">'stories'</span>)}&gt;<span class="tk-tp">Stories</span><span class="tk-tg">&lt;/button</span>&gt;
+      <span class="tk-tg">&lt;button</span> onClick={() =&gt; <span class="tk-fn">selectTab</span>(<span class="tk-st">'favorites'</span>)}&gt;<span class="tk-tp">Favorites</span><span class="tk-tg">&lt;/button</span>&gt;
+      {isPending &amp;&amp; <span class="tk-tg">&lt;span</span>&gt;<span class="tk-tp">Loading</span>…<span class="tk-tg">&lt;/span</span>&gt;}
+      {tab === <span class="tk-st">'stories'</span> ? <span class="tk-tg">&lt;StoriesTab</span> <span class="tk-tg">/&gt;</span> : <span class="tk-tg">&lt;FavoritesTab</span> <span class="tk-tg">/&gt;</span>}
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<p>
+  React 19 更进一步：<code>startTransition</code> 可以接收 <strong>async 函数</strong>。整个异步过程中 <code>isPending</code> 都为 <code>true</code>，
+  这就是第 24 章 form Actions 的底层机制 —— <code>&lt;form action&gt;</code> 本质上就是自动包在 transition 里的 async 函数。
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> [isPending, startTransition] = <span class="tk-fn">useTransition</span>();
+
+<span class="tk-kw">const</span> handleSave = () =&gt; {
+  <span class="tk-fn">startTransition</span>(<span class="tk-kw">async</span> () =&gt; {
+    <span class="tk-kw">await</span> <span class="tk-fn">saveStory</span>(story);    <span class="tk-cm">// 异步期间 isPending === true</span>
+    <span class="tk-fn">startTransition</span>(() =&gt; {    <span class="tk-cm">// await 之后的状态更新再包一层（React 19 的已知限制）</span>
+      <span class="tk-fn">setSaved</span>(<span class="tk-kw">true</span>);
+    });
+  });
+};</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; transition 与 Suspense 配合</div>
+  <p>
+    当一次更新会让已显示的内容重新“暂停”（比如路由切换到一个需要加载数据的页面），如果这次更新在 transition 中，
+    React 会<strong>保持旧界面</strong>而不是立刻换成 Suspense 的 fallback。React Router 的导航默认就是这样做的。
+  </p>
+</div>
+
+<h2 id="compare">怎么选</h2>
+
+<div class="tw">
+<table>
+  <tr><th>工具</th><th>解决什么</th><th>原理</th><th>会减少网络请求吗</th></tr>
+  <tr><td>显式提交（第 22 章）</td><td>请求过多</td><td>用户点了才请求</td><td>会</td></tr>
+  <tr><td>防抖 <code>useDebounce</code></td><td>请求过多</td><td>固定延迟，停下来才执行</td><td>会</td></tr>
+  <tr><td>节流</td><td>持续事件太频繁</td><td>固定频率执行</td><td>会</td></tr>
+  <tr><td><code>useDeferredValue</code></td><td>渲染太慢导致输入卡顿</td><td>值的渲染降为低优先级，可打断</td><td>不会（常和防抖一起用）</td></tr>
+  <tr><td><code>useTransition</code></td><td>某次更新渲染太慢；异步操作的 pending</td><td>更新降为低优先级，提供 isPending</td><td>不会</td></tr>
+</table>
+</div>
+
+<div class="vs">
+  <div class="old"><div class="h">过去 <span class="ver old">React 17 及以前</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 只能用防抖“掩盖”慢渲染：</span>
+<span class="tk-cm">// 故意延迟更新，希望用户停下来时再卡</span>
+<span class="tk-kw">const</span> debouncedFilter = <span class="tk-fn">useMemo</span>(
+  () =&gt; <span class="tk-fn">debounce</span>(setFilter, <span class="tk-nm">300</span>),
+  []
+);</pre></div>
+  </div>
+  <div class="new"><div class="h">现在 <span class="ver">React 18+ / 19</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 渲染层面的调度：不用固定延迟，</span>
+<span class="tk-cm">// 设备快就马上更新，设备慢就自动让路</span>
+<span class="tk-kw">const</span> deferredFilter = <span class="tk-fn">useDeferredValue</span>(filter);
+
+<span class="tk-cm">// 异步操作的 pending 由 React 追踪</span>
+<span class="tk-fn">startTransition</span>(<span class="tk-kw">async</span> () =&gt; { … });</pre></div>
+  </div>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>防抖：等停止触发一段时间后执行一次，适合搜索框；节流：固定频率执行，适合滚动等持续事件。</li>
+  <li><code>useDebounce</code> 利用 effect 清理函数取消上一个定时器，几行代码就能实现；配合 <code>AbortController</code> 处理竞态。</li>
+  <li>并发渲染把更新分为紧急和非紧急：<code>useDeferredValue</code> 延后一个值的渲染，<code>useTransition</code> 把一次更新标记为非紧急并提供 <code>isPending</code>。</li>
+  <li>防抖减少请求次数；并发特性解决渲染卡顿。两者可以同时使用。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>useDebounce</code> 把 Hacker Stories 改成“停止输入 500ms 后自动搜索”，去掉 Submit 按钮，在 Network 面板里对比请求次数。</li>
+    <li>写一个 <code>useThrottle</code>，在滚动时记录页面滚动位置。</li>
+    <li>生成 5000 条假数据做客户端过滤，在开发者工具 Performance 面板里开启 CPU 降速，体会有无 <code>useDeferredValue</code> 时输入框的差别。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>防抖和节流有什么区别？</summary>
+    <div><p>防抖在触发停止一段时间后才执行一次（每次触发都重新计时）；节流保证在固定时间间隔内最多执行一次。搜索输入常用防抖，滚动、缩放常用节流。</p></div></details>
+  <details><summary>如何在 React 中实现防抖？</summary>
+    <div><p>常见方式是自定义 Hook：在 effect 中 setTimeout 更新防抖值，并在清理函数中 clearTimeout。直接使用工具库的 debounce 时需用 useMemo/useRef 保持同一个函数实例。</p></div></details>
+  <details><summary>useDeferredValue 和防抖有什么区别？</summary>
+    <div><p>防抖使用固定延迟并减少执行次数；useDeferredValue 没有固定延迟，而是让基于该值的渲染以低优先级进行、可被打断，不会减少网络请求。</p></div></details>
+  <details><summary>useTransition 有什么用？</summary>
+    <div><p>把状态更新标记为非紧急，使其渲染可被更紧急的更新（如输入）打断，并提供 isPending 显示过渡状态；React 19 中还支持 async 函数，用于追踪异步操作。</p></div></details>
+  <details><summary>并发特性需要什么前提？</summary>
+    <div><p>使用 React 18+ 的 createRoot（旧的 ReactDOM.render 以同步模式运行，不支持并发特性）。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

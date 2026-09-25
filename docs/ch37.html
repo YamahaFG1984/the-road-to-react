@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>第 37 章 · 下一步去哪里 — React 19 入门教程</title>
-<meta name="description" content="路由、框架、状态管理与更多方向">
+<title>第 37 章 · Context 实战 — React 19 入门教程</title>
+<meta name="description" content="主题切换与收藏夹：何时用 Context，何时不用">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
 <script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <link rel="stylesheet" href="assets/style.css">
@@ -13,231 +13,390 @@
 <div id="app">
 <aside id="sidebar"></aside>
 <main>
-<span class="chapter-eyebrow">第 37 章 · 上线</span>
-<h1>下一步去哪里</h1>
+<span class="chapter-eyebrow">第 37 章 · 进阶专题</span>
+<h1>Context 实战</h1>
 <p class="lede">
-  你走完了整条路：从一个 “Hello React” 开始，做出了一个连接真实 API、能搜索、删除、排序、分页，
-  有类型、有测试、已部署上线的应用。这最后一章做两件事：给你一张全书的<strong>速查表</strong>（尤其是新旧写法的对照），
-  以及几条接下来可以走的<strong>路线</strong>。
+  第 25 章只是认识了 Context。这一章在 Hacker Stories 里做两个真实需求：<strong>深色 / 浅色主题切换</strong>和<strong>收藏夹</strong>。
+  两者都是“很多组件都要用、隔了好几层”的数据，正是 Context 的用武之地。同时我们也会讨论 Context 的代价，以及什么时候<strong>不该</strong>用它。
 </p>
 
 <div class="goals">
-  <h4>本章内容</h4>
+  <h4>本章目标</h4>
   <ul>
-    <li>核心概念速查</li>
-    <li>React 新旧写法对照总表</li>
-    <li>接下来的学习方向</li>
+    <li>用“Provider 组件 + 自定义 Hook”的模式封装 Context</li>
+    <li>把 Context 和 <code>useReducer</code>、localStorage 组合起来</li>
+    <li>理解 Context 值变化时的重新渲染范围，以及拆分 Context 的技巧</li>
+    <li>判断什么时候该用 Context，什么时候用组合、URL 或专门的库</li>
   </ul>
 </div>
 
 <div id="chapter-toc"></div>
 
-<h2 id="recap">一张图回顾全书</h2>
+<h2 id="problem">需求：收藏夹</h2>
+
+<p>
+  每条文章旁边放一个 ☆ 按钮，点击后加入收藏；页头显示“已收藏 N 篇”。收藏数据需要被两个相距很远的组件使用：
+</p>
 
 <figure>
-<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="全书核心概念关系图">
-  <rect class="bx-a" x="290" y="130" width="180" height="70" rx="14"/>
-  <text class="ttl on-a" x="380" y="158" text-anchor="middle">组件</text>
-  <text class="mono sm" x="380" y="180" text-anchor="middle">(props) =&gt; JSX</text>
-
-  <rect class="bx-b" x="20" y="20" width="200" height="80" rx="12"/>
-  <text class="ttl on-b" x="120" y="44" text-anchor="middle">描述界面</text>
-  <text class="sm" x="120" y="66" text-anchor="middle">JSX · 列表与 key</text>
-  <text class="sm" x="120" y="84" text-anchor="middle">条件渲染 · Fragment</text>
-
-  <rect class="bx-g" x="540" y="20" width="200" height="80" rx="12"/>
-  <text class="ttl on-g" x="640" y="44" text-anchor="middle">数据流</text>
-  <text class="sm" x="640" y="66" text-anchor="middle">props 向下 · 回调向上</text>
-  <text class="sm" x="640" y="84" text-anchor="middle">状态提升 · children 组合</text>
-
-  <rect class="bx-p" x="20" y="230" width="200" height="80" rx="12"/>
-  <text class="ttl on-p" x="120" y="254" text-anchor="middle">状态</text>
-  <text class="sm" x="120" y="276" text-anchor="middle">useState · useReducer</text>
-  <text class="sm" x="120" y="294" text-anchor="middle">派生值 · 受控组件</text>
-
-  <rect class="bx-r" x="540" y="230" width="200" height="80" rx="12"/>
-  <text class="ttl on-r" x="640" y="254" text-anchor="middle">外部世界</text>
-  <text class="sm" x="640" y="276" text-anchor="middle">useEffect · useRef</text>
-  <text class="sm" x="640" y="294" text-anchor="middle">数据请求 · form Actions</text>
-
-  <rect class="bx" x="290" y="250" width="180" height="60" rx="12"/>
-  <text class="ttl" x="380" y="274" text-anchor="middle">复用与维护</text>
-  <text class="sm" x="380" y="294" text-anchor="middle">自定义 Hook · TS · 测试</text>
-
-  <path class="ln-b" d="M222 70 L288 140"/>
-  <path class="ln-g" d="M538 70 L472 140"/>
-  <path class="ln-p" d="M222 270 L288 190"/>
-  <path class="ln-r" d="M538 270 L472 190"/>
-  <path class="ln" d="M380 202 V248"/>
-  <text class="ttl" x="380" y="40" text-anchor="middle">UI = f(state)</text>
-  <text class="sm" x="380" y="62" text-anchor="middle">数据向下流，事件向上传</text>
-  <text class="sm" x="380" y="80" text-anchor="middle">状态一变，React 重新渲染</text>
+<svg class="dgm" viewBox="0 0 760 280" role="img" aria-label="收藏数据被组件树中相距很远的两个组件使用">
+  <rect class="bx" x="300" y="20" width="160" height="40" rx="8"/>
+  <text class="ttl" x="380" y="45" text-anchor="middle">App</text>
+  <rect class="bx" x="120" y="100" width="160" height="40" rx="8"/>
+  <text class="sm" x="200" y="125" text-anchor="middle">Layout</text>
+  <rect class="bx-a" x="40" y="180" width="170" height="50" rx="8"/>
+  <text class="ttl on-a" x="125" y="202" text-anchor="middle">Header</text>
+  <text class="sm" x="125" y="220" text-anchor="middle">显示“已收藏 3 篇”</text>
+  <rect class="bx" x="480" y="100" width="160" height="40" rx="8"/>
+  <text class="sm" x="560" y="125" text-anchor="middle">StoriesPage</text>
+  <rect class="bx" x="480" y="160" width="160" height="36" rx="8"/>
+  <text class="sm" x="560" y="183" text-anchor="middle">List</text>
+  <rect class="bx-a" x="480" y="216" width="160" height="50" rx="8"/>
+  <text class="ttl on-a" x="560" y="238" text-anchor="middle">Item</text>
+  <text class="sm" x="560" y="256" text-anchor="middle">☆ 按钮：添加 / 移除</text>
+  <path class="ln" d="M350 62 L210 98"/><path class="ln" d="M410 62 L550 98"/>
+  <path class="ln" d="M180 142 L140 178"/><path class="ln" d="M560 142 V158"/><path class="ln" d="M560 198 V214"/>
+  <path class="ln-a" d="M212 205 C330 205 350 240 476 240" stroke-dasharray="6 5"/>
+  <text class="sm on-a" x="340" y="200" text-anchor="middle">需要同一份数据</text>
+  <text class="sm" x="700" y="150" text-anchor="middle">如果用 props：</text>
+  <text class="sm" x="700" y="168" text-anchor="middle">App → Layout →</text>
+  <text class="sm" x="700" y="186" text-anchor="middle">StoriesPage →</text>
+  <text class="sm" x="700" y="204" text-anchor="middle">List → Item</text>
 </svg>
-<figcaption>图 37-1　全书的知识地图</figcaption>
+<figcaption>图 37-1　两个相距很远的组件需要同一份数据：用 props 要穿过一长串中间组件</figcaption>
 </figure>
 
-<h2 id="cheatsheet">核心概念速查</h2>
+<p>
+  按第 11 章的规则，状态要提升到它们的共同祖先 <code>App</code>，然后一路用 props 传下去 —— Layout、StoriesPage、List 都得转手。
+  这就是 prop drilling。而且现在有了路由（第 36 章），列表页由路由渲染，想从 App 传 props 下去更加别扭。
+</p>
 
-<div class="tw">
-<table>
-  <tr><th>需求</th><th>用什么</th><th>章节</th></tr>
-  <tr><td>在界面里显示变量</td><td><code>{value}</code></td><td>4</td></tr>
-  <tr><td>渲染列表</td><td><code>list.map(item =&gt; &lt;Item key={item.id} /&gt;)</code></td><td>5</td></tr>
-  <tr><td>把数据传给子组件</td><td>props</td><td>9</td></tr>
-  <tr><td>保存会变化的数据</td><td><code>useState</code></td><td>10</td></tr>
-  <tr><td>子组件通知父组件</td><td>回调 prop <code>onXxx</code></td><td>11</td></tr>
-  <tr><td>多个组件共享状态</td><td>状态提升到共同祖先；层级深时用 Context</td><td>11、25</td></tr>
-  <tr><td>表单输入</td><td>受控组件 <code>value</code> + <code>onChange</code>；或 form action + FormData</td><td>12、24</td></tr>
-  <tr><td>和外部系统同步</td><td><code>useEffect</code>（记得清理）</td><td>14</td></tr>
-  <tr><td>复用有状态的逻辑</td><td>自定义 Hook <code>useXxx</code></td><td>15</td></tr>
-  <tr><td>让组件接收任意内容</td><td><code>children</code></td><td>16</td></tr>
-  <tr><td>操作 DOM</td><td><code>useRef</code> + <code>ref</code></td><td>17</td></tr>
-  <tr><td>根据状态显示不同内容</td><td><code>? :</code>、<code>&amp;&amp;</code>、提前 return</td><td>19</td></tr>
-  <tr><td>相关联的复杂状态</td><td><code>useReducer</code></td><td>20</td></tr>
-  <tr><td>请求远程数据</td><td>effect + fetch/axios（生产中用 TanStack Query 或框架）</td><td>21–23</td></tr>
-  <tr><td>提交表单</td><td><code>&lt;form action={fn}&gt;</code>、<code>useActionState</code>、<code>useFormStatus</code></td><td>24</td></tr>
-  <tr><td>组件样式</td><td>CSS Modules / Tailwind / CSS-in-JS</td><td>26、27</td></tr>
-  <tr><td>性能优化</td><td>先测量；<code>memo</code>、<code>useCallback</code>、<code>useMemo</code> 或 React Compiler</td><td>28</td></tr>
-  <tr><td>类型安全</td><td>TypeScript</td><td>29</td></tr>
-  <tr><td>测试</td><td>Vitest + React Testing Library</td><td>30、31</td></tr>
-</table>
-</div>
+<h2 id="pattern">推荐模式：Provider 组件 + 自定义 Hook</h2>
 
-<h2 id="old-vs-new">新旧写法对照总表</h2>
+<p>不要把 <code>createContext</code> 散落在各处使用。把 Context、状态逻辑和读取方式封装在一个文件里：</p>
 
-<p>读老代码、老教程时，用这张表把旧写法“翻译”成今天的写法：</p>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/favorites.jsx</span></div><pre><span class="tk-kw">import</span> { createContext, use, useReducer, useEffect } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
 
-<div class="tw">
-<table>
-  <tr><th>主题</th><th>旧写法 <span class="ver old">过去</span></th><th>新写法 <span class="ver">React 19</span></th><th>章节</th></tr>
-  <tr><td>创建项目</td><td><code>npx create-react-app</code></td><td><code>npm create vite@latest</code>，或 Next.js 等框架</td><td>1、2</td></tr>
-  <tr><td>组件</td><td><code>class X extends React.Component</code></td><td>函数组件</td><td>3</td></tr>
-  <tr><td>导入 React</td><td>每个文件 <code>import React from 'react'</code></td><td>只写 JSX 时无需导入（新 JSX 转换）</td><td>3、4</td></tr>
-  <tr><td>挂载应用</td><td><code>ReactDOM.render(&lt;App /&gt;, el)</code></td><td><code>createRoot(el).render(&lt;App /&gt;)</code></td><td>6</td></tr>
-  <tr><td>事件处理</td><td>构造函数里 <code>this.handle = this.handle.bind(this)</code>；<code>event.persist()</code></td><td>普通函数/箭头函数，无 this，无事件池</td><td>8</td></tr>
-  <tr><td>props 校验与默认值</td><td><code>propTypes</code>、<code>defaultProps</code></td><td>TypeScript + 参数默认值（React 19 已移除前两者对函数组件的支持）</td><td>9、13</td></tr>
-  <tr><td>状态</td><td><code>this.state</code> + <code>this.setState</code>（合并对象）</td><td><code>useState</code>（替换值）、<code>useReducer</code></td><td>10、20</td></tr>
-  <tr><td>批处理</td><td>只在 React 事件中批处理</td><td>到处自动批处理（React 18+）</td><td>10</td></tr>
-  <tr><td>副作用</td><td><code>componentDidMount</code> / <code>DidUpdate</code> / <code>WillUnmount</code></td><td><code>useEffect</code> + 清理函数，按“同步什么”组织</td><td>14</td></tr>
-  <tr><td>逻辑复用</td><td>高阶组件（HOC）、render props</td><td>自定义 Hook</td><td>15</td></tr>
-  <tr><td>Fragment</td><td><code>&lt;React.Fragment&gt;</code> / 返回数组</td><td><code>&lt;&gt;…&lt;/&gt;</code></td><td>16</td></tr>
-  <tr><td>ref</td><td>字符串 ref、<code>createRef</code>、<code>forwardRef</code></td><td><code>useRef</code>；ref 是普通 prop；ref 回调可返回清理函数</td><td>17</td></tr>
-  <tr><td>表单提交</td><td><code>onSubmit</code> + <code>preventDefault</code> + 手动 pending 状态</td><td><code>&lt;form action&gt;</code> + <code>useActionState</code> / <code>useFormStatus</code></td><td>24</td></tr>
-  <tr><td>Context</td><td><code>&lt;Ctx.Provider&gt;</code> + <code>useContext</code></td><td><code>&lt;Ctx value&gt;</code> + <code>use(Ctx)</code></td><td>25</td></tr>
-  <tr><td>异步数据</td><td>effect 里手动 loading/error</td><td>仍可用；另有 <code>use(promise)</code> + Suspense、数据请求库、服务端组件</td><td>19、25</td></tr>
-  <tr><td>样式</td><td>运行时 CSS-in-JS（styled-components）、Sass 嵌套</td><td>CSS Modules、Tailwind、原生 CSS 嵌套、零运行时方案</td><td>26、27</td></tr>
-  <tr><td>性能</td><td>手写 <code>memo</code> / <code>useCallback</code> / <code>useMemo</code></td><td>React Compiler 自动记忆化</td><td>22、28</td></tr>
-  <tr><td>测试</td><td>Jest + Enzyme / react-test-renderer</td><td>Vitest + React Testing Library（+ user-event、MSW）</td><td>30、31</td></tr>
-</table>
-</div>
+<span class="tk-kw">const</span> <span class="tk-tp">FavoritesContext</span> = <span class="tk-fn">createContext</span>(<span class="tk-kw">null</span>);
 
-<h2 id="next">接下来去哪里</h2>
+<span class="tk-kw">const</span> favoritesReducer = (state, action) =&gt; {
+  <span class="tk-kw">switch</span> (action.<span class="tk-kw">type</span>) {
+    <span class="tk-kw">case</span> <span class="tk-st">'TOGGLE_FAVORITE'</span>: {
+      <span class="tk-kw">const</span> story = action.payload;
+      <span class="tk-kw">const</span> exists = state.<span class="tk-fn">some</span>((s) =&gt; s.objectID === story.objectID);
+      <span class="tk-kw">return</span> exists
+        ? state.<span class="tk-fn">filter</span>((s) =&gt; s.objectID !== story.objectID)
+        : [...state, story];
+    }
+    <span class="tk-kw">case</span> <span class="tk-st">'CLEAR_FAVORITES'</span>:
+      <span class="tk-kw">return</span> [];
+    <span class="tk-kw">default</span>:
+      <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Error</span>();
+  }
+};
 
-<p>作者的建议是：<strong>先别急着读下一本书</strong>。花一周时间扩展这个应用，或者用一个自己感兴趣的 API 做一个新项目，部署上线，拿给别人看。之后再按兴趣挑选方向：</p>
+<span class="tk-kw">const</span> loadFavorites = () =&gt;
+  <span class="tk-tp">JSON</span>.<span class="tk-fn">parse</span>(localStorage.<span class="tk-fn">getItem</span>(<span class="tk-st">'favorites'</span>) ?? <span class="tk-st">'[]'</span>);
+
+<span class="tk-cm">// 1. Provider 组件：持有状态，并把它提供给整个子树</span>
+<span class="tk-kw">const</span> <span class="tk-tp">FavoritesProvider</span> = ({ children }) =&gt; {
+  <span class="tk-kw">const</span> [favorites, dispatch] = <span class="tk-fn">useReducer</span>(
+    favoritesReducer,
+    <span class="tk-kw">undefined</span>,
+    loadFavorites <span class="tk-cm">// 惰性初始化：只在首次渲染时读取 localStorage</span>
+  );
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    localStorage.<span class="tk-fn">setItem</span>(<span class="tk-st">'favorites'</span>, <span class="tk-tp">JSON</span>.<span class="tk-fn">stringify</span>(favorites));
+  }, [favorites]);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;FavoritesContext</span> value={{ favorites, dispatch }}&gt;
+      {children}
+    <span class="tk-tg">&lt;/FavoritesContext</span>&gt;
+  );
+};
+
+<span class="tk-cm">// 2. 自定义 Hook：统一的读取入口，并检查是否在 Provider 内使用</span>
+<span class="tk-kw">const</span> useFavorites = () =&gt; {
+  <span class="tk-kw">const</span> context = <span class="tk-fn">use</span>(<span class="tk-tp">FavoritesContext</span>);
+
+  <span class="tk-kw">if</span> (!context) {
+    <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Error</span>(<span class="tk-st">'useFavorites must be used within a FavoritesProvider'</span>);
+  }
+
+  <span class="tk-kw">const</span> { favorites, dispatch } = context;
+
+  <span class="tk-kw">return</span> {
+    favorites,
+    isFavorite: (story) =&gt;
+      favorites.<span class="tk-fn">some</span>((s) =&gt; s.objectID === story.objectID),
+    toggleFavorite: (story) =&gt;
+      <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'TOGGLE_FAVORITE'</span>, payload: story }),
+    clearFavorites: () =&gt; <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'CLEAR_FAVORITES'</span> }),
+  };
+};
+
+<span class="tk-kw">export</span> { <span class="tk-tp">FavoritesProvider</span>, useFavorites };</pre></div>
+
+<p>在应用的上层包一次 Provider（放在路由外面，所有页面都能用）：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/main.jsx</span></div><pre><span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;FavoritesProvider</span>&gt;
+      <span class="tk-tg">&lt;RouterProvider</span> router={router} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/FavoritesProvider</span>&gt;
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<p>任何组件都可以直接使用，中间层一行都不用改：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 页头</span>
+<span class="tk-kw">const</span> <span class="tk-tp">Header</span> = () =&gt; {
+  <span class="tk-kw">const</span> { favorites } = <span class="tk-fn">useFavorites</span>();
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;span</span>&gt;★ {favorites.length} saved<span class="tk-tg">&lt;/span</span>&gt;;
+};
+
+<span class="tk-cm">// 列表项</span>
+<span class="tk-kw">const</span> <span class="tk-tp">Item</span> = ({ item, onRemoveItem }) =&gt; {
+  <span class="tk-kw">const</span> { isFavorite, toggleFavorite } = <span class="tk-fn">useFavorites</span>();
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;li</span>&gt;
+      ...
+      <span class="tk-tg">&lt;button</span>
+        <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+        aria-pressed={<span class="tk-fn">isFavorite</span>(item)}
+        onClick={() =&gt; <span class="tk-fn">toggleFavorite</span>(item)}
+      &gt;
+        {<span class="tk-fn">isFavorite</span>(item) ? <span class="tk-st">'★'</span> : <span class="tk-st">'☆'</span>}
+      <span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/li</span>&gt;
+  );
+};</pre></div>
 
 <figure>
-<svg class="dgm" viewBox="0 0 760 360" role="img" aria-label="学完本教程后的进阶方向">
-  <rect class="bx-a" x="300" y="150" width="160" height="60" rx="14"/>
-  <text class="ttl on-a" x="380" y="176" text-anchor="middle">你现在</text>
-  <text class="sm" x="380" y="196" text-anchor="middle">React 19 基础 ✓</text>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="Provider 组件与自定义 Hook 的封装结构">
+  <rect class="bx-a" x="20" y="20" width="340" height="220" rx="14"/>
+  <text class="ttl on-a" x="190" y="46" text-anchor="middle">favorites.jsx（对外只暴露两样东西）</text>
+  <rect class="bx" x="40" y="62" width="300" height="34" rx="6"/>
+  <text class="sm" x="190" y="84" text-anchor="middle">FavoritesContext（不导出）</text>
+  <rect class="bx" x="40" y="104" width="300" height="34" rx="6"/>
+  <text class="sm" x="190" y="126" text-anchor="middle">favoritesReducer + localStorage 同步</text>
+  <rect class="bx-g" x="40" y="146" width="140" height="80" rx="8"/>
+  <text class="ttl on-g" x="110" y="176" text-anchor="middle">Provider</text>
+  <text class="sm" x="110" y="198" text-anchor="middle">持有状态</text>
+  <rect class="bx-b" x="200" y="146" width="140" height="80" rx="8"/>
+  <text class="ttl on-b" x="270" y="176" text-anchor="middle">useFavorites</text>
+  <text class="sm" x="270" y="198" text-anchor="middle">读取 + 操作方法</text>
 
-  <rect class="bx-b" x="20" y="20" width="220" height="70" rx="10"/>
-  <text class="ttl on-b" x="130" y="44" text-anchor="middle">框架</text>
-  <text class="sm" x="130" y="64" text-anchor="middle">Next.js：SSR、文件路由、</text>
-  <text class="sm" x="130" y="80" text-anchor="middle">服务端组件与服务端函数</text>
-
-  <rect class="bx-b" x="270" y="20" width="220" height="70" rx="10"/>
-  <text class="ttl on-b" x="380" y="44" text-anchor="middle">路由</text>
-  <text class="sm" x="380" y="64" text-anchor="middle">React Router / TanStack Router</text>
-  <text class="sm" x="380" y="80" text-anchor="middle">多页面、不刷新</text>
-
-  <rect class="bx-b" x="520" y="20" width="220" height="70" rx="10"/>
-  <text class="ttl on-b" x="630" y="44" text-anchor="middle">数据</text>
-  <text class="sm" x="630" y="64" text-anchor="middle">TanStack Query、数据库与认证</text>
-  <text class="sm" x="630" y="80" text-anchor="middle">Firebase / Supabase / 自建后端</text>
-
-  <rect class="bx-p" x="20" y="150" width="240" height="60" rx="10"/>
-  <text class="ttl on-p" x="140" y="174" text-anchor="middle">状态管理</text>
-  <text class="sm" x="140" y="194" text-anchor="middle">Context 之外：Zustand、Redux Toolkit</text>
-  <rect class="bx-p" x="500" y="150" width="240" height="60" rx="10"/>
-  <text class="ttl on-p" x="620" y="174" text-anchor="middle">工程化</text>
-  <text class="sm" x="620" y="194" text-anchor="middle">Webpack/Babel 原理、代码组织</text>
-
-  <rect class="bx-g" x="20" y="270" width="220" height="70" rx="10"/>
-  <text class="ttl on-g" x="130" y="294" text-anchor="middle">UI 组件</text>
-  <text class="sm" x="130" y="314" text-anchor="middle">先自己写下拉框、对话框，</text>
-  <text class="sm" x="130" y="330" text-anchor="middle">再用 shadcn/ui、Radix 等</text>
-
-  <rect class="bx-g" x="270" y="270" width="220" height="70" rx="10"/>
-  <text class="ttl on-g" x="380" y="294" text-anchor="middle">质量</text>
-  <text class="sm" x="380" y="314" text-anchor="middle">更深入的 TypeScript、</text>
-  <text class="sm" x="380" y="330" text-anchor="middle">RTL 与 Playwright 测试</text>
-
-  <rect class="bx-g" x="520" y="270" width="220" height="70" rx="10"/>
-  <text class="ttl on-g" x="630" y="294" text-anchor="middle">移动端</text>
-  <text class="sm" x="630" y="314" text-anchor="middle">React Native：同样的思想，</text>
-  <text class="sm" x="630" y="330" text-anchor="middle">不同的组件和平台 API</text>
-
-  <path class="ln-d" d="M340 148 L150 92"/>
-  <path class="ln-d" d="M380 148 V92"/>
-  <path class="ln-d" d="M420 148 L610 92"/>
-  <path class="ln-d" d="M298 180 H262"/>
-  <path class="ln-d" d="M462 180 H498"/>
-  <path class="ln-d" d="M340 212 L150 268"/>
-  <path class="ln-d" d="M380 212 V268"/>
-  <path class="ln-d" d="M420 212 L610 268"/>
+  <rect class="bx-g" x="440" y="30" width="300" height="50" rx="10"/>
+  <text class="mono sm on-g" x="590" y="60" text-anchor="middle">&lt;FavoritesProvider&gt; 包住应用</text>
+  <rect class="bx-b" x="440" y="110" width="140" height="50" rx="10"/>
+  <text class="mono sm on-b" x="510" y="140" text-anchor="middle">Header</text>
+  <rect class="bx-b" x="600" y="110" width="140" height="50" rx="10"/>
+  <text class="mono sm on-b" x="670" y="140" text-anchor="middle">Item</text>
+  <text class="sm" x="590" y="196" text-anchor="middle">组件只知道 useFavorites()，</text>
+  <text class="sm" x="590" y="214" text-anchor="middle">不知道 Context、reducer、存储的存在</text>
+  <path class="ln-g" d="M362 90 C400 90 400 55 436 55" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M362 196 C400 196 420 140 436 135" marker-end="url(#ar-b)"/>
 </svg>
-<figcaption>图 37-2　进阶方向。没有固定顺序，跟着自己的项目需要走</figcaption>
+<figcaption>图 37-2　封装之后，将来把实现换成 Zustand 之类的库，使用方的代码都不用改</figcaption>
 </figure>
 
+<div class="box key">
+  <div class="t">&#9733; 为什么要这样封装</div>
+  <ul style="margin:0">
+    <li><strong>隐藏实现</strong>：使用方不关心数据存在 Context 还是别的地方。</li>
+    <li><strong>尽早报错</strong>：忘了包 Provider 时，得到一条清晰的错误，而不是莫名其妙的 <code>undefined</code>。</li>
+    <li><strong>业务方法集中</strong>：<code>toggleFavorite</code> 这样的操作写在一处，而不是每个组件都去 dispatch。</li>
+  </ul>
+</div>
+
+<h2 id="theme">主题切换</h2>
+
+<p>主题是 Context 最经典的用例：值很少变化，却几乎每个组件都可能用到。</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/theme.jsx</span></div><pre><span class="tk-kw">import</span> { createContext, use, useEffect } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">ThemeContext</span> = <span class="tk-fn">createContext</span>(<span class="tk-kw">null</span>);
+
+<span class="tk-kw">const</span> <span class="tk-tp">ThemeProvider</span> = ({ children }) =&gt; {
+  <span class="tk-kw">const</span> [theme, setTheme] = <span class="tk-fn">useStorageState</span>(<span class="tk-st">'theme'</span>, <span class="tk-st">'light'</span>); <span class="tk-cm">// 第 15 章的 Hook</span>
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-cm">// 同步到 &lt;html data-theme="dark"&gt;，CSS 根据它切换颜色变量</span>
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  <span class="tk-kw">const</span> toggleTheme = () =&gt;
+    <span class="tk-fn">setTheme</span>((current) =&gt; (current === <span class="tk-st">'light'</span> ? <span class="tk-st">'dark'</span> : <span class="tk-st">'light'</span>));
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;ThemeContext</span> value={{ theme, toggleTheme }}&gt;
+      {children}
+    <span class="tk-tg">&lt;/ThemeContext</span>&gt;
+  );
+};
+
+<span class="tk-kw">const</span> useTheme = () =&gt; {
+  <span class="tk-kw">const</span> context = <span class="tk-fn">use</span>(<span class="tk-tp">ThemeContext</span>);
+  <span class="tk-kw">if</span> (!context) <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Error</span>(<span class="tk-st">'useTheme must be used within a ThemeProvider'</span>);
+  <span class="tk-kw">return</span> context;
+};
+
+<span class="tk-kw">export</span> { <span class="tk-tp">ThemeProvider</span>, useTheme };</pre></div>
+
+<div class="code" data-lang="css"><div class="bar"><span class="tag">src/index.css</span></div><pre>:root {
+  <span class="tk-pr">--bg</span>: <span class="tk-nm">#ffffff</span>;
+  <span class="tk-pr">--fg</span>: <span class="tk-nm">#171212</span>;
+}
+
+[data-theme=<span class="tk-st">'dark'</span>] {
+  <span class="tk-pr">--bg</span>: <span class="tk-nm">#171212</span>;
+  <span class="tk-pr">--fg</span>: <span class="tk-nm">#f5f5f5</span>;
+}
+
+body {
+  <span class="tk-pr">background</span>: var(--bg);
+  <span class="tk-pr">color</span>: var(--fg);
+}</pre></div>
+
+<p>
+  注意这里的分工：<strong>React 只负责“当前是哪个主题”这一个状态</strong>，颜色的切换交给 CSS 变量完成。
+  这样主题变化时，大部分组件根本不需要重新渲染 —— 它们的样式由浏览器自动更新。
+</p>
+
+<h2 id="rerender">Context 的代价：重新渲染</h2>
+
+<p>
+  Context 的值一变，<strong>所有读取这个 Context 的组件</strong>都会重新渲染，即使它们只用到了值的一小部分。
+  而且注意上面 Provider 里的 <code>value={{ favorites, dispatch }}</code>：每次 Provider 渲染都会创建一个新对象，
+  消费者会认为值变了。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="Context 值变化导致所有消费者重新渲染，拆分 Context 可以缩小范围">
+  <text class="ttl" x="190" y="24" text-anchor="middle">一个大 Context</text>
+  <rect class="bx-a" x="40" y="40" width="300" height="40" rx="8"/>
+  <text class="mono sm on-a" x="190" y="65" text-anchor="middle">{ theme, favorites, user, … }</text>
+  <rect class="bx-r" x="40" y="120" width="90" height="40" rx="8"/><text class="sm on-r" x="85" y="145" text-anchor="middle">Header 🔄</text>
+  <rect class="bx-r" x="145" y="120" width="90" height="40" rx="8"/><text class="sm on-r" x="190" y="145" text-anchor="middle">Item 🔄</text>
+  <rect class="bx-r" x="250" y="120" width="90" height="40" rx="8"/><text class="sm on-r" x="295" y="145" text-anchor="middle">Toggle 🔄</text>
+  <path class="ln-r" d="M110 82 L85 116"/><path class="ln-r" d="M190 82 V116"/><path class="ln-r" d="M270 82 L295 116"/>
+  <text class="sm" x="190" y="190" text-anchor="middle">收藏一篇文章 → 只关心主题的</text>
+  <text class="sm" x="190" y="208" text-anchor="middle">ThemeToggle 也重新渲染</text>
+
+  <text class="ttl on-g" x="570" y="24" text-anchor="middle">按关注点拆分</text>
+  <rect class="bx-g" x="420" y="40" width="140" height="40" rx="8"/>
+  <text class="mono sm on-g" x="490" y="65" text-anchor="middle">ThemeContext</text>
+  <rect class="bx-g" x="590" y="40" width="150" height="40" rx="8"/>
+  <text class="mono sm on-g" x="665" y="65" text-anchor="middle">FavoritesContext</text>
+  <rect class="bx" x="420" y="120" width="90" height="40" rx="8"/><text class="sm" x="465" y="145" text-anchor="middle">Toggle</text>
+  <rect class="bx-r" x="540" y="120" width="90" height="40" rx="8"/><text class="sm on-r" x="585" y="145" text-anchor="middle">Header 🔄</text>
+  <rect class="bx-r" x="650" y="120" width="90" height="40" rx="8"/><text class="sm on-r" x="695" y="145" text-anchor="middle">Item 🔄</text>
+  <path class="ln" d="M475 82 L465 116"/><path class="ln-r" d="M640 82 L590 116"/><path class="ln-r" d="M690 82 L695 116"/>
+  <text class="sm" x="580" y="190" text-anchor="middle">收藏变化只影响真正用到收藏的组件</text>
+</svg>
+<figcaption>图 37-3　Context 没有“只订阅一部分”的能力，所以要按关注点拆成多个 Context</figcaption>
+</figure>
+
+<p>几个常用的优化手段：</p>
 <ul>
-  <li><strong>框架</strong>：Next.js 是掌握 React 这个“库”之后最自然的下一步，你会接触服务端渲染、文件路由、服务端组件和服务端函数。</li>
-  <li><strong>路由</strong>：应用有多个页面时，用 React Router 在不刷新页面的情况下切换 URL 和界面。</li>
-  <li><strong>代码组织</strong>：回顾第 32 章，把 Hacker Stories 按功能重新组织一遍。</li>
-  <li><strong>构建工具</strong>：从零用 Webpack + Babel 搭一个 React 项目，理解 Vite 在背后替你做了什么。</li>
-  <li><strong>数据库与认证</strong>：让数据跨会话保存、在用户之间共享。Firebase、Supabase 能让你不写后端就用上数据库和登录。</li>
-  <li><strong>自己的后端</strong>：写一个连接数据库、处理认证授权的后端，用 REST 或 GraphQL 和前端通信。</li>
-  <li><strong>状态管理</strong>：大多数应用用组件状态 + Context 就够了；真正需要全局状态时再看 Zustand 或 Redux Toolkit。</li>
-  <li><strong>测试</strong>：深入 React Testing Library 的组件测试，以及 Playwright 的端到端测试。</li>
-  <li><strong>TypeScript</strong>：越用越离不开，很多人最后会全面切换过去。</li>
-  <li><strong>UI 组件</strong>：初学者常常太早引入组件库。先用普通 HTML 和 React 状态写出下拉框、复选框、对话框，再用组件库会轻松得多。</li>
-  <li><strong>React Native</strong>：用 React 写 iOS / Android 应用。核心概念相同，区别在于布局组件、构建工具和平台 API。</li>
+  <li><strong>按关注点拆分</strong>：主题、收藏、用户各一个 Context，互不影响。</li>
+  <li><strong>稳定 value</strong>：用 <code>useMemo</code> 包住 value 对象（启用 React Compiler 时会自动处理）。</li>
+  <li><strong>拆分“读”和“写”</strong>：<code>dispatch</code> 永远不变，可以放进单独的 Context。只负责触发操作的组件（比如一个“清空收藏”按钮）读取 dispatch Context，就不会因为收藏列表变化而重新渲染。</li>
+  <li><strong>把变化频繁的状态放在别处</strong>：如果一个值每秒变很多次（鼠标位置、输入框内容），不要放进 Context。</li>
 </ul>
 
-<div class="box tip">
-  <div class="t">&#128161; 最后的建议</div>
-  <p>
-    学框架最快的方式永远是<strong>动手做点什么</strong>。找一个你真正感兴趣的 API —— 天气、电影、股票、游戏、GitHub ——
-    用本教程学到的东西做一个小应用，部署出去。遇到问题回来翻对应的章节。做完一个完整的项目，胜过读十篇教程。
-  </p>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">FavoritesProvider</span> = ({ children }) =&gt; {
+  <span class="tk-kw">const</span> [favorites, dispatch] = <span class="tk-fn">useReducer</span>(favoritesReducer, <span class="tk-kw">undefined</span>, loadFavorites);
+
+  <span class="tk-cm">// 没有启用 React Compiler 时，手动稳定 value</span>
+  <span class="tk-kw">const</span> value = <span class="tk-fn">useMemo</span>(() =&gt; ({ favorites, dispatch }), [favorites]);
+
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;FavoritesContext</span> value={value}&gt;{children}<span class="tk-tg">&lt;/FavoritesContext</span>&gt;;
+};</pre></div>
+
+<h2 id="when">什么时候用 Context</h2>
+
+<div class="tw">
+<table>
+  <tr><th>场景</th><th>推荐做法</th></tr>
+  <tr><td>只隔了一两层</td><td>直接传 props，清晰又简单</td></tr>
+  <tr><td>中间组件只是“摆放”子组件</td><td>组件组合：把子组件作为 <code>children</code> 传进去（第 16 章）</td></tr>
+  <tr><td>主题、语言、当前登录用户</td><td><strong>Context</strong>：变化少、用的地方多</td></tr>
+  <tr><td>搜索词、筛选条件、分页</td><td>URL（第 36 章）</td></tr>
+  <tr><td>从服务器获取的数据</td><td>TanStack Query 等服务端状态库（第 40 章），它自带共享和缓存</td></tr>
+  <tr><td>复杂、频繁更新的全局客户端状态</td><td>Zustand、Redux Toolkit 等状态管理库（第 45 章）</td></tr>
+</table>
 </div>
 
 <div class="box note">
-  <div class="t">&#9432; 关于原书</div>
+  <div class="t">&#9432; Context 不是状态管理工具</div>
   <p>
-    本站基于 Robin Wieruch 的《The Road to React》整理而成。原书附有每一节的完整源码、TypeScript 版本源码和更多延伸阅读链接，
-    作者的网站 <a href="https://www.robinwieruch.de">robinwieruch.de</a> 上也有大量相关文章。如果这套教程对你有帮助，欢迎支持原书
-    （<a href="https://www.roadtoreact.com/">roadtoreact.com</a>）。
+    Context 本身只是一个“<strong>传递</strong>机制”：它把一个值从上层送到下层，不负责存储和更新。
+    真正存状态的仍然是 Provider 里的 <code>useState</code> / <code>useReducer</code>。
+    理解这一点，就明白为什么大型应用会引入专门的状态管理库：它们在“存储”和“精确订阅”上做得更好。
   </p>
+</div>
+
+<h2 id="old-new">新旧对照</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">React 18 及以前 <span class="ver old">旧写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { createContext, useContext } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-tg">&lt;FavoritesContext.Provider</span> value={value}&gt;
+  {children}
+<span class="tk-tg">&lt;/FavoritesContext.Provider</span>&gt;
+
+<span class="tk-kw">const</span> context = <span class="tk-fn">useContext</span>(<span class="tk-tp">FavoritesContext</span>);
+
+<span class="tk-cm">// 类组件时代还有 &lt;Ctx.Consumer&gt;{(v) =&gt; …}&lt;/Ctx.Consumer&gt;</span></pre></div>
+  </div>
+  <div class="new"><div class="h">React 19 <span class="ver">新写法</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { createContext, use } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-tg">&lt;FavoritesContext</span> value={value}&gt;
+  {children}
+<span class="tk-tg">&lt;/FavoritesContext</span>&gt;
+
+<span class="tk-kw">const</span> context = <span class="tk-fn">use</span>(<span class="tk-tp">FavoritesContext</span>);
+
+<span class="tk-cm">// use() 还可以在 if 里调用</span></pre></div>
+  </div>
 </div>
 
 <h2 id="summary">小结</h2>
 <ul>
-  <li>React 的核心只有几条：组件是函数、UI 是状态的函数、数据向下流、事件向上传、副作用放在渲染之外。</li>
-  <li>读老代码时，用新旧对照表把类组件、生命周期、forwardRef、onSubmit+preventDefault 等翻译成现代写法。</li>
-  <li>下一步：做自己的项目，然后按需学习框架、路由、数据、状态管理、测试等方向。</li>
+  <li>Context 解决“同一份数据要穿过很多层组件”的问题。</li>
+  <li>推荐封装：一个文件里包含 Context（不导出）、Provider 组件、自定义 Hook（带 Provider 检查和业务方法）。</li>
+  <li>Context 值变化会让所有消费者重新渲染：按关注点拆分、稳定 value、拆分读写。</li>
+  <li>不是所有共享状态都适合 Context：URL、服务端状态库、状态管理库各有更合适的场景。</li>
 </ul>
 
 <div class="exercise">
-  <h3>毕业作业</h3>
+  <h3>动手练习</h3>
   <ol>
-    <li>挑一个公开 API，做一个包含搜索、列表、详情、加载与错误状态的小应用。</li>
-    <li>给它加上 TypeScript 和至少三个测试。</li>
-    <li>部署到 GitHub Pages，并在 README 里写下你用到了本教程的哪些知识点。</li>
+    <li>实现收藏夹，并新增一个 <code>/favorites</code> 路由页面列出所有收藏。</li>
+    <li>实现主题切换，并让它默认跟随系统设置（提示：<code>window.matchMedia('(prefers-color-scheme: dark)')</code>）。</li>
+    <li>用 React DevTools 的 “Highlight updates” 观察收藏时哪些组件重新渲染；尝试拆分 Context 后再观察一次。</li>
+    <li>把 dispatch 拆进单独的 Context，写一个只读取 dispatch 的“清空收藏”按钮，验证它不会因收藏变化而重新渲染。</li>
   </ol>
 </div>
 
-<p style="text-align:center;margin-top:40px;font-size:18px">&#127881; 恭喜完成全部 37 章！感谢阅读。</p>
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>Context 会带来什么性能问题？如何缓解？</summary>
+    <div><p>Provider 的 value 变化时所有消费者都会重新渲染。可以拆分 Context、用 useMemo 稳定 value、分离 state 与 dispatch，并避免把高频变化的值放进 Context。</p></div></details>
+  <details><summary>为什么要为 Context 封装一个自定义 Hook？</summary>
+    <div><p>隐藏实现细节、提供统一的业务方法、在 Provider 缺失时给出清晰的错误，以及方便日后替换实现。</p></div></details>
+  <details><summary>Context 是状态管理方案吗？</summary>
+    <div><p>它是依赖注入 / 数据传递机制，状态仍由 useState 或 useReducer 管理；它没有选择性订阅能力，大型应用常配合或改用专门的状态管理库。</p></div></details>
+  <details><summary>什么情况下不该用 Context？</summary>
+    <div><p>只隔一两层（直接传 props）、可以用组件组合解决、数据应该放在 URL 中、属于服务端数据、或更新非常频繁时。</p></div></details>
+</div>
 
 <div id="pager"></div>
 </main>

@@ -124,7 +124,7 @@
   <tr><td><code>package.json</code></td><td>列出依赖（<code>dependencies</code>）、开发依赖（<code>devDependencies</code>）和脚本（<code>scripts</code>）</td><td>偶尔看看，<code>npm install xxx</code> 会自动改它</td></tr>
   <tr><td><code>package-lock.json</code></td><td>记录依赖树的精确版本，保证团队每个人装到一样的东西</td><td>提交到 Git，不要手改</td></tr>
   <tr><td><code>node_modules/</code></td><td>实际安装的依赖代码</td><td>不提交（已写在 <code>.gitignore</code>），别人 <code>npm install</code> 就能还原</td></tr>
-  <tr><td><code>vite.config.js</code></td><td>Vite 配置，里面启用了 React 插件</td><td>加插件、改部署路径时才动（第 27、36 章）</td></tr>
+  <tr><td><code>vite.config.js</code></td><td>Vite 配置，里面启用了 React 插件</td><td>加插件、改部署路径时才动（第 27、52 章）</td></tr>
   <tr><td><code>public/</code></td><td>不经处理、原样拷贝的静态资源，如 favicon</td><td>放图标、robots.txt 等</td></tr>
   <tr><td><code>index.html</code></td><td>单页应用的“唯一一页”</td><td>一般只改 <code>&lt;title&gt;</code></td></tr>
   <tr><td><code>src/main.jsx</code></td><td>JavaScript 入口，把 <code>App</code> 渲染进 <code>#root</code></td><td>很少改</td></tr>

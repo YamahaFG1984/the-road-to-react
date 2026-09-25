@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 50 章 · 组合实战：搭一套技术栈 — React 19 入门教程</title>
+<meta name="description" content="把常用库组合进一个项目">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="50">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 50 章 · 生态与选型</span>
+<h1>组合实战：搭一套技术栈</h1>
+<p class="lede">
+  前面几章分别介绍了各类库。真正的项目里它们要<strong>一起工作</strong>：谁包着谁？数据从哪流到哪？文件怎么组织？
+  这一章把 Hacker Stories 升级成一个“真实项目”的形态，用一套主流组合把路由、服务端状态、客户端状态、表单、UI 和测试串起来，
+  最后给出几种常见场景的技术栈模板。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解多个库组合时的分工原则：每类状态只归一个库管</li>
+    <li>按功能组织目录，用自己的模块包装第三方库</li>
+    <li>正确组织入口的 Provider 层级</li>
+    <li>看清一次交互中数据如何在各个库之间流动</li>
+    <li>为不同类型的项目选择一套技术栈</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="stack">选定的技术栈</h2>
+
+<div class="tw">
+<table>
+  <tr><th>职责</th><th>选择</th><th>章节</th></tr>
+  <tr><td>构建</td><td>Vite + React 19（+ React Compiler）</td><td>2、28</td></tr>
+  <tr><td>路由 / URL 状态</td><td>React Router（数据模式）</td><td>36</td></tr>
+  <tr><td>服务端状态</td><td>TanStack Query</td><td>40</td></tr>
+  <tr><td>全局客户端状态</td><td>Zustand</td><td>45</td></tr>
+  <tr><td>表单与校验</td><td>React Hook Form + Zod</td><td>41</td></tr>
+  <tr><td>样式与组件</td><td>Tailwind CSS + shadcn/ui</td><td>27、47</td></tr>
+  <tr><td>类型</td><td>TypeScript</td><td>29</td></tr>
+  <tr><td>测试</td><td>Vitest + Testing Library + MSW</td><td>30、31</td></tr>
+</table>
+</div>
+
+<h2 id="principle">分工原则：每类状态只有一个家</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="组合架构：每类状态由一个库负责">
+  <rect class="bx-a" x="250" y="130" width="260" height="80" rx="14"/>
+  <text class="ttl on-a" x="380" y="158" text-anchor="middle">React 组件</text>
+  <text class="sm" x="380" y="180" text-anchor="middle">只通过自定义 Hook 读写状态</text>
+  <text class="sm" x="380" y="198" text-anchor="middle">shadcn/ui + Tailwind 负责外观</text>
+
+  <rect class="bx-a" x="20" y="20" width="220" height="76" rx="10"/>
+  <text class="ttl on-a" x="130" y="44" text-anchor="middle">URL 状态</text>
+  <text class="sm" x="130" y="64" text-anchor="middle">React Router</text>
+  <text class="sm" x="130" y="82" text-anchor="middle">当前页面、搜索词、页码</text>
+
+  <rect class="bx-b" x="270" y="20" width="220" height="76" rx="10"/>
+  <text class="ttl on-b" x="380" y="44" text-anchor="middle">服务端状态</text>
+  <text class="sm" x="380" y="64" text-anchor="middle">TanStack Query</text>
+  <text class="sm" x="380" y="82" text-anchor="middle">文章列表、详情（缓存）</text>
+
+  <rect class="bx-p" x="520" y="20" width="220" height="76" rx="10"/>
+  <text class="ttl on-p" x="630" y="44" text-anchor="middle">全局客户端状态</text>
+  <text class="sm" x="630" y="64" text-anchor="middle">Zustand</text>
+  <text class="sm" x="630" y="82" text-anchor="middle">收藏夹、主题</text>
+
+  <rect class="bx" x="20" y="244" width="220" height="76" rx="10"/>
+  <text class="ttl" x="130" y="268" text-anchor="middle">表单状态</text>
+  <text class="sm" x="130" y="288" text-anchor="middle">React Hook Form + Zod</text>
+  <text class="sm" x="130" y="306" text-anchor="middle">提交文章表单</text>
+
+  <rect class="bx-g" x="270" y="244" width="220" height="76" rx="10"/>
+  <text class="ttl on-g" x="380" y="268" text-anchor="middle">局部 UI 状态</text>
+  <text class="sm" x="380" y="288" text-anchor="middle">useState</text>
+  <text class="sm" x="380" y="306" text-anchor="middle">输入框草稿、弹窗开关</text>
+
+  <rect class="bx-r" x="520" y="244" width="220" height="76" rx="10"/>
+  <text class="ttl on-r" x="630" y="268" text-anchor="middle">&#10060; 不要这样</text>
+  <text class="sm" x="630" y="288" text-anchor="middle">把 API 数据复制进 Zustand</text>
+  <text class="sm" x="630" y="306" text-anchor="middle">把搜索词同时存 URL 和 store</text>
+
+  <path class="ln-a" d="M150 98 L290 132"/><path class="ln-b" d="M380 98 V128"/><path class="ln-p" d="M610 98 L470 132"/>
+  <path class="ln" d="M150 242 L290 210"/><path class="ln-g" d="M380 242 V212"/>
+</svg>
+<figcaption>图 50-1　一份数据只存在一个地方。同一份数据存两处，就一定会出现不同步</figcaption>
+</figure>
+
+<h2 id="structure">目录结构：按功能组织</h2>
+
+<p>第 32 章讲过按功能组织目录。库多了以后，这样做的好处更明显 —— 和某个功能相关的路由、请求、状态、组件都在一起：</p>
+
+<div class="code" data-lang="tree"><div class="bar"><span class="tag">目录结构</span></div><pre>src/
+├── main.tsx                  ← 入口：Provider 与路由
+├── routes.tsx                ← 路由表
+├── lib/                      ← 对第三方库的统一封装
+│   ├── http.ts               ← fetch 封装（第 46 章）
+│   ├── query-client.ts       ← QueryClient 实例与默认配置
+│   └── utils.ts              ← cn()（clsx + tailwind-merge，shadcn/ui 约定）
+├── components/
+│   └── ui/                   ← shadcn/ui 复制进来的基础组件
+│       ├── button.tsx
+│       └── input.tsx
+├── features/
+│   ├── stories/
+│   │   ├── api.ts            ← 请求函数 + queryOptions
+│   │   ├── stories-page.tsx  ← 列表页（路由组件）
+│   │   ├── story-page.tsx    ← 详情页
+│   │   ├── story-list.tsx
+│   │   ├── submit-story-form.tsx
+│   │   └── story-schema.ts   ← Zod schema
+│   └── favorites/
+│       ├── favorites-store.ts← Zustand store
+│       └── favorite-button.tsx
+└── test/
+    ├── setup.ts
+    ├── handlers.ts           ← MSW 模拟的 API
+    └── render.tsx            ← 带 Provider 的 render 工具</pre></div>
+
+<div class="box key">
+  <div class="t">&#9733; 用自己的模块包一层</div>
+  <p>
+    组件不直接调用 <code>axios.get</code>、不直接写 <code>useQuery({ queryKey: … })</code>，而是调用 <code>features/stories/api.ts</code> 里导出的东西。
+    这样 queryKey 只定义一次、URL 只写在一处，将来把 axios 换成 fetch、把 TanStack Query 换成 SWR，改动都被限制在一个文件里。
+  </p>
+</div>
+
+<h2 id="entry">入口：Provider 的层级</h2>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/lib/query-client.ts</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">QueryClient</span> } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> queryClient = <span class="tk-kw">new</span> <span class="tk-tp">QueryClient</span>({
+  defaultOptions: {
+    queries: { staleTime: 60_000, retry: <span class="tk-nm">1</span> },
+  },
+});</pre></div>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/main.tsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StrictMode</span> } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { createRoot } <span class="tk-kw">from</span> <span class="tk-st">'react-dom/client'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">QueryClientProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">RouterProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">Toaster</span> } <span class="tk-kw">from</span> <span class="tk-st">'sonner'</span>;
+
+<span class="tk-kw">import</span> <span class="tk-st">'./index.css'</span>;
+<span class="tk-kw">import</span> { queryClient } <span class="tk-kw">from</span> <span class="tk-st">'./lib/query-client'</span>;
+<span class="tk-kw">import</span> { router } <span class="tk-kw">from</span> <span class="tk-st">'./routes'</span>;
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)!).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;QueryClientProvider</span> client={queryClient}&gt;
+      <span class="tk-tg">&lt;RouterProvider</span> router={router} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;Toaster</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/QueryClientProvider</span>&gt;
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="Provider 的嵌套层级">
+  <rect class="bx" x="20" y="20" width="720" height="210" rx="14"/>
+  <text class="ttl" x="36" y="44">StrictMode</text>
+  <rect class="bx-b" x="40" y="56" width="680" height="160" rx="12"/>
+  <text class="ttl on-b" x="56" y="80">QueryClientProvider —— 路由 loader 和组件都要用缓存，所以放在路由外面</text>
+  <rect class="bx-a" x="60" y="94" width="420" height="108" rx="10"/>
+  <text class="ttl on-a" x="76" y="118">RouterProvider</text>
+  <rect class="bx" x="80" y="130" width="120" height="56" rx="8"/><text class="sm" x="140" y="162" text-anchor="middle">Layout</text>
+  <rect class="bx" x="210" y="130" width="120" height="56" rx="8"/><text class="sm" x="270" y="162" text-anchor="middle">StoriesPage</text>
+  <rect class="bx" x="340" y="130" width="120" height="56" rx="8"/><text class="sm" x="400" y="162" text-anchor="middle">StoryPage</text>
+  <rect class="bx-g" x="500" y="94" width="200" height="50" rx="10"/>
+  <text class="sm on-g" x="600" y="124" text-anchor="middle">Toaster（全局提示）</text>
+  <rect class="bx-p" x="500" y="152" width="200" height="50" rx="10" stroke-dasharray="6 4"/>
+  <text class="sm on-p" x="600" y="174" text-anchor="middle">Zustand store</text>
+  <text class="sm" x="600" y="192" text-anchor="middle">不需要 Provider</text>
+</svg>
+<figcaption>图 50-2　Provider 的顺序原则：被依赖的放在外层。loader 需要 queryClient，所以 QueryClientProvider 在路由外面</figcaption>
+</figure>
+
+<h2 id="stories">stories 功能：路由 + 查询</h2>
+
+<p>把 queryKey 和请求函数集中定义成 <code>queryOptions</code>，路由 loader 和组件共用同一份：</p>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/features/stories/api.ts</span></div><pre><span class="tk-kw">import</span> { queryOptions } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { http } <span class="tk-kw">from</span> <span class="tk-st">'../../lib/http'</span>;
+<span class="tk-kw">import</span> <span class="tk-kw">type</span> { <span class="tk-tp">Story</span> } <span class="tk-kw">from</span> <span class="tk-st">'./story-schema'</span>;
+
+<span class="tk-kw">type</span> <span class="tk-tp">SearchResult</span> = { hits: <span class="tk-tp">Story</span>[]; page: number; nbPages: number };
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> storiesQuery = (query: string) =&gt;
+  <span class="tk-fn">queryOptions</span>({
+    queryKey: [<span class="tk-st">'stories'</span>, query],
+    queryFn: ({ signal }) =&gt;
+      http<span class="tk-tg">&lt;SearchResult</span>&gt;(<span class="tk-st">'/search'</span>, { params: { query }, signal }),
+  });
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> storyQuery = (id: string) =&gt;
+  <span class="tk-fn">queryOptions</span>({
+    queryKey: [<span class="tk-st">'story'</span>, id],
+    queryFn: ({ signal }) =&gt; http<span class="tk-tg">&lt;Story</span>&gt;(<span class="tk-st">`/items/${id}`</span>, { signal }),
+  });</pre></div>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/routes.tsx</span></div><pre><span class="tk-kw">import</span> { createBrowserRouter } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+<span class="tk-kw">import</span> { queryClient } <span class="tk-kw">from</span> <span class="tk-st">'./lib/query-client'</span>;
+<span class="tk-kw">import</span> { storiesQuery, storyQuery } <span class="tk-kw">from</span> <span class="tk-st">'./features/stories/api'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> router = <span class="tk-fn">createBrowserRouter</span>(
+  [
+    {
+      path: <span class="tk-st">'/'</span>,
+      element: <span class="tk-tg">&lt;Layout</span> <span class="tk-tg">/&gt;</span>,
+      errorElement: <span class="tk-tg">&lt;RouteError</span> <span class="tk-tg">/&gt;</span>,
+      children: [
+        {
+          index: <span class="tk-kw">true</span>,
+          element: <span class="tk-tg">&lt;StoriesPage</span> <span class="tk-tg">/&gt;</span>,
+          <span class="tk-cm">// 路由切换时就开始请求（已有缓存则立即返回）</span>
+          loader: ({ request }) =&gt; {
+            <span class="tk-kw">const</span> query = <span class="tk-kw">new</span> <span class="tk-tp">URL</span>(request.url).searchParams.<span class="tk-fn">get</span>(<span class="tk-st">'query'</span>) ?? <span class="tk-st">'React'</span>;
+            <span class="tk-kw">return</span> queryClient.<span class="tk-fn">ensureQueryData</span>(<span class="tk-fn">storiesQuery</span>(query));
+          },
+        },
+        {
+          path: <span class="tk-st">'story/:storyId'</span>,
+          element: <span class="tk-tg">&lt;StoryPage</span> <span class="tk-tg">/&gt;</span>,
+          loader: ({ params }) =&gt;
+            queryClient.<span class="tk-fn">ensureQueryData</span>(<span class="tk-fn">storyQuery</span>(params.storyId!)),
+        },
+      ],
+    },
+  ],
+  { basename: <span class="tk-kw">import</span>.meta.env.<span class="tk-tp">BASE_URL</span> }
+);</pre></div>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/features/stories/stories-page.tsx</span></div><pre><span class="tk-kw">import</span> { useSearchParams } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+<span class="tk-kw">import</span> { useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { storiesQuery } <span class="tk-kw">from</span> <span class="tk-st">'./api'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> <span class="tk-tp">StoriesPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchParams, setSearchParams] = <span class="tk-fn">useSearchParams</span>();
+  <span class="tk-kw">const</span> query = searchParams.<span class="tk-fn">get</span>(<span class="tk-st">'query'</span>) ?? <span class="tk-st">'React'</span>;
+
+  <span class="tk-kw">const</span> { data, isFetching } = <span class="tk-fn">useQuery</span>(<span class="tk-fn">storiesQuery</span>(query));
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;SearchForm</span>
+        defaultValue={query}
+        onSearch={(term) =&gt; <span class="tk-fn">setSearchParams</span>({ query: term })}
+      <span class="tk-tg">/&gt;</span>
+      {isFetching &amp;&amp; <span class="tk-tg">&lt;p</span> role=<span class="tk-st">"status"</span>&gt;<span class="tk-tp">Updating</span>…<span class="tk-tg">&lt;/p</span>&gt;}
+      <span class="tk-tg">&lt;StoryList</span> stories={data?.hits ?? []} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+};</pre></div>
+
+<h2 id="favorites">favorites 功能：Zustand</h2>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/features/favorites/favorite-button.tsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">Star</span> } <span class="tk-kw">from</span> <span class="tk-st">'lucide-react'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">Button</span> } <span class="tk-kw">from</span> <span class="tk-st">'@/components/ui/button'</span>;
+<span class="tk-kw">import</span> { useFavoritesStore } <span class="tk-kw">from</span> <span class="tk-st">'./favorites-store'</span>;
+<span class="tk-kw">import</span> <span class="tk-kw">type</span> { <span class="tk-tp">Story</span> } <span class="tk-kw">from</span> <span class="tk-st">'../stories/story-schema'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> <span class="tk-tp">FavoriteButton</span> = ({ story }: { story: <span class="tk-tp">Story</span> }) =&gt; {
+  <span class="tk-kw">const</span> isFavorite = <span class="tk-fn">useFavoritesStore</span>((s) =&gt;
+    s.favorites.<span class="tk-fn">some</span>((f) =&gt; f.objectID === story.objectID)
+  );
+  <span class="tk-kw">const</span> toggleFavorite = <span class="tk-fn">useFavoritesStore</span>((s) =&gt; s.toggleFavorite);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;Button</span>
+      variant=<span class="tk-st">"ghost"</span>
+      size=<span class="tk-st">"icon"</span>
+      aria-pressed={isFavorite}
+      aria-label={isFavorite ? <span class="tk-st">'Remove from favorites'</span> : <span class="tk-st">'Add to favorites'</span>}
+      onClick={() =&gt; <span class="tk-fn">toggleFavorite</span>(story)}
+    &gt;
+      <span class="tk-tg">&lt;Star</span> className={isFavorite ? <span class="tk-st">'fill-current'</span> : <span class="tk-st">''</span>} aria-hidden=<span class="tk-st">"true"</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/Button</span>&gt;
+  );
+};</pre></div>
+
+<h2 id="form">提交表单：RHF + Zod + useMutation</h2>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/features/stories/submit-story-form.tsx</span></div><pre><span class="tk-kw">import</span> { useForm } <span class="tk-kw">from</span> <span class="tk-st">'react-hook-form'</span>;
+<span class="tk-kw">import</span> { zodResolver } <span class="tk-kw">from</span> <span class="tk-st">'@hookform/resolvers/zod'</span>;
+<span class="tk-kw">import</span> { useMutation, useQueryClient } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { toast } <span class="tk-kw">from</span> <span class="tk-st">'sonner'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">Button</span> } <span class="tk-kw">from</span> <span class="tk-st">'@/components/ui/button'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">Input</span> } <span class="tk-kw">from</span> <span class="tk-st">'@/components/ui/input'</span>;
+<span class="tk-kw">import</span> { storyInputSchema, <span class="tk-kw">type</span> <span class="tk-tp">StoryInput</span> } <span class="tk-kw">from</span> <span class="tk-st">'./story-schema'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> <span class="tk-tp">SubmitStoryForm</span> = () =&gt; {
+  <span class="tk-kw">const</span> queryClient = <span class="tk-fn">useQueryClient</span>();
+
+  <span class="tk-kw">const</span> form = useForm<span class="tk-tg">&lt;StoryInput</span>&gt;({
+    resolver: <span class="tk-fn">zodResolver</span>(storyInputSchema),
+  });
+
+  <span class="tk-kw">const</span> mutation = <span class="tk-fn">useMutation</span>({
+    mutationFn: (input: <span class="tk-tp">StoryInput</span>) =&gt;
+      <span class="tk-fn">http</span>(<span class="tk-st">'/stories'</span>, { method: <span class="tk-st">'POST'</span>, body: <span class="tk-tp">JSON</span>.<span class="tk-fn">stringify</span>(input) }),
+    onSuccess: () =&gt; {
+      queryClient.<span class="tk-fn">invalidateQueries</span>({ queryKey: [<span class="tk-st">'stories'</span>] });
+      toast.<span class="tk-fn">success</span>(<span class="tk-st">'Story submitted'</span>);
+      form.<span class="tk-fn">reset</span>();
+    },
+    onError: () =&gt; toast.<span class="tk-fn">error</span>(<span class="tk-st">'Could not submit story'</span>),
+  });
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;form</span> onSubmit={form.<span class="tk-fn">handleSubmit</span>((values) =&gt; mutation.<span class="tk-fn">mutate</span>(values))}&gt;
+      <span class="tk-tg">&lt;Input</span> placeholder=<span class="tk-st">"Title"</span> {...form.<span class="tk-fn">register</span>(<span class="tk-st">'title'</span>)} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;p</span> role=<span class="tk-st">"alert"</span>&gt;{form.formState.errors.title?.message}<span class="tk-tg">&lt;/p</span>&gt;
+
+      <span class="tk-tg">&lt;Input</span> placeholder=<span class="tk-st">"https://…"</span> {...form.<span class="tk-fn">register</span>(<span class="tk-st">'url'</span>)} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;p</span> role=<span class="tk-st">"alert"</span>&gt;{form.formState.errors.url?.message}<span class="tk-tg">&lt;/p</span>&gt;
+
+      <span class="tk-tg">&lt;Button</span> <span class="tk-kw">type</span>=<span class="tk-st">"submit"</span> disabled={mutation.isPending}&gt;
+        {mutation.isPending ? <span class="tk-st">'Submitting…'</span> : <span class="tk-st">'Submit'</span>}
+      <span class="tk-tg">&lt;/Button</span>&gt;
+    <span class="tk-tg">&lt;/form</span>&gt;
+  );
+};</pre></div>
+
+<h2 id="flow">一次交互中的数据流</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 290" role="img" aria-label="用户搜索时数据在路由、查询缓存和组件之间的流动">
+  <rect class="bx-p" x="20" y="30" width="150" height="70" rx="10"/>
+  <text class="ttl on-p" x="95" y="56" text-anchor="middle">① 用户提交</text>
+  <text class="sm" x="95" y="78" text-anchor="middle">SearchForm</text>
+  <text class="sm" x="95" y="94" text-anchor="middle">（局部 state）</text>
+
+  <rect class="bx-a" x="210" y="30" width="160" height="70" rx="10"/>
+  <text class="ttl on-a" x="290" y="56" text-anchor="middle">② URL 变化</text>
+  <text class="mono sm" x="290" y="78" text-anchor="middle">/?query=vue</text>
+  <text class="sm" x="290" y="94" text-anchor="middle">React Router</text>
+
+  <rect class="bx-b" x="410" y="30" width="160" height="70" rx="10"/>
+  <text class="ttl on-b" x="490" y="56" text-anchor="middle">③ loader</text>
+  <text class="sm" x="490" y="78" text-anchor="middle">ensureQueryData</text>
+  <text class="mono sm" x="490" y="94" text-anchor="middle">['stories','vue']</text>
+
+  <rect class="bx-g" x="610" y="30" width="130" height="70" rx="10"/>
+  <text class="ttl on-g" x="675" y="56" text-anchor="middle">④ 缓存？</text>
+  <text class="sm" x="675" y="78" text-anchor="middle">有：直接用</text>
+  <text class="sm" x="675" y="94" text-anchor="middle">无：http 请求</text>
+
+  <rect class="bx-b" x="410" y="170" width="160" height="70" rx="10"/>
+  <text class="ttl on-b" x="490" y="196" text-anchor="middle">⑤ StoriesPage</text>
+  <text class="mono sm" x="490" y="218" text-anchor="middle" style="font-size:10.5px">useQuery(storiesQuery)</text>
+  <text class="sm" x="490" y="234" text-anchor="middle">读缓存渲染列表</text>
+
+  <rect class="bx-p" x="210" y="170" width="160" height="70" rx="10"/>
+  <text class="ttl on-p" x="290" y="196" text-anchor="middle">⑥ FavoriteButton</text>
+  <text class="sm" x="290" y="218" text-anchor="middle">Zustand 选择器</text>
+  <text class="sm" x="290" y="234" text-anchor="middle">显示 ★ / ☆</text>
+
+  <path class="ln-p" d="M172 65 H206" marker-end="url(#ar-p)"/>
+  <path class="ln-a" d="M372 65 H406" marker-end="url(#ar-a)"/>
+  <path class="ln-b" d="M572 65 H606" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M675 102 V205 H574" marker-end="url(#ar-g)"/>
+  <path class="ln" d="M408 205 H374" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="274" text-anchor="middle">每一步只和一个库打交道；刷新页面或分享链接，从 ② 开始就能完整还原</text>
+</svg>
+<figcaption>图 50-3　URL 驱动数据，缓存负责获取，组件只负责读取和显示</figcaption>
+</figure>
+
+<h2 id="testing">测试：统一的 Provider 与 MSW</h2>
+
+<p>组件依赖了 QueryClient 和路由，测试时也要提供。写一个带 Provider 的 <code>render</code> 工具，每个测试用独立的 QueryClient，避免缓存互相污染：</p>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">src/test/render.tsx</span></div><pre><span class="tk-kw">import</span> { render } <span class="tk-kw">from</span> <span class="tk-st">'@testing-library/react'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">QueryClient</span>, <span class="tk-tp">QueryClientProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { createMemoryRouter, <span class="tk-tp">RouterProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'react-router'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> renderRoute = (routes, { initialEntries = [<span class="tk-st">'/'</span>] } = {}) =&gt; {
+  <span class="tk-kw">const</span> queryClient = <span class="tk-kw">new</span> <span class="tk-tp">QueryClient</span>({
+    defaultOptions: { queries: { retry: <span class="tk-kw">false</span> } },
+  });
+  <span class="tk-kw">const</span> router = <span class="tk-fn">createMemoryRouter</span>(routes, { initialEntries });
+
+  <span class="tk-kw">return</span> <span class="tk-fn">render</span>(
+    <span class="tk-tg">&lt;QueryClientProvider</span> client={queryClient}&gt;
+      <span class="tk-tg">&lt;RouterProvider</span> router={router} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/QueryClientProvider</span>&gt;
+  );
+};</pre></div>
+
+<div class="code" data-lang="ts"><div class="bar"><span class="tag">src/test/handlers.ts</span></div><pre><span class="tk-kw">import</span> { http, <span class="tk-tp">HttpResponse</span> } <span class="tk-kw">from</span> <span class="tk-st">'msw'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">const</span> handlers = [
+  http.<span class="tk-fn">get</span>(<span class="tk-st">'https://hn.algolia.com/api/v1/search'</span>, ({ request }) =&gt; {
+    <span class="tk-kw">const</span> query = <span class="tk-kw">new</span> <span class="tk-tp">URL</span>(request.url).searchParams.<span class="tk-fn">get</span>(<span class="tk-st">'query'</span>);
+    <span class="tk-kw">return</span> <span class="tk-tp">HttpResponse</span>.<span class="tk-fn">json</span>({
+      hits: [{ objectID: <span class="tk-st">'1'</span>, title: <span class="tk-st">`${query} story`</span>, author: <span class="tk-st">'robin'</span>,
+               url: <span class="tk-st">'https://example.com'</span>, num_comments: <span class="tk-nm">1</span>, points: <span class="tk-nm">10</span> }],
+      page: <span class="tk-nm">0</span>,
+      nbPages: <span class="tk-nm">1</span>,
+    });
+  }),
+];</pre></div>
+
+<p>MSW 在网络层拦截请求（第 31 章），所以无论请求是从 loader 还是 <code>useQuery</code> 发出，测试都不需要关心。</p>
+
+<h2 id="templates">常见场景的技术栈模板</h2>
+
+<div class="tw">
+<table>
+  <tr><th>场景</th><th>技术栈</th></tr>
+  <tr><td><strong>中后台管理系统</strong></td><td>Vite + React Router + TanStack Query + Zustand + <strong>Ant Design</strong>（+ ProComponents）+ Zod + Vitest</td></tr>
+  <tr><td><strong>C 端 SPA / SaaS 工作台</strong></td><td>Vite + React Router（或 TanStack Router）+ TanStack Query + Zustand + React Hook Form + Zod + Tailwind + shadcn/ui</td></tr>
+  <tr><td><strong>全栈应用 / 需要 SEO</strong></td><td>Next.js（App Router、服务端组件、服务端函数）+ Zod + Tailwind + shadcn/ui + ORM（Prisma / Drizzle）+ 认证库；客户端交互多的地方加 TanStack Query</td></tr>
+  <tr><td><strong>内容站（博客、文档、官网）</strong></td><td>Astro + Markdown / MDX + 少量 React 组件做交互 + Tailwind</td></tr>
+  <tr><td><strong>移动 App</strong></td><td>Expo（React Native）+ Expo Router + TanStack Query + Zustand</td></tr>
+  <tr><td><strong>学习 / 个人小项目</strong></td><td>Vite + React，按需一个个加：先路由，再 TanStack Query，其余等需要时再说</td></tr>
+</table>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 模板不是必选清单</div>
+  <p>
+    上面的每一项都应该是“遇到了对应的问题才加进来”。一个只有三个页面的小应用配齐八个库，维护成本会远超它带来的收益。
+    回到第 44 章的决策流程：先问需不需要，再问选哪个。
+  </p>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>组合的核心原则：URL、服务端、全局客户端、表单、局部 UI 五类状态，每类只归一个库管，同一份数据不存两处。</li>
+  <li>按功能组织目录，用自己的模块（<code>api.ts</code>、store、<code>lib/</code>）包装第三方库，方便替换。</li>
+  <li>Provider 按依赖关系嵌套：被依赖的在外层；Zustand 不需要 Provider。</li>
+  <li><code>queryOptions</code> 让路由 loader 和组件共享同一份查询定义。</li>
+  <li>测试时用带 Provider 的 render 工具 + MSW。</li>
+  <li>根据项目类型选择模板，但每一项都要有引入的理由。</li>
+</ul>
+
+<div class="exercise">
+  <h3>毕业项目（进阶版）</h3>
+  <ol>
+    <li>按本章的目录结构，从零搭建一个新的 Hacker Stories：列表页（搜索词在 URL）、详情页、收藏夹页面、提交文章表单。</li>
+    <li>为 stories 列表写一个集成测试，用 MSW 模拟 API。</li>
+    <li>启用 React Compiler 和 TypeScript 严格模式，修复所有报错。</li>
+    <li>部署到 GitHub Pages（第 52 章），在 README 里画一张你的架构图。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>一个 React 项目里多个状态库如何分工？</summary>
+    <div><p>按状态类别分工：服务端数据交给 TanStack Query 等缓存库，可分享状态放 URL（路由），全局客户端状态用 Context 或 Zustand/Redux，表单状态用表单库，局部 UI 状态用 useState；避免同一份数据存在多处。</p></div></details>
+  <details><summary>为什么要用自己的模块包装第三方库？</summary>
+    <div><p>集中配置和约定（如 queryKey、请求地址），减少组件对具体库的依赖，将来替换或升级时只需修改一处。</p></div></details>
+  <details><summary>Provider 的嵌套顺序有什么讲究？</summary>
+    <div><p>被依赖的 Provider 放在外层。例如路由 loader 需要访问 queryClient，QueryClientProvider 应包在 RouterProvider 外面。</p></div></details>
+  <details><summary>测试使用 TanStack Query 的组件需要注意什么？</summary>
+    <div><p>为每个测试创建新的 QueryClient（避免缓存共享），关闭重试以便快速失败，并用 MSW 等方式模拟网络请求。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

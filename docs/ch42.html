@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 42 章 · 调试与 React DevTools — React 19 入门教程</title>
+<meta name="description" content="定位 bug 与“为什么又重新渲染了”">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="42">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 42 章 · 进阶专题</span>
+<h1>调试与 React DevTools</h1>
+<p class="lede">
+  写代码的时间里，有很大一部分其实花在“为什么不对”上。这一章不讲新 API，而是讲方法和工具：
+  怎么读懂 React 的报错、怎么用浏览器和 <strong>React DevTools</strong> 找到问题、以及初学者最常踩的几类 bug 长什么样。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>掌握“复现 → 缩小范围 → 假设 → 验证”的调试流程</li>
+    <li>看懂 React 最常见的十条报错和警告</li>
+    <li>用断点、Network 面板和 React DevTools 的 Components / Profiler 定位问题</li>
+    <li>识别过期闭包、直接修改状态、effect 死循环等典型 bug</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="method">调试的流程</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="调试循环：复现、缩小范围、提出假设、验证">
+  <rect class="bx-b" x="20" y="80" width="160" height="70" rx="12"/>
+  <text class="ttl on-b" x="100" y="106" text-anchor="middle">① 稳定复现</text>
+  <text class="sm" x="100" y="128" text-anchor="middle">记下精确的操作步骤</text>
+  <rect class="bx-p" x="210" y="80" width="160" height="70" rx="12"/>
+  <text class="ttl on-p" x="290" y="106" text-anchor="middle">② 缩小范围</text>
+  <text class="sm" x="290" y="128" text-anchor="middle">是哪个组件？哪次更新？</text>
+  <rect class="bx-a" x="400" y="80" width="160" height="70" rx="12"/>
+  <text class="ttl on-a" x="480" y="106" text-anchor="middle">③ 提出假设</text>
+  <text class="sm" x="480" y="128" text-anchor="middle">“我猜是 key 重复了”</text>
+  <rect class="bx-g" x="590" y="80" width="150" height="70" rx="12"/>
+  <text class="ttl on-g" x="665" y="106" text-anchor="middle">④ 验证</text>
+  <text class="sm" x="665" y="128" text-anchor="middle">日志 / 断点 / DevTools</text>
+  <path class="ln" d="M182 115 H206" marker-end="url(#ar)"/>
+  <path class="ln" d="M372 115 H396" marker-end="url(#ar)"/>
+  <path class="ln" d="M562 115 H586" marker-end="url(#ar)"/>
+  <path class="ln-d" d="M665 152 V190 H290 V154" marker-end="url(#ar)"/>
+  <text class="sm" x="478" y="208" text-anchor="middle">假设不成立 → 回到 ②，继续缩小范围</text>
+  <text class="sm" x="380" y="40" text-anchor="middle">最大的误区：跳过 ①② 直接改代码“试试看”</text>
+</svg>
+<figcaption>图 42-1　调试是一个科学实验的过程，而不是随机修改</figcaption>
+</figure>
+
+<h2 id="errors">读懂常见报错</h2>
+
+<p>React 的报错信息通常已经告诉你答案了。下面是初学者最常遇到的几条：</p>
+
+<div class="tw">
+<table>
+  <tr><th>报错 / 警告</th><th>通常的原因</th><th>章节</th></tr>
+  <tr><td><em>Each child in a list should have a unique "key" prop</em></td><td><code>map()</code> 返回的元素缺少 key，或 key 重复</td><td>5</td></tr>
+  <tr><td><em>Objects are not valid as a React child</em></td><td>把一个对象直接放进了 JSX：<code>{user}</code> 应为 <code>{user.name}</code></td><td>4</td></tr>
+  <tr><td><em>Too many re-renders</em></td><td>渲染时直接调用了 setState，常见于 <code>onClick={setOpen(true)}</code></td><td>8</td></tr>
+  <tr><td><em>Maximum update depth exceeded</em></td><td>effect 更新了自己依赖的值，或依赖是每次都新建的对象/函数</td><td>14、22</td></tr>
+  <tr><td><em>Rendered more hooks than during the previous render</em></td><td>在 if / 提前 return 之后调用了 Hook，违反 Hook 规则</td><td>10</td></tr>
+  <tr><td><em>A component is changing an uncontrolled input to be controlled</em></td><td><code>value</code> 起初是 <code>undefined</code>，后来变成字符串</td><td>12</td></tr>
+  <tr><td><em>Cannot update a component while rendering a different component</em></td><td>在渲染过程中调用了父组件传来的 setState 回调，应移到事件或 effect 中</td><td>11</td></tr>
+  <tr><td><em>Cannot read properties of undefined (reading 'map')</em></td><td>数据还没到（初始值是 undefined），或 API 结构和你想的不一样</td><td>19</td></tr>
+  <tr><td><em>Invalid hook call</em></td><td>在普通函数或类组件里调用 Hook；或项目里装了两份 React</td><td>10</td></tr>
+  <tr><td><em>React Hook useEffect has a missing dependency</em>（ESLint）</td><td>effect 用到的值没写进依赖数组</td><td>14</td></tr>
+</table>
+</div>
+
+<div class="box tip">
+  <div class="t">&#128161; 看报错的正确姿势</div>
+  <p>
+    ① 读完第一行的错误描述；② 看组件栈（component stack）—— 它告诉你错误发生在哪个组件里、这个组件被谁渲染；
+    ③ 点击控制台里的文件链接直接跳到源码（Vite 自带 source map，看到的是你写的代码而不是打包后的代码）。
+    React 19 的开发版报错更精简，同一个错误不再重复打印好几次；19.1 起还会附带更完整的“所有者栈”（owner stack），能看出是哪个组件一路把出问题的组件渲染出来的。
+  </p>
+</div>
+
+<h2 id="browser">浏览器工具</h2>
+
+<h3>console.log 的正确用法</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// 给日志加标签，打印对象时用对象简写，能看到变量名</span>
+console.<span class="tk-fn">log</span>(<span class="tk-st">'Item render'</span>, { item, isFavorite });
+
+<span class="tk-cm">// 只在条件满足时打印</span>
+<span class="tk-kw">if</span> (item.points &gt; <span class="tk-nm">100</span>) console.<span class="tk-fn">log</span>(<span class="tk-st">'hot story'</span>, item);
+
+<span class="tk-cm">// 数组对象用表格看更清楚</span>
+console.<span class="tk-fn">table</span>(stories.<span class="tk-fn">map</span>(({ title, points }) =&gt; ({ title, points })));</pre></div>
+
+<h3>断点：debugger</h3>
+
+<p>
+  在代码里写一行 <code>debugger;</code>，打开开发者工具后运行到这里会暂停。你可以查看此刻每个变量的值、单步执行、看调用栈。
+  也可以在 Sources 面板里直接点行号设断点，不用改代码。对“这个值到底是什么时候变的”这类问题，断点比日志高效得多。
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> handleRemoveStory = (item) =&gt; {
+  debugger; <span class="tk-cm">// 点击 Dismiss 时暂停在这里</span>
+  <span class="tk-fn">dispatchStories</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'REMOVE_STORY'</span>, payload: item });
+};</pre></div>
+
+<h3>Network 面板</h3>
+
+<p>
+  数据相关的问题先看 Network：请求发了没有？发了几次？URL 和参数对不对？状态码是多少？返回的 JSON 结构和代码里假设的一样吗？
+  一半以上的“数据显示不出来”在这里就能找到答案。还可以把网速调成 Slow 3G，复现加载状态和竞态问题。
+</p>
+
+<h2 id="devtools">React DevTools</h2>
+
+<p>安装浏览器扩展 React Developer Tools 后，开发者工具里会多出两个面板：</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="React DevTools 的 Components 与 Profiler 面板功能">
+  <rect class="bx-b" x="20" y="20" width="350" height="260" rx="12"/>
+  <text class="ttl on-b" x="195" y="46" text-anchor="middle">⚛ Components</text>
+  <rect class="bx" x="36" y="60" width="140" height="200" rx="8"/>
+  <text class="sm" x="46" y="82">▾ App</text>
+  <text class="sm" x="58" y="102">▸ SearchForm</text>
+  <text class="sm" x="58" y="122">▾ List</text>
+  <rect class="bx-a" x="64" y="130" width="100" height="22" rx="4"/>
+  <text class="sm on-a" x="72" y="146">Item key=42</text>
+  <text class="sm" x="70" y="170">Item key=43</text>
+  <text class="sm" x="46" y="200">组件树（不是 DOM 树）</text>
+  <rect class="bx" x="186" y="60" width="170" height="200" rx="8"/>
+  <text class="sm" x="196" y="82">props</text>
+  <text class="mono sm" x="204" y="100">item: {…}</text>
+  <text class="mono sm" x="204" y="116">onRemoveItem: ƒ</text>
+  <text class="sm" x="196" y="140">hooks</text>
+  <text class="mono sm" x="204" y="158">State: false  ✎</text>
+  <text class="mono sm" x="204" y="174">Context: {…}</text>
+  <text class="sm" x="196" y="200">rendered by</text>
+  <text class="mono sm" x="204" y="218">List ← App</text>
+  <text class="sm" x="196" y="244">可直接修改 state 测试</text>
+
+  <rect class="bx-p" x="400" y="20" width="340" height="260" rx="12"/>
+  <text class="ttl on-p" x="570" y="46" text-anchor="middle">⏱ Profiler</text>
+  <text class="sm" x="420" y="74">① 点录制 ② 操作页面 ③ 停止</text>
+  <rect class="bx-a" x="420" y="90" width="300" height="26" rx="4"/><text class="sm on-a" x="430" y="108">App (3.2ms)</text>
+  <rect class="bx-a" x="420" y="120" width="120" height="26" rx="4"/><text class="sm on-a" x="430" y="138">SearchForm</text>
+  <rect class="bx-r" x="545" y="120" width="175" height="26" rx="4"/><text class="sm on-r" x="555" y="138">List (48ms) 慢!</text>
+  <rect class="bx" x="545" y="150" width="80" height="22" rx="4"/><text class="sm" x="552" y="166">Item</text>
+  <rect class="bx" x="630" y="150" width="90" height="22" rx="4"/><text class="sm" x="637" y="166">Item</text>
+  <text class="sm" x="420" y="200">火焰图：每个组件渲染花了多久</text>
+  <text class="sm" x="420" y="222">开启 “Record why each component</text>
+  <text class="sm" x="420" y="240">rendered”：显示重新渲染的原因</text>
+  <text class="sm" x="420" y="262">（哪个 props / state / hook 变了）</text>
+</svg>
+<figcaption>图 42-2　Components 看“现在是什么”，Profiler 看“刚才发生了什么”</figcaption>
+</figure>
+
+<h3>Components 面板</h3>
+<ul>
+  <li><strong>组件树</strong>：看到的是 React 组件而不是 HTML 元素。用左上角的选择工具点页面上的元素，可以直接定位到对应组件。</li>
+  <li><strong>props / state / hooks</strong>：选中组件后右侧显示它当前的所有数据。<strong>可以直接修改 state</strong>，立即看到界面变化 —— 用来验证“是不是数据的问题”非常快。</li>
+  <li><strong>rendered by</strong>：这个组件是被谁渲染的，props 从哪来一目了然。</li>
+  <li>选中组件后，在控制台输入 <code>$r</code> 可以访问它的数据。</li>
+  <li>设置里勾选 “Highlight updates when components render”：每次重新渲染的组件会闪一下边框（第 28 章）。</li>
+</ul>
+
+<h3>Profiler 面板</h3>
+<ul>
+  <li>录制一段交互，看每次提交（commit）中有哪些组件渲染了、各花多少时间。</li>
+  <li>在设置中开启 “Record why each component rendered while profiling”，选中组件就能看到它<strong>为什么</strong>重新渲染：是 props 变了（哪个）、state 变了、还是父组件渲染了。</li>
+  <li>性能问题只在这里找到证据后再优化（第 28 章“先测量”）。</li>
+</ul>
+
+<h2 id="bugs">四类典型 bug</h2>
+
+<h3>1. 过期闭包（stale closure）</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">Timer</span> = () =&gt; {
+  <span class="tk-kw">const</span> [count, setCount] = <span class="tk-fn">useState</span>(<span class="tk-nm">0</span>);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-kw">const</span> id = <span class="tk-fn">setInterval</span>(() =&gt; {
+      <span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>); <span class="tk-cm">// count 永远是 0！</span>
+    }, <span class="tk-nm">1000</span>);
+    <span class="tk-kw">return</span> () =&gt; <span class="tk-fn">clearInterval</span>(id);
+  }, []); <span class="tk-cm">// 依赖为空：effect 只运行一次，闭包捕获的是第一次渲染的 count</span>
+
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;p</span>&gt;{count}<span class="tk-tg">&lt;/p</span>&gt;; <span class="tk-cm">// 显示 1 之后就不动了</span>
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="过期闭包：定时器回调捕获了第一次渲染时的 count">
+  <rect class="bx-a" x="20" y="30" width="200" height="80" rx="10"/>
+  <text class="ttl on-a" x="120" y="56" text-anchor="middle">第 1 次渲染</text>
+  <text class="mono sm" x="120" y="80" text-anchor="middle">count = 0</text>
+  <text class="sm" x="120" y="98" text-anchor="middle">创建 interval 回调</text>
+  <rect class="bx" x="280" y="30" width="200" height="80" rx="10"/>
+  <text class="ttl" x="380" y="56" text-anchor="middle">第 2、3… 次渲染</text>
+  <text class="mono sm" x="380" y="80" text-anchor="middle">count = 1</text>
+  <text class="sm" x="380" y="98" text-anchor="middle">effect 不再运行（依赖为 []）</text>
+  <rect class="bx-r" x="540" y="30" width="200" height="80" rx="10"/>
+  <text class="ttl on-r" x="640" y="56" text-anchor="middle">interval 回调</text>
+  <text class="mono sm" x="640" y="80" text-anchor="middle">setCount(0 + 1)</text>
+  <text class="sm" x="640" y="98" text-anchor="middle">永远看到的是 count = 0</text>
+  <path class="ln-r" d="M222 70 C300 140 480 140 538 90" marker-end="url(#ar-r)"/>
+  <text class="sm on-r" x="380" y="150" text-anchor="middle">回调“记住”的是创建它那次渲染的变量（快照）</text>
+  <text class="sm on-g" x="380" y="186" text-anchor="middle">修复：setCount((c) =&gt; c + 1)，不依赖闭包里的 count</text>
+</svg>
+<figcaption>图 42-3　过期闭包：每次渲染都有自己的变量快照，旧的回调只能看到旧的快照</figcaption>
+</figure>
+
+<p>
+  解决办法：用函数形式 <code>setCount((c) =&gt; c + 1)</code>；或者把 <code>count</code> 加进依赖数组；或者用 ref 保存最新值。
+  ESLint 的 <code>exhaustive-deps</code> 规则能提前发现大多数这类问题。
+</p>
+
+<h3>2. 直接修改状态</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// ❌ 界面不更新：数组还是同一个引用，React 认为没变</span>
+stories.<span class="tk-fn">push</span>(newStory);
+<span class="tk-fn">setStories</span>(stories);
+
+<span class="tk-cm">// ✅</span>
+<span class="tk-fn">setStories</span>([...stories, newStory]);</pre></div>
+
+<h3>3. effect 死循环</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// ❌ 每次渲染 options 都是新对象 → effect 每次都运行 → setData → 再渲染 …</span>
+<span class="tk-kw">const</span> options = { query };
+<span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">fetchData</span>(options).<span class="tk-fn">then</span>(setData);
+}, [options]);
+
+<span class="tk-cm">// ✅ 依赖基本类型的值</span>
+<span class="tk-fn">useEffect</span>(() =&gt; {
+  <span class="tk-fn">fetchData</span>({ query }).<span class="tk-fn">then</span>(setData);
+}, [query]);</pre></div>
+
+<h3>4. “状态没更新”</h3>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> handleClick = () =&gt; {
+  <span class="tk-fn">setCount</span>(count + <span class="tk-nm">1</span>);
+  console.<span class="tk-fn">log</span>(count); <span class="tk-cm">// 还是旧值 —— 这不是 bug，是快照（第 10 章）</span>
+};</pre></div>
+
+<h2 id="vscode">进阶：在 VS Code 里调试</h2>
+
+<p>
+  VS Code 可以直接连接浏览器调试：在编辑器里打断点、查看变量，而不用切换到浏览器的 Sources 面板。
+  在 <code>.vscode/launch.json</code> 中添加：
+</p>
+
+<div class="code" data-lang="json"><div class="bar"><span class="tag">.vscode/launch.json</span></div><pre>{
+  <span class="tk-pr">"version"</span>: <span class="tk-st">"0.2.0"</span>,
+  <span class="tk-pr">"configurations"</span>: [
+    {
+      <span class="tk-pr">"type"</span>: <span class="tk-st">"chrome"</span>,
+      <span class="tk-pr">"request"</span>: <span class="tk-st">"launch"</span>,
+      <span class="tk-pr">"name"</span>: <span class="tk-st">"Debug Hacker Stories"</span>,
+      <span class="tk-pr">"url"</span>: <span class="tk-st">"http://localhost:5173"</span>,
+      <span class="tk-pr">"webRoot"</span>: <span class="tk-st">"${workspaceFolder}"</span>
+    }
+  ]
+}</pre></div>
+
+<p>先 <code>npm run dev</code>，再在 VS Code 的“运行和调试”里启动这个配置即可。</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>调试流程：稳定复现 → 缩小范围 → 提出假设 → 验证，不要随机改代码。</li>
+  <li>React 报错通常已经指出原因，结合组件栈定位到具体组件。</li>
+  <li>浏览器工具：带标签的日志、<code>debugger</code> 断点、Network 面板。</li>
+  <li>React DevTools：Components 看并修改 props / state / hooks；Profiler 看渲染耗时和重新渲染的原因。</li>
+  <li>典型 bug：过期闭包、直接修改状态、effect 依赖不稳定导致死循环、误以为 setState 立即生效。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 Components 面板里找到搜索框所在的组件，直接修改 <code>searchTerm</code> 的值，观察界面变化。</li>
+    <li>用 Profiler 录制一次输入搜索词的过程，开启“记录渲染原因”，看看 <code>List</code> 为什么重新渲染。</li>
+    <li>复现本章的过期闭包计时器，用断点观察回调中 <code>count</code> 的值，再用两种方式修复它。</li>
+    <li>故意制造表格中的三条报错，读一读完整的错误信息和组件栈。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是过期闭包？在 React 中怎么避免？</summary>
+    <div><p>函数捕获了创建时那次渲染的变量，之后变量更新了它仍使用旧值。可以通过正确填写依赖数组、使用 setState 的函数形式、或用 ref 保存最新值来避免。</p></div></details>
+  <details><summary>“Too many re-renders” 通常是什么原因？</summary>
+    <div><p>在渲染过程中无条件调用 setState，例如把函数调用 <code>onClick={setX(1)}</code> 而不是函数传给事件属性，导致无限渲染循环。</p></div></details>
+  <details><summary>如何找出组件为什么重新渲染？</summary>
+    <div><p>使用 React DevTools Profiler，开启“记录每个组件渲染原因”，可以看到是哪个 props、state 或 hook 发生了变化，或是父组件渲染导致。</p></div></details>
+  <details><summary>为什么修改数组后界面没有更新？</summary>
+    <div><p>直接修改（push、splice、赋值）不会改变数组引用，React 通过 Object.is 判断状态未变；应创建新数组或新对象。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

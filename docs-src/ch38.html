@@ -1,0 +1,423 @@
+<p class="lede">
+  前面的章节里，“加载中”和“出错了”都是用状态变量手动处理的。React 还提供了两种<strong>声明式</strong>的“边界”：
+  <strong>Suspense</strong> 负责“内容还没准备好时显示什么”，<strong>错误边界</strong>负责“渲染出错时显示什么”。
+  它们让你像写 <code>try/catch</code> 一样，给界面的某一块区域兜底。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解为什么一个组件出错会导致整个应用白屏</li>
+    <li>用错误边界（类组件写法和 <code>react-error-boundary</code>）隔离错误，并提供重试</li>
+    <li>知道错误边界捕获不到哪些错误，以及怎么处理它们</li>
+    <li>用 <code>lazy</code> + <code>Suspense</code> 做代码分割，用 <code>use()</code> + Suspense 读取数据</li>
+    <li>处理 React Router 中 loader 抛出的错误</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="white-screen">一个错误，整页白屏</h2>
+
+<p>假设 API 返回的某篇文章没有 <code>title</code>，而 <code>Item</code> 里写了：</p>
+
+```jsx
+<span>{item.title.toUpperCase()}</span>
+// TypeError: Cannot read properties of null (reading 'toUpperCase')
+```
+
+<p>
+  结果不是“这一条显示不出来”，而是<strong>整个页面变成空白</strong>。从 React 16 起，渲染过程中抛出的错误如果没有被捕获，
+  React 会卸载整棵组件树 —— 因为显示一个可能是错的界面，比什么都不显示更危险（想象一个显示错金额的支付页）。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="没有错误边界时一个组件出错导致整棵树卸载；有错误边界时只影响局部">
+  <text class="ttl on-r" x="190" y="22" text-anchor="middle">没有错误边界</text>
+  <rect class="bx-r" x="130" y="36" width="120" height="36" rx="8"/><text class="sm on-r" x="190" y="59" text-anchor="middle">App ✗</text>
+  <rect class="bx-r" x="40" y="106" width="120" height="36" rx="8"/><text class="sm on-r" x="100" y="129" text-anchor="middle">Header ✗</text>
+  <rect class="bx-r" x="220" y="106" width="120" height="36" rx="8"/><text class="sm on-r" x="280" y="129" text-anchor="middle">List ✗</text>
+  <rect class="bx-r" x="220" y="176" width="120" height="36" rx="8"/><text class="sm on-r" x="280" y="199" text-anchor="middle">Item 💥</text>
+  <path class="ln-r" d="M170 74 L110 104"/><path class="ln-r" d="M210 74 L270 104"/><path class="ln-r" d="M280 144 V174"/>
+  <text class="sm on-r" x="190" y="238" text-anchor="middle">错误一路冒泡，整棵树被卸载 → 白屏</text>
+
+  <text class="ttl on-g" x="570" y="22" text-anchor="middle">List 外面包一层错误边界</text>
+  <rect class="bx-g" x="510" y="36" width="120" height="36" rx="8"/><text class="sm on-g" x="570" y="59" text-anchor="middle">App ✓</text>
+  <rect class="bx-g" x="420" y="106" width="120" height="36" rx="8"/><text class="sm on-g" x="480" y="129" text-anchor="middle">Header ✓</text>
+  <rect class="bx-a" x="590" y="96" width="150" height="56" rx="8" stroke-dasharray="6 4"/>
+  <text class="sm on-a" x="665" y="116" text-anchor="middle">ErrorBoundary</text>
+  <text class="sm" x="665" y="136" text-anchor="middle">显示“列表加载失败 [重试]”</text>
+  <rect class="bx-r" x="605" y="176" width="120" height="36" rx="8"/><text class="sm on-r" x="665" y="199" text-anchor="middle">Item 💥</text>
+  <path class="ln-g" d="M550 74 L490 104"/><path class="ln-g" d="M590 74 L650 94"/><path class="ln-r" d="M665 174 V154" marker-end="url(#ar-r)"/>
+  <text class="sm on-g" x="570" y="238" text-anchor="middle">错误在边界处被接住，页面其他部分照常工作</text>
+</svg>
+<figcaption>图 38-1　错误边界就像界面上的 try/catch：错误被最近的边界接住，只替换那一块</figcaption>
+</figure>
+
+<h2 id="boundary">错误边界</h2>
+
+<p>
+  错误边界是一个能捕获子树渲染错误的组件。有点特别的是：<strong>到今天为止，React 仍然只能用类组件来写错误边界</strong>
+  （没有对应的 Hook）。这是现代 React 代码里几乎唯一还需要类组件的地方：
+</p>
+
+```jsx src/ErrorBoundary.jsx
+import { Component } from 'react';
+
+class ErrorBoundary extends Component {
+  state = { error: null };
+
+  // 渲染出错时调用：返回新的 state，让下一次渲染显示后备界面
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  // 可以在这里把错误上报到监控服务
+  componentDidCatch(error, info) {
+    console.error(error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
+export { ErrorBoundary };
+```
+
+```jsx
+<ErrorBoundary fallback={<p>Something went wrong with the list.</p>}>
+  <List list={stories.data} onRemoveItem={handleRemoveStory} />
+</ErrorBoundary>
+```
+
+<h3>用 react-error-boundary 库</h3>
+
+<p>自己写的版本不能“重试”，也处理不了异步错误。实际项目里通常直接用社区标准库：</p>
+
+```bash
+npm install react-error-boundary
+```
+
+```jsx src/StoriesPage.jsx
+import { ErrorBoundary } from 'react-error-boundary';
+
+const ListFallback = ({ error, resetErrorBoundary }) => (
+  <div role="alert">
+    <p>Could not display the stories: {error.message}</p>
+    <button type="button" onClick={resetErrorBoundary}>
+      Try again
+    </button>
+  </div>
+);
+
+const StoriesPage = () => {
+  ...
+  return (
+    <>
+      <SearchForm ... />
+
+      <ErrorBoundary
+        FallbackComponent={ListFallback}
+        resetKeys={[stories.data]}
+      >
+        <List list={stories.data} onRemoveItem={handleRemoveStory} />
+      </ErrorBoundary>
+    </>
+  );
+};
+```
+
+<ul>
+  <li><code>FallbackComponent</code> 会收到 <code>error</code> 和 <code>resetErrorBoundary</code>，点击“重试”会清除错误、重新渲染子树。</li>
+  <li><code>resetKeys</code>：数组里的值变化时自动重置。新搜索拿到了新数据，就不必再显示旧的错误。</li>
+</ul>
+
+<h2 id="limits">错误边界接不住什么</h2>
+
+<div class="tw">
+<table>
+  <tr><th>错误发生在</th><th>能被错误边界捕获吗</th><th>怎么处理</th></tr>
+  <tr><td>子组件渲染过程中</td><td>&#9989; 能</td><td>—</td></tr>
+  <tr><td>子组件的 useEffect 里（同步抛出）</td><td>&#9989; 能</td><td>—</td></tr>
+  <tr><td>事件处理函数里</td><td>&#10060; 不能</td><td>自己 <code>try/catch</code>，存进状态；或调用 <code>showBoundary(error)</code></td></tr>
+  <tr><td>异步代码里（Promise、setTimeout）</td><td>&#10060; 不能</td><td><code>.catch</code> / <code>try/catch</code>；或 <code>showBoundary</code></td></tr>
+  <tr><td>错误边界组件自身</td><td>&#10060; 不能</td><td>由更外层的边界捕获</td></tr>
+  <tr><td>form action / transition 中</td><td>&#9989; 能（React 19）</td><td>action 抛出的错误会交给最近的错误边界</td></tr>
+</table>
+</div>
+
+<p><code>react-error-boundary</code> 提供的 Hook 可以把事件和异步代码里的错误“转交”给边界：</p>
+
+```jsx
+import { useErrorBoundary } from 'react-error-boundary';
+
+const RefreshButton = () => {
+  const { showBoundary } = useErrorBoundary();
+
+  const handleClick = async () => {
+    try {
+      await refreshStories();
+    } catch (error) {
+      showBoundary(error); // 交给最近的 ErrorBoundary 显示
+    }
+  };
+
+  return <button type="button" onClick={handleClick}>Refresh</button>;
+};
+```
+
+<div class="box note">
+  <div class="t">&#9432; React 19 的错误处理改进</div>
+  <ul style="margin:0">
+    <li>开发环境下，一个错误不再被重复抛出、打印两三次；控制台信息更精简，并带有组件栈。</li>
+    <li><code>createRoot</code> 新增了全局回调：<code>onCaughtError</code>（被边界捕获的错误）、<code>onUncaughtError</code>（未捕获的错误）、<code>onRecoverableError</code>，方便统一接入错误监控。</li>
+  </ul>
+</div>
+
+```jsx src/main.jsx
+createRoot(document.getElementById('root'), {
+  onUncaughtError: (error, errorInfo) => {
+    reportToMonitoring(error, errorInfo.componentStack);
+  },
+  onCaughtError: (error, errorInfo) => {
+    reportToMonitoring(error, errorInfo.componentStack);
+  },
+}).render(<App />);
+```
+
+<h2 id="router-errors">路由里的错误：errorElement</h2>
+
+<p>
+  第 36 章的 <code>storyLoader</code> 在文章不存在时 <code>throw new Response(…, { status: 404 })</code>。
+  React Router 内置了路由级的错误边界：给路由配置 <code>errorElement</code>，loader 或组件抛出的错误都会显示它：
+</p>
+
+```jsx src/main.jsx
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Layout />,
+    errorElement: <RouteError />, // 兜底：整个应用的错误页
+    children: [
+      { index: true, element: <StoriesPage /> },
+      {
+        path: 'story/:storyId',
+        element: <StoryPage />,
+        loader: storyLoader,
+        errorElement: <RouteError />, // 只替换详情区域，保留 Layout
+      },
+    ],
+  },
+]);
+```
+
+```jsx src/RouteError.jsx
+import { isRouteErrorResponse, useRouteError, Link } from 'react-router';
+
+const RouteError = () => {
+  const error = useRouteError();
+
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return (
+      <div>
+        <h2>Story not found</h2>
+        <Link to="/">Back to all stories</Link>
+      </div>
+    );
+  }
+
+  return <h2>Something went wrong: {error.message}</h2>;
+};
+
+export { RouteError };
+```
+
+<h2 id="suspense">Suspense：还没准备好时显示什么</h2>
+
+<p>
+  <code>&lt;Suspense fallback={…}&gt;</code> 包住的子树里，只要有组件“暂停”（suspend，即表示“我还没准备好”），
+  整个边界就先显示 <code>fallback</code>，准备好后再换成真正的内容。什么会让组件暂停？主要有两种：
+  <strong>懒加载的代码</strong>和<strong>还没兑现的数据</strong>。
+</p>
+
+<h3>1. 代码分割：lazy</h3>
+
+<p>
+  详情页不是每个用户都会打开，没必要把它的代码塞进首屏的 JS 包里。用 <code>lazy</code> + 动态 <code>import()</code>，
+  Vite 会把它打包成一个单独的文件，第一次用到时才下载：
+</p>
+
+```jsx src/main.jsx
+import { lazy, Suspense } from 'react';
+
+const StoryPage = lazy(() => import('./StoryPage'));
+// 注意：lazy 需要模块有 default export
+
+...
+{
+  path: 'story/:storyId',
+  element: (
+    <Suspense fallback={<p>Loading page ...</p>}>
+      <StoryPage />
+    </Suspense>
+  ),
+}
+```
+
+<h3>2. 读取数据：use(promise)</h3>
+
+<p>第 25 章介绍过 <code>use</code> 可以读取 Promise。和 Suspense、错误边界组合起来，加载和出错都变成了声明式的：</p>
+
+```jsx
+import { use, Suspense } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
+
+// Promise 必须在组件外创建或被缓存，不能在渲染时新建
+const storiesPromise = fetch(`${API_ENDPOINT}react`).then((r) => r.json());
+
+const Stories = () => {
+  const result = use(storiesPromise); // 没好就暂停；失败就抛给错误边界
+  return <List list={result.hits} />;
+};
+
+const App = () => (
+  <ErrorBoundary fallback={<p>Something went wrong ...</p>}>
+    <Suspense fallback={<p>Loading ...</p>}>
+      <Stories />
+    </Suspense>
+  </ErrorBoundary>
+);
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 260" role="img" aria-label="ErrorBoundary 与 Suspense 包裹组件，分别处理错误和加载">
+  <rect class="bx-r" x="20" y="20" width="440" height="220" rx="14" stroke-dasharray="7 5"/>
+  <text class="ttl on-r" x="36" y="44">&lt;ErrorBoundary fallback="出错了"&gt;</text>
+  <rect class="bx-b" x="40" y="60" width="400" height="160" rx="12" stroke-dasharray="7 5"/>
+  <text class="ttl on-b" x="56" y="84">&lt;Suspense fallback="Loading"&gt;</text>
+  <rect class="bx-g" x="60" y="100" width="360" height="100" rx="10"/>
+  <text class="ttl on-g" x="240" y="126" text-anchor="middle">&lt;Stories /&gt;</text>
+  <text class="mono sm" x="240" y="150" text-anchor="middle">const data = use(promise);</text>
+  <text class="sm" x="240" y="176" text-anchor="middle">只写“数据到了之后怎么显示”</text>
+
+  <rect class="bx-b" x="520" y="30" width="220" height="56" rx="10"/>
+  <text class="sm on-b" x="630" y="54" text-anchor="middle">Promise 待定 → 暂停</text>
+  <text class="sm" x="630" y="74" text-anchor="middle">显示最近 Suspense 的 fallback</text>
+  <rect class="bx-g" x="520" y="102" width="220" height="56" rx="10"/>
+  <text class="sm on-g" x="630" y="126" text-anchor="middle">Promise 兑现</text>
+  <text class="sm" x="630" y="146" text-anchor="middle">正常渲染内容</text>
+  <rect class="bx-r" x="520" y="174" width="220" height="56" rx="10"/>
+  <text class="sm on-r" x="630" y="198" text-anchor="middle">Promise 失败 → 抛出错误</text>
+  <text class="sm" x="630" y="218" text-anchor="middle">显示最近 ErrorBoundary 的 fallback</text>
+  <path class="ln-b" d="M422 130 L516 60" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M422 150 H516" marker-end="url(#ar-g)"/>
+  <path class="ln-r" d="M422 170 L516 200" marker-end="url(#ar-r)"/>
+</svg>
+<figcaption>图 38-2　三种结果各有去处：组件本身只关心“成功”这一条路</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 实践中通常不自己管理 Promise</div>
+  <p>
+    上面的 <code>storiesPromise</code> 在模块加载时就创建了，搜索词变了怎么办？需要缓存、按参数区分、失效重取……
+    这些正是 TanStack Query（<code>useSuspenseQuery</code>，第 40 章）和框架（服务端组件，第 51 章）替你做的事。
+    <code>use(promise)</code> 更适合作为这些工具的底层机制来理解。
+  </p>
+</div>
+
+<h3>Suspense 边界放在哪里</h3>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 210" role="img" aria-label="Suspense 边界的粒度">
+  <rect class="bx" x="20" y="20" width="230" height="170" rx="12"/>
+  <text class="ttl" x="135" y="44" text-anchor="middle">一个大边界</text>
+  <rect class="bx-d" x="40" y="60" width="190" height="110" rx="8"/>
+  <text class="sm" x="135" y="120" text-anchor="middle">Loading …（整页）</text>
+  <text class="sm" x="135" y="186" text-anchor="middle">最慢的数据决定整页何时出现</text>
+
+  <rect class="bx" x="265" y="20" width="230" height="170" rx="12"/>
+  <text class="ttl" x="380" y="44" text-anchor="middle">多个小边界</text>
+  <rect class="bx-g" x="285" y="60" width="190" height="30" rx="6"/><text class="sm on-g" x="380" y="80" text-anchor="middle">Header ✓</text>
+  <rect class="bx-d" x="285" y="98" width="90" height="72" rx="6"/><text class="sm" x="330" y="138" text-anchor="middle">Loading…</text>
+  <rect class="bx-g" x="385" y="98" width="90" height="72" rx="6"/><text class="sm on-g" x="430" y="138" text-anchor="middle">侧栏 ✓</text>
+  <text class="sm" x="380" y="186" text-anchor="middle">先好的先显示，但可能“跳来跳去”</text>
+
+  <rect class="bx-a" x="510" y="20" width="230" height="170" rx="12"/>
+  <text class="ttl on-a" x="625" y="44" text-anchor="middle">按“有意义的区块”划分</text>
+  <text class="sm" x="625" y="80" text-anchor="middle">• 页面骨架（导航、标题）立即显示</text>
+  <text class="sm" x="625" y="102" text-anchor="middle">• 主要内容一个边界</text>
+  <text class="sm" x="625" y="124" text-anchor="middle">• 次要内容（评论、推荐）各一个</text>
+  <text class="sm" x="625" y="160" text-anchor="middle">fallback 最好是和内容同尺寸的骨架屏</text>
+</svg>
+<figcaption>图 38-3　边界的粒度是一个设计决策：按用户感知的区块来划分</figcaption>
+</figure>
+
+<h2 id="old-new">新旧对照</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">手动管理 <span class="ver old">第 19–23 章</span></div>
+```jsx
+const [data, setData] = useState(null);
+const [isLoading, setIsLoading] = useState(true);
+const [error, setError] = useState(null);
+
+useEffect(() => { /* fetch … */ }, []);
+
+if (isLoading) return <Loading />;
+if (error) return <ErrorMessage />;
+return <List list={data} />;
+```
+  </div>
+  <div class="new"><div class="h">声明式边界 <span class="ver">Suspense + ErrorBoundary</span></div>
+```jsx
+<ErrorBoundary FallbackComponent={ErrorMessage}>
+  <Suspense fallback={<Loading />}>
+    <Stories />  {/* 内部 use() 或 useSuspenseQuery() */}
+  </Suspense>
+</ErrorBoundary>
+```
+  </div>
+</div>
+
+<p>
+  两种方式都正确。手动管理最直观、不依赖任何工具；声明式边界让组件更干净，加载与错误界面可以在上层统一编排。
+  在 React 18 之前，Suspense 只能用于 <code>lazy</code> 代码分割；现在它已经是数据加载的一等公民。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>未捕获的渲染错误会卸载整棵组件树；错误边界把错误限制在局部并显示后备界面。</li>
+  <li>错误边界目前只能用类组件实现，实际项目中通常用 <code>react-error-boundary</code>（支持重试、<code>resetKeys</code>、<code>showBoundary</code>）。</li>
+  <li>事件处理函数和异步代码中的错误不会被自动捕获，需要 try/catch 或 <code>showBoundary</code>。</li>
+  <li>React Router 用 <code>errorElement</code> + <code>useRouteError</code> 处理路由级错误。</li>
+  <li>Suspense 在子树“暂停”时显示 fallback：用于 <code>lazy</code> 代码分割和 <code>use(promise)</code> / Suspense 查询等数据加载。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 <code>Item</code> 里故意制造一个错误（比如 <code>item.title.foo.bar</code>），分别观察有无错误边界时的表现。</li>
+    <li>给第 36 章的详情路由加上 <code>errorElement</code>，访问一个不存在的 id 验证 404 页面。</li>
+    <li>用 <code>lazy</code> 懒加载详情页，运行 <code>npm run build</code>，确认 <code>dist/assets</code> 里多了一个单独的 JS 文件。</li>
+    <li>在 Network 面板里开启慢速网络，观察懒加载时 Suspense 的 fallback。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是错误边界？为什么需要它？</summary>
+    <div><p>能捕获子组件树渲染错误并显示后备 UI 的组件。没有它时，未捕获的渲染错误会导致整个应用卸载白屏。</p></div></details>
+  <details><summary>错误边界能用函数组件写吗？</summary>
+    <div><p>目前不能，需要类组件实现 getDerivedStateFromError / componentDidCatch；可以使用 react-error-boundary 等库在函数组件中方便地使用。</p></div></details>
+  <details><summary>哪些错误不能被错误边界捕获？</summary>
+    <div><p>事件处理函数中的错误、异步代码（setTimeout、Promise 回调）中的错误、服务端渲染中的错误，以及边界自身的错误。</p></div></details>
+  <details><summary>Suspense 的作用是什么？</summary>
+    <div><p>当子树中的组件因为代码或数据未就绪而暂停时，显示指定的 fallback，就绪后再显示实际内容。常用于 lazy 代码分割和数据加载。</p></div></details>
+  <details><summary>React.lazy 有什么好处？</summary>
+    <div><p>实现按需加载：组件代码被拆成独立文件，只有渲染到时才下载，减少首屏 JS 体积。</p></div></details>
+</div>

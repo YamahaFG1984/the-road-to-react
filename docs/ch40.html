@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 40 章 · TanStack Query — React 19 入门教程</title>
+<meta name="description" content="用服务端状态库重写数据请求与无限加载">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="40">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 40 章 · 进阶专题</span>
+<h1>TanStack Query</h1>
+<p class="lede">
+  回顾第 19–35 章，为了“从服务器拿数据”我们手写了：reducer、加载与错误状态、effect、竞态处理、URL 状态、分页拼接……
+  而且还没做缓存（切回上一次的搜索，要重新等一遍）。<strong>TanStack Query</strong>（原名 React Query）专门解决这类问题。
+  这一章用它重写 Hacker Stories 的数据层，你会看到有多少代码可以删掉。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>分清“客户端状态”和“服务端状态”</li>
+    <li>用 <code>useQuery</code> 替换手写的数据请求逻辑，理解 <code>queryKey</code></li>
+    <li>理解缓存、过期（stale）和后台刷新</li>
+    <li>用 <code>queryClient.setQueryData</code> / <code>useMutation</code> 修改数据</li>
+    <li>用 <code>useInfiniteQuery</code> 重写第 35 章的“加载更多”</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="server-state">服务端状态不是普通的状态</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="客户端状态与服务端状态的区别">
+  <rect class="bx-p" x="20" y="20" width="340" height="200" rx="12"/>
+  <text class="ttl on-p" x="190" y="46" text-anchor="middle">客户端状态</text>
+  <text class="sm" x="40" y="76">• 例子：输入框内容、主题、弹窗开关、收藏夹</text>
+  <text class="sm" x="40" y="100">• 完全由浏览器这一端拥有</text>
+  <text class="sm" x="40" y="124">• 同步读写，永远是最新的</text>
+  <text class="sm" x="40" y="160">工具：useState / useReducer /</text>
+  <text class="sm" x="40" y="180">Context / Zustand（第 45 章）</text>
+
+  <rect class="bx-b" x="400" y="20" width="340" height="200" rx="12"/>
+  <text class="ttl on-b" x="570" y="46" text-anchor="middle">服务端状态</text>
+  <text class="sm" x="420" y="76">• 例子：文章列表、用户资料、评论</text>
+  <text class="sm" x="420" y="100">• 真正的数据在服务器上，浏览器只有“副本”</text>
+  <text class="sm" x="420" y="124">• 需要异步获取，可能随时过时</text>
+  <text class="sm" x="420" y="148">• 要考虑：缓存、去重、重试、刷新、分页、竞态</text>
+  <text class="sm" x="420" y="180">工具：TanStack Query / SWR（第 46 章）</text>
+</svg>
+<figcaption>图 40-1　两类状态的性质完全不同，把服务端数据当作普通 state 管理，就要自己处理右边的所有问题</figcaption>
+</figure>
+
+<h2 id="setup">安装与配置</h2>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npm</span> install @tanstack/react-query
+<span class="tk-kw">npm</span> install --save-dev @tanstack/react-query-devtools</pre></div>
+
+<p>创建一个 <code>QueryClient</code>（它持有所有缓存），并在应用最外层提供给组件树：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/main.jsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">QueryClient</span>, <span class="tk-tp">QueryClientProvider</span> } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">ReactQueryDevtools</span> } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query-devtools'</span>;
+
+<span class="tk-kw">const</span> queryClient = <span class="tk-kw">new</span> <span class="tk-tp">QueryClient</span>({
+  defaultOptions: {
+    queries: {
+      staleTime: <span class="tk-nm">60</span> * <span class="tk-nm">1000</span>, <span class="tk-cm">// 数据 1 分钟内视为新鲜，不会自动重新请求</span>
+    },
+  },
+});
+
+<span class="tk-fn">createRoot</span>(document.<span class="tk-fn">getElementById</span>(<span class="tk-st">'root'</span>)).<span class="tk-fn">render</span>(
+  <span class="tk-tg">&lt;StrictMode</span>&gt;
+    <span class="tk-tg">&lt;QueryClientProvider</span> client={queryClient}&gt;
+      <span class="tk-tg">&lt;App</span> <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;ReactQueryDevtools</span> <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/QueryClientProvider</span>&gt;
+  <span class="tk-tg">&lt;/StrictMode</span>&gt;
+);</pre></div>
+
+<h2 id="usequery">useQuery：一行代替一个 reducer</h2>
+
+<p>先把请求函数单独写出来 —— 它就是一个普通的 async 函数：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/api.js</span></div><pre><span class="tk-kw">import</span> axios <span class="tk-kw">from</span> <span class="tk-st">'axios'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">API_ENDPOINT</span> = <span class="tk-st">'https://hn.algolia.com/api/v1/search'</span>;
+
+<span class="tk-kw">const</span> fetchStories = <span class="tk-kw">async</span> (query, signal) =&gt; {
+  <span class="tk-kw">const</span> result = <span class="tk-kw">await</span> axios.<span class="tk-fn">get</span>(<span class="tk-tp">API_ENDPOINT</span>, {
+    params: { query },
+    signal, <span class="tk-cm">// TanStack Query 在请求过时时会自动取消</span>
+  });
+  <span class="tk-kw">return</span> result.data.hits;
+};
+
+<span class="tk-kw">export</span> { fetchStories };</pre></div>
+
+<p>在组件里：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+<span class="tk-kw">import</span> { fetchStories } <span class="tk-kw">from</span> <span class="tk-st">'./api'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useStorageState</span>(<span class="tk-st">'search'</span>, <span class="tk-st">'React'</span>);
+  <span class="tk-kw">const</span> [query, setQuery] = <span class="tk-fn">useState</span>(searchTerm);
+
+  <span class="tk-kw">const</span> {
+    data: stories = [],
+    isPending,
+    isError,
+    isFetching,
+  } = <span class="tk-fn">useQuery</span>({
+    queryKey: [<span class="tk-st">'stories'</span>, query],
+    queryFn: ({ signal }) =&gt; <span class="tk-fn">fetchStories</span>(query, signal),
+    enabled: <span class="tk-tp">Boolean</span>(query), <span class="tk-cm">// query 为空时不请求</span>
+  });
+
+  <span class="tk-kw">const</span> searchAction = () =&gt; {
+    <span class="tk-fn">setQuery</span>(searchTerm);
+  };
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span> {isFetching &amp;&amp; <span class="tk-st">'⟳'</span>}<span class="tk-tg">&lt;/h1</span>&gt;
+
+      <span class="tk-tg">&lt;SearchForm</span>
+        searchTerm={searchTerm}
+        onSearchInput={(event) =&gt; <span class="tk-fn">setSearchTerm</span>(event.target.value)}
+        searchAction={searchAction}
+      <span class="tk-tg">/&gt;</span>
+
+      {isError &amp;&amp; <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Something</span> went wrong ...<span class="tk-tg">&lt;/p</span>&gt;}
+
+      {isPending ? <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> ...<span class="tk-tg">&lt;/p</span>&gt; : <span class="tk-tg">&lt;List</span> list={stories} <span class="tk-tg">/&gt;</span>}
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="手写数据请求与 useQuery 的代码量对比">
+  <rect class="bx-r" x="20" y="20" width="340" height="230" rx="12"/>
+  <text class="ttl on-r" x="190" y="46" text-anchor="middle">手写（第 20–23 章）</text>
+  <text class="sm" x="40" y="76">✎ storiesReducer（4 个 case）</text>
+  <text class="sm" x="40" y="98">✎ useReducer + 初始状态</text>
+  <text class="sm" x="40" y="120">✎ url / urls 状态</text>
+  <text class="sm" x="40" y="142">✎ useCallback 包装请求函数</text>
+  <text class="sm" x="40" y="164">✎ useEffect 触发请求</text>
+  <text class="sm" x="40" y="186">✎ try/catch + 三种 dispatch</text>
+  <text class="sm" x="40" y="208">✎ AbortController 处理竞态（第 21 章）</text>
+  <text class="sm on-r" x="40" y="236">✗ 没有缓存、去重、重试、后台刷新</text>
+
+  <rect class="bx-g" x="400" y="20" width="340" height="230" rx="12"/>
+  <text class="ttl on-g" x="570" y="46" text-anchor="middle">useQuery</text>
+  <text class="mono sm" x="420" y="80">useQuery({</text>
+  <text class="mono sm" x="436" y="100">queryKey: ['stories', query],</text>
+  <text class="mono sm" x="436" y="120">queryFn: ({ signal }) =&gt;</text>
+  <text class="mono sm" x="452" y="140">fetchStories(query, signal),</text>
+  <text class="mono sm" x="420" y="160">});</text>
+  <text class="sm on-g" x="420" y="196">✓ 加载 / 错误 / 数据状态</text>
+  <text class="sm on-g" x="420" y="216">✓ 缓存 · 去重 · 重试 · 取消 · 竞态</text>
+  <text class="sm on-g" x="420" y="236">✓ 窗口重新聚焦时后台刷新</text>
+</svg>
+<figcaption>图 40-2　同样的功能，关注点从“怎么获取”变成了“要什么数据”</figcaption>
+</figure>
+
+<h3>queryKey：缓存的“地址”</h3>
+
+<p>
+  <code>queryKey</code> 是一个数组，唯一标识一份数据。它有两个作用：
+  <strong>① 作为缓存的键</strong>：<code>['stories', 'react']</code> 和 <code>['stories', 'vue']</code> 是两份独立的缓存；
+  <strong>② 作为依赖</strong>：key 里的值变化时，自动请求新数据 —— 就像 effect 的依赖数组。
+  所以 <strong>queryFn 用到的所有变量都应该出现在 queryKey 里</strong>（官方 ESLint 插件会检查这一点）。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 270" role="img" aria-label="TanStack Query 缓存：按 key 存储，先返回缓存再后台刷新">
+  <rect class="bx-a" x="270" y="20" width="220" height="230" rx="14"/>
+  <text class="ttl on-a" x="380" y="46" text-anchor="middle">QueryClient 缓存</text>
+  <rect class="bx-g" x="290" y="64" width="180" height="44" rx="8"/>
+  <text class="mono sm on-g" x="380" y="84" text-anchor="middle">['stories','react']</text>
+  <text class="sm" x="380" y="100" text-anchor="middle">20 条 · 新鲜</text>
+  <rect class="bx" x="290" y="118" width="180" height="44" rx="8"/>
+  <text class="mono sm" x="380" y="138" text-anchor="middle">['stories','vue']</text>
+  <text class="sm" x="380" y="154" text-anchor="middle">20 条 · 已过期（stale）</text>
+  <rect class="bx" x="290" y="172" width="180" height="44" rx="8"/>
+  <text class="mono sm" x="380" y="192" text-anchor="middle">['story', 42]</text>
+  <text class="sm" x="380" y="208" text-anchor="middle">详情 · 新鲜</text>
+
+  <rect class="bx-b" x="20" y="60" width="200" height="60" rx="10"/>
+  <text class="sm on-b" x="120" y="84" text-anchor="middle">再次搜索 react</text>
+  <text class="sm" x="120" y="104" text-anchor="middle">→ 立即显示缓存，不请求</text>
+  <rect class="bx-b" x="20" y="140" width="200" height="60" rx="10"/>
+  <text class="sm on-b" x="120" y="164" text-anchor="middle">再次搜索 vue</text>
+  <text class="sm" x="120" y="184" text-anchor="middle">→ 先显示旧数据，后台刷新</text>
+  <path class="ln-g" d="M222 90 H286" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M222 170 L286 140" marker-end="url(#ar-b)"/>
+
+  <rect class="bx-g" x="540" y="120" width="200" height="60" rx="10"/>
+  <text class="ttl on-g" x="640" y="144" text-anchor="middle">Hacker News API</text>
+  <text class="sm" x="640" y="164" text-anchor="middle">只在需要时请求</text>
+  <path class="ln-d" d="M472 140 H536" marker-end="url(#ar)"/>
+  <text class="sm" x="504" y="132" text-anchor="middle">refetch</text>
+  <text class="sm" x="640" y="220" text-anchor="middle">stale-while-revalidate：</text>
+  <text class="sm" x="640" y="238" text-anchor="middle">先给旧的，再悄悄换新的</text>
+</svg>
+<figcaption>图 40-3　缓存让“切回刚才的搜索”变得瞬间完成</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th>返回值</th><th>含义</th></tr>
+  <tr><td><code>data</code></td><td>queryFn 返回的数据（还没有时是 <code>undefined</code>）</td></tr>
+  <tr><td><code>isPending</code></td><td>还没有任何数据（首次加载）</td></tr>
+  <tr><td><code>isFetching</code></td><td>正在请求中（包括有缓存时的后台刷新）</td></tr>
+  <tr><td><code>isError</code> / <code>error</code></td><td>请求失败（默认会自动重试 3 次后才算失败）</td></tr>
+  <tr><td><code>refetch()</code></td><td>手动重新请求</td></tr>
+</table>
+</div>
+
+<h3>搜索时避免闪烁</h3>
+
+<p>换一个新的搜索词时，新 key 还没有缓存，<code>data</code> 会变回 <code>undefined</code>，列表先消失再出现。用 <code>placeholderData</code> 保留上一次的结果：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { keepPreviousData, useQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-fn">useQuery</span>({
+  queryKey: [<span class="tk-st">'stories'</span>, query],
+  queryFn: ({ signal }) =&gt; <span class="tk-fn">fetchStories</span>(query, signal),
+  placeholderData: keepPreviousData, <span class="tk-cm">// 新数据到达前继续显示旧列表</span>
+});</pre></div>
+
+<h2 id="mutation">修改数据：删除文章</h2>
+
+<p>
+  “Dismiss” 删除文章怎么办？数据在缓存里，不在组件状态里。真实应用里，删除通常要请求服务器，然后让缓存失效、重新获取：
+</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useMutation, useQueryClient } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">const</span> queryClient = <span class="tk-fn">useQueryClient</span>();
+
+<span class="tk-kw">const</span> removeMutation = <span class="tk-fn">useMutation</span>({
+  mutationFn: (story) =&gt; api.<span class="tk-fn">deleteStory</span>(story.objectID), <span class="tk-cm">// 请求服务器</span>
+  onSuccess: () =&gt; {
+    <span class="tk-cm">// 让所有以 'stories' 开头的缓存失效 → 自动重新获取</span>
+    queryClient.<span class="tk-fn">invalidateQueries</span>({ queryKey: [<span class="tk-st">'stories'</span>] });
+  },
+});
+
+<span class="tk-tg">&lt;button</span> onClick={() =&gt; removeMutation.<span class="tk-fn">mutate</span>(item)}&gt;<span class="tk-tp">Dismiss</span><span class="tk-tg">&lt;/button</span>&gt;</pre></div>
+
+<p>Hacker News API 不能删除文章，我们只是在本地隐藏它，所以直接修改缓存即可：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">const</span> queryClient = <span class="tk-fn">useQueryClient</span>();
+
+<span class="tk-kw">const</span> handleRemoveStory = (item) =&gt; {
+  queryClient.<span class="tk-fn">setQueryData</span>([<span class="tk-st">'stories'</span>, query], (oldStories) =&gt;
+    oldStories.<span class="tk-fn">filter</span>((story) =&gt; story.objectID !== item.objectID)
+  );
+};</pre></div>
+
+<div class="box note">
+  <div class="t">&#9432; 和第 20 章的 reducer 对比</div>
+  <p>
+    <code>setQueryData</code> 的更新函数和 reducer 的 <code>REMOVE_STORY</code> 分支一模一样 —— 都是不可变地过滤出新数组。
+    区别在于数据存在哪里：以前在组件的 <code>useReducer</code> 里，现在在全局共享的查询缓存里，任何用同一个 key 的组件都会看到变化。
+  </p>
+</div>
+
+<h2 id="infinite">useInfiniteQuery：加载更多</h2>
+
+<p>第 35 章手写的无限分页（页码状态、URL 拼接、reducer 里的 concat）可以整体换成：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">src/App.jsx</span></div><pre><span class="tk-kw">import</span> { useInfiniteQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">const</span> fetchStoriesPage = <span class="tk-kw">async</span> (query, page, signal) =&gt; {
+  <span class="tk-kw">const</span> result = <span class="tk-kw">await</span> axios.<span class="tk-fn">get</span>(<span class="tk-tp">API_ENDPOINT</span>, {
+    params: { query, page },
+    signal,
+  });
+  <span class="tk-kw">return</span> result.data; <span class="tk-cm">// { hits, page, nbPages, ... }</span>
+};
+
+<span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  ...
+  <span class="tk-kw">const</span> {
+    data,
+    isPending,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = <span class="tk-fn">useInfiniteQuery</span>({
+    queryKey: [<span class="tk-st">'stories'</span>, <span class="tk-st">'infinite'</span>, query],
+    queryFn: ({ pageParam, signal }) =&gt;
+      <span class="tk-fn">fetchStoriesPage</span>(query, pageParam, signal),
+    initialPageParam: <span class="tk-nm">0</span>,
+    getNextPageParam: (lastPage) =&gt;
+      lastPage.page + <span class="tk-nm">1</span> &lt; lastPage.nbPages ? lastPage.page + <span class="tk-nm">1</span> : <span class="tk-kw">undefined</span>,
+  });
+
+  <span class="tk-cm">// 所有已加载的页拼成一个列表</span>
+  <span class="tk-kw">const</span> stories = data?.pages.<span class="tk-fn">flatMap</span>((page) =&gt; page.hits) ?? [];
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span>&gt;
+      ...
+      <span class="tk-tg">&lt;List</span> list={stories} <span class="tk-tg">/&gt;</span>
+
+      {hasNextPage &amp;&amp; (
+        <span class="tk-tg">&lt;button</span>
+          <span class="tk-kw">type</span>=<span class="tk-st">"button"</span>
+          onClick={() =&gt; <span class="tk-fn">fetchNextPage</span>()}
+          disabled={isFetchingNextPage}
+        &gt;
+          {isFetchingNextPage ? <span class="tk-st">'Loading more…'</span> : <span class="tk-st">'More'</span>}
+        <span class="tk-tg">&lt;/button</span>&gt;
+      )}
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+};</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="useInfiniteQuery 的数据结构与翻页参数">
+  <rect class="bx-a" x="20" y="20" width="300" height="180" rx="12"/>
+  <text class="ttl on-a" x="170" y="46" text-anchor="middle">data.pages</text>
+  <rect class="bx" x="40" y="62" width="260" height="34" rx="6"/><text class="mono sm" x="170" y="84" text-anchor="middle">[0] { hits: [20 条], page: 0 }</text>
+  <rect class="bx" x="40" y="104" width="260" height="34" rx="6"/><text class="mono sm" x="170" y="126" text-anchor="middle">[1] { hits: [20 条], page: 1 }</text>
+  <rect class="bx-g" x="40" y="146" width="260" height="34" rx="6"/><text class="mono sm on-g" x="170" y="168" text-anchor="middle">[2] { hits: [20 条], page: 2 }</text>
+
+  <rect class="bx-b" x="380" y="30" width="360" height="60" rx="10"/>
+  <text class="mono sm on-b" x="560" y="54" text-anchor="middle">getNextPageParam(lastPage)</text>
+  <text class="sm" x="560" y="74" text-anchor="middle">根据最后一页算出下一页的参数；返回 undefined 表示没有更多</text>
+  <rect class="bx-g" x="380" y="120" width="360" height="60" rx="10"/>
+  <text class="mono sm on-g" x="560" y="144" text-anchor="middle">pages.flatMap(p =&gt; p.hits)</text>
+  <text class="sm" x="560" y="164" text-anchor="middle">渲染时再拼成一个列表（派生数据）</text>
+  <path class="ln-b" d="M322 160 C350 160 350 60 376 60" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M322 150 H376" marker-end="url(#ar-g)"/>
+</svg>
+<figcaption>图 40-4　每一页分开缓存，拼接在渲染时完成；不需要再在 reducer 里判断 page === 0</figcaption>
+</figure>
+
+<h2 id="suspense">与 Suspense、路由配合</h2>
+
+<p>第 38 章说过，<code>use(promise)</code> 需要有人帮你缓存 Promise。TanStack Query 就是这个“有人”：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">import</span> { useSuspenseQuery } <span class="tk-kw">from</span> <span class="tk-st">'@tanstack/react-query'</span>;
+
+<span class="tk-kw">const</span> <span class="tk-tp">Stories</span> = ({ query }) =&gt; {
+  <span class="tk-cm">// data 一定有值：加载中交给 Suspense，出错交给 ErrorBoundary</span>
+  <span class="tk-kw">const</span> { data } = <span class="tk-fn">useSuspenseQuery</span>({
+    queryKey: [<span class="tk-st">'stories'</span>, query],
+    queryFn: ({ signal }) =&gt; <span class="tk-fn">fetchStories</span>(query, signal),
+  });
+
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;List</span> list={data} <span class="tk-tg">/&gt;</span>;
+};</pre></div>
+
+<p>和第 36 章的路由 loader 结合时，可以在 loader 里预先填充缓存，组件里再用同一个 key 读取：</p>
+
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> storyQuery = (id) =&gt; ({
+  queryKey: [<span class="tk-st">'story'</span>, id],
+  queryFn: () =&gt; <span class="tk-fn">fetchStory</span>(id),
+});
+
+<span class="tk-cm">// loader：路由匹配时开始请求（已有缓存则直接返回）</span>
+<span class="tk-kw">const</span> storyLoader = ({ params }) =&gt;
+  queryClient.<span class="tk-fn">ensureQueryData</span>(<span class="tk-fn">storyQuery</span>(params.storyId));
+
+<span class="tk-cm">// 组件：从缓存中读取</span>
+<span class="tk-kw">const</span> <span class="tk-tp">StoryPage</span> = () =&gt; {
+  <span class="tk-kw">const</span> { storyId } = <span class="tk-fn">useParams</span>();
+  <span class="tk-kw">const</span> { data: story } = <span class="tk-fn">useSuspenseQuery</span>(<span class="tk-fn">storyQuery</span>(storyId));
+  ...
+};</pre></div>
+
+<h2 id="devtools">DevTools</h2>
+
+<p>
+  页面右下角的 TanStack Query DevTools 图标可以展开一个面板：每个 queryKey 的状态（fresh / stale / fetching / inactive）、缓存内容、
+  手动触发刷新或失效。调试数据问题时非常有用。它只在开发环境中生效，不会被打包进生产代码。
+</p>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>服务端状态有缓存、同步、过期等特殊问题，适合交给专门的库，而不是 useState / useReducer。</li>
+  <li><code>useQuery({ queryKey, queryFn })</code> 返回 <code>data</code>、<code>isPending</code>、<code>isError</code>、<code>isFetching</code> 等状态。</li>
+  <li><code>queryKey</code> 既是缓存键又是依赖；queryFn 用到的变量都要放进去。</li>
+  <li>修改数据：请求服务器后 <code>invalidateQueries</code>，或用 <code>setQueryData</code> 直接更新缓存。</li>
+  <li><code>useInfiniteQuery</code> 处理“加载更多”；<code>useSuspenseQuery</code> 与 Suspense / 错误边界配合。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 <code>useQuery</code> 重写 Hacker Stories，删除 reducer 和相关 effect，数一数少了多少行。</li>
+    <li>先搜 react，再搜 vue，再搜回 react：用 DevTools 观察缓存，体会第三次搜索的速度。</li>
+    <li>用 <code>useInfiniteQuery</code> 重写“加载更多”，并在最后一页隐藏按钮。</li>
+    <li>把第 39 章的 <code>useDebounce</code> 和 <code>useQuery</code> 结合：<code>queryKey: ['stories', debouncedSearchTerm]</code>。</li>
+    <li>把第 36 章详情页的数据改为用 <code>useQuery</code> 获取，从列表进入详情再返回，观察列表是否需要重新加载。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是服务端状态？和客户端状态有什么不同？</summary>
+    <div><p>数据的权威来源在服务器，客户端只持有可能过时的副本，需要异步获取并处理缓存、同步、重试等问题；客户端状态完全由前端拥有，同步且始终最新。</p></div></details>
+  <details><summary>queryKey 的作用是什么？</summary>
+    <div><p>唯一标识查询、作为缓存键；key 中的值变化时自动重新获取，相当于依赖数组。</p></div></details>
+  <details><summary>staleTime 和 gcTime 有什么区别？</summary>
+    <div><p>staleTime 决定数据多久后被视为过期（过期后在合适时机后台重新获取）；gcTime 决定不再被使用的缓存多久后从内存中移除。</p></div></details>
+  <details><summary>如何在修改数据后更新列表？</summary>
+    <div><p>在 mutation 成功后调用 invalidateQueries 让相关缓存失效并重新获取，或用 setQueryData 直接更新缓存（也可做乐观更新）。</p></div></details>
+  <details><summary>isPending 和 isFetching 的区别？</summary>
+    <div><p>isPending 表示还没有任何数据；isFetching 表示有请求正在进行，包括已有缓存时的后台刷新。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

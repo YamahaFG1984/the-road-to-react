@@ -341,7 +341,7 @@
     手动管理 <code>isLoading</code> / <code>isError</code> 是最基础、最通用的做法，也是理解数据获取的起点。
     React 19 还提供了另一种声明式的思路：组件用 <code>use(promise)</code> 直接“读取”一个 Promise，
     数据没到时由外层的 <code>&lt;Suspense fallback={…}&gt;</code> 显示加载界面，出错时由错误边界（Error Boundary）接住。
-    这种写法通常要配合框架或数据请求库（它们负责缓存 Promise）才好用，第 25 章会简单介绍。
+    这种写法通常要配合框架或数据请求库（它们负责缓存 Promise）才好用，第 25 章会简单介绍，第 38 章会结合错误边界完整演示。
   </p>
 </div>
 

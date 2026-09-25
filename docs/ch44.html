@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 44 章 · React 生态地图与选型方法 — React 19 入门教程</title>
+<meta name="description" content="面对上百个库，怎么挑、怎么判断">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="44">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 44 章 · 生态与选型</span>
+<h1>React 生态地图与选型方法</h1>
+<p class="lede">
+  React 只负责“把组件渲染成界面”，路由、数据请求、状态管理、表单、样式、测试……全都要从生态里挑。
+  每个方向少则三五个、多则几十个候选库，初学者很容易被淹没。这一部分（第 44–50 章）专门解决这个问题：
+  先建立一张<strong>生态地图</strong>和一套<strong>选型方法</strong>，再逐类比较主流库，最后把它们组合进一个项目。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>看懂 React 生态的全貌：有哪些类别，每类解决什么问题</li>
+    <li>掌握一套评估第三方库的清单和工具</li>
+    <li>知道“什么时候根本不需要引入库”</li>
+    <li>认出那些已经过时、但在老教程里仍然常见的库</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="why">为什么 React 生态这么“乱”</h2>
+
+<p>
+  Angular 是“全家桶”：路由、表单、HTTP、测试都是官方提供的，只有一个标准答案。React 是一个<strong>库</strong>，
+  官方刻意只做核心，其余交给社区竞争。好处是创新快、可以按需组合；代价就是选择困难，而且“最佳实践”几年就换一轮。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 380" role="img" aria-label="React 生态地图">
+  <circle cx="380" cy="190" r="56" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="2"/>
+  <text class="ttl on-a" x="380" y="186" text-anchor="middle">React</text>
+  <text class="sm" x="380" y="204" text-anchor="middle">组件 · Hooks</text>
+
+  <rect class="bx-b" x="20" y="20" width="220" height="70" rx="10"/>
+  <text class="ttl on-b" x="130" y="42" text-anchor="middle">构建 / 框架（第 49、51 章）</text>
+  <text class="sm" x="130" y="62" text-anchor="middle">Vite · Next.js · React Router</text>
+  <text class="sm" x="130" y="78" text-anchor="middle">（框架模式）· Astro · Expo</text>
+
+  <rect class="bx-b" x="270" y="20" width="220" height="70" rx="10"/>
+  <text class="ttl on-b" x="380" y="42" text-anchor="middle">路由（第 36、49 章）</text>
+  <text class="sm" x="380" y="62" text-anchor="middle">React Router</text>
+  <text class="sm" x="380" y="78" text-anchor="middle">TanStack Router</text>
+
+  <rect class="bx-g" x="520" y="20" width="220" height="70" rx="10"/>
+  <text class="ttl on-g" x="630" y="42" text-anchor="middle">服务端状态（第 46 章）</text>
+  <text class="sm" x="630" y="62" text-anchor="middle">TanStack Query · SWR</text>
+  <text class="sm" x="630" y="78" text-anchor="middle">RTK Query · Apollo · tRPC</text>
+
+  <rect class="bx-p" x="20" y="155" width="220" height="70" rx="10"/>
+  <text class="ttl on-p" x="130" y="177" text-anchor="middle">客户端状态（第 45 章）</text>
+  <text class="sm" x="130" y="197" text-anchor="middle">Context · Zustand</text>
+  <text class="sm" x="130" y="213" text-anchor="middle">Redux Toolkit · Jotai</text>
+
+  <rect class="bx-p" x="520" y="155" width="220" height="70" rx="10"/>
+  <text class="ttl on-p" x="630" y="177" text-anchor="middle">表单与校验（第 41、48 章）</text>
+  <text class="sm" x="630" y="197" text-anchor="middle">React Hook Form · TanStack Form</text>
+  <text class="sm" x="630" y="213" text-anchor="middle">Zod · Valibot</text>
+
+  <rect class="bx-a" x="20" y="290" width="220" height="70" rx="10"/>
+  <text class="ttl on-a" x="130" y="312" text-anchor="middle">UI 与样式（第 26–27、47 章）</text>
+  <text class="sm" x="130" y="332" text-anchor="middle">Tailwind · CSS Modules</text>
+  <text class="sm" x="130" y="348" text-anchor="middle">shadcn/ui · Ant Design · MUI</text>
+
+  <rect class="bx" x="270" y="290" width="220" height="70" rx="10"/>
+  <text class="ttl" x="380" y="312" text-anchor="middle">测试（第 30–31 章）</text>
+  <text class="sm" x="380" y="332" text-anchor="middle">Vitest · Testing Library</text>
+  <text class="sm" x="380" y="348" text-anchor="middle">MSW · Playwright</text>
+
+  <rect class="bx" x="520" y="290" width="220" height="70" rx="10"/>
+  <text class="ttl" x="630" y="312" text-anchor="middle">工具库（第 48 章）</text>
+  <text class="sm" x="630" y="332" text-anchor="middle">日期 · 国际化 · 动画 · 图表</text>
+  <text class="sm" x="630" y="348" text-anchor="middle">工具函数 · 图标</text>
+
+  <path class="ln-d" d="M240 70 L336 150"/><path class="ln-d" d="M380 92 V132"/><path class="ln-d" d="M520 70 L424 150"/>
+  <path class="ln-d" d="M242 190 H322"/><path class="ln-d" d="M518 190 H438"/>
+  <path class="ln-d" d="M240 310 L336 230"/><path class="ln-d" d="M380 288 V248"/><path class="ln-d" d="M520 310 L424 230"/>
+</svg>
+<figcaption>图 44-1　React 生态地图：中间是 React 本身，四周每一块都要自己选</figcaption>
+</figure>
+
+<h2 id="need">第一个问题：真的需要这个库吗？</h2>
+
+<p>很多库是在 React 或浏览器还缺少某项能力时诞生的。今天，不少需求已经有了内置方案：</p>
+
+<div class="tw">
+<table>
+  <tr><th>需求</th><th>过去常装的库</th><th>现在的内置方案</th></tr>
+  <tr><td>发 HTTP 请求</td><td>axios、jQuery.ajax</td><td><code>fetch</code>（浏览器和 Node 18+ 都内置）</td></tr>
+  <tr><td>深拷贝</td><td>lodash.cloneDeep</td><td><code>structuredClone()</code></td></tr>
+  <tr><td>数组排序 / 分组</td><td>lodash.sortBy、groupBy</td><td><code>toSorted()</code>、<code>Object.groupBy()</code></td></tr>
+  <tr><td>日期格式化</td><td>moment</td><td><code>Intl.DateTimeFormat</code>、<code>Intl.RelativeTimeFormat</code></td></tr>
+  <tr><td>跨组件共享少量数据</td><td>Redux</td><td>Context（第 37 章）</td></tr>
+  <tr><td>表单提交状态</td><td>Formik</td><td>form Actions + <code>useActionState</code>（第 24 章）</td></tr>
+  <tr><td>弹窗</td><td>react-modal</td><td><code>&lt;dialog&gt;</code>（第 43 章）</td></tr>
+  <tr><td>手写记忆化</td><td>reselect、memoize-one</td><td>React Compiler（第 28 章）</td></tr>
+  <tr><td>唯一 id</td><td>uuid、nanoid（用于 label 关联）</td><td><code>useId()</code>（第 43 章）</td></tr>
+</table>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 每个依赖都有成本</div>
+  <p>
+    多一个库，就多一份包体积、一份要学的 API、一份需要跟进升级的依赖、一个可能停更的风险。
+    <strong>先用最朴素的方式实现，真正感受到痛点了再引入库</strong> —— 这也是本教程一路手写 reducer、effect 之后才介绍 TanStack Query 的原因：
+    你知道它解决了什么，才能判断自己需不需要它。
+  </p>
+</div>
+
+<h2 id="checklist">评估一个库的清单</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="选型评估的八个维度">
+  <rect class="bx-a" x="280" y="110" width="200" height="80" rx="14"/>
+  <text class="ttl on-a" x="380" y="146" text-anchor="middle">这个库</text>
+  <text class="sm" x="380" y="166" text-anchor="middle">值得引入吗？</text>
+
+  <rect class="bx-b" x="20" y="20" width="220" height="56" rx="8"/>
+  <text class="ttl on-b" x="130" y="42" text-anchor="middle">① 解决我的问题吗</text>
+  <text class="sm" x="130" y="62" text-anchor="middle">而不是一个我没有的问题</text>
+  <rect class="bx-b" x="270" y="20" width="220" height="56" rx="8"/>
+  <text class="ttl on-b" x="380" y="42" text-anchor="middle">② 还在维护吗</text>
+  <text class="sm" x="380" y="62" text-anchor="middle">最近发版、issue 响应、维护者数量</text>
+  <rect class="bx-b" x="520" y="20" width="220" height="56" rx="8"/>
+  <text class="ttl on-b" x="630" y="42" text-anchor="middle">③ 用的人多吗</text>
+  <text class="sm" x="630" y="62" text-anchor="middle">下载量趋势 &gt; 星标数</text>
+
+  <rect class="bx-g" x="20" y="122" width="220" height="56" rx="8"/>
+  <text class="ttl on-g" x="130" y="144" text-anchor="middle">④ 兼容性</text>
+  <text class="sm" x="130" y="164" text-anchor="middle">React 19 · SSR/RSC · 你的框架</text>
+  <rect class="bx-g" x="520" y="122" width="220" height="56" rx="8"/>
+  <text class="ttl on-g" x="630" y="144" text-anchor="middle">⑤ 文档与类型</text>
+  <text class="sm" x="630" y="164" text-anchor="middle">文档清楚、自带 TypeScript 类型</text>
+
+  <rect class="bx-p" x="20" y="224" width="220" height="56" rx="8"/>
+  <text class="ttl on-p" x="130" y="246" text-anchor="middle">⑥ 体积</text>
+  <text class="sm" x="130" y="266" text-anchor="middle">gzip 后多大、能否 tree-shake</text>
+  <rect class="bx-p" x="270" y="224" width="220" height="56" rx="8"/>
+  <text class="ttl on-p" x="380" y="246" text-anchor="middle">⑦ 退出成本</text>
+  <text class="sm" x="380" y="266" text-anchor="middle">侵入代码多深？换掉要改多少</text>
+  <rect class="bx-p" x="520" y="224" width="220" height="56" rx="8"/>
+  <text class="ttl on-p" x="630" y="246" text-anchor="middle">⑧ 团队与许可证</text>
+  <text class="sm" x="630" y="266" text-anchor="middle">团队熟悉吗 · MIT 等许可证</text>
+
+  <path class="ln-d" d="M200 78 L300 112"/><path class="ln-d" d="M380 78 V108"/><path class="ln-d" d="M560 78 L460 112"/>
+  <path class="ln-d" d="M242 150 H278"/><path class="ln-d" d="M518 150 H482"/>
+  <path class="ln-d" d="M200 222 L300 192"/><path class="ln-d" d="M380 222 V192"/><path class="ln-d" d="M560 222 L460 192"/>
+</svg>
+<figcaption>图 44-2　评估第三方库的八个维度</figcaption>
+</figure>
+
+<h3>去哪里找这些信息</h3>
+
+<div class="tw">
+<table>
+  <tr><th>要看什么</th><th>去哪里</th></tr>
+  <tr><td>下载量趋势、几个库对比</td><td>npmtrends.com（输入多个包名对比曲线）</td></tr>
+  <tr><td>包体积</td><td>bundlephobia.com、pkg-size.dev</td></tr>
+  <tr><td>维护情况</td><td>GitHub：最近的提交与发版、打开/关闭的 issue 比例、Releases 页面</td></tr>
+  <tr><td>社区风向</td><td>State of React / State of JS 年度调查（看“使用率”和“满意度”两个维度）</td></tr>
+  <tr><td>和框架的兼容性</td><td>库的官方文档里有没有 Next.js / React Router / RSC 的集成说明</td></tr>
+  <tr><td>快速上手</td><td>官方文档里的 Quick Start，能否 10 分钟跑通一个例子</td></tr>
+</table>
+</div>
+
+<div class="box warn">
+  <div class="t">&#9888; 别只看 GitHub 星标</div>
+  <p>
+    星标是累计的，一个五年前火过、现在停更的库可能比正在崛起的新库星标多得多。看<strong>下载量的趋势</strong>、<strong>最近一年的发版</strong>和
+    <strong>调查里的满意度</strong>更可靠。另外，中文社区的搜索结果和教程往往滞后一两年，注意文章的发布日期。
+  </p>
+</div>
+
+<h2 id="decision">一个简单的决策流程</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="是否引入第三方库的决策流程">
+  <rect class="bx-b" x="270" y="10" width="220" height="44" rx="22"/>
+  <text class="ttl on-b" x="380" y="37" text-anchor="middle">遇到一个需求</text>
+
+  <rect class="bx" x="250" y="80" width="260" height="44" rx="8"/>
+  <text class="sm" x="380" y="107" text-anchor="middle">React / 浏览器内置能力能解决吗？</text>
+  <rect class="bx-g" x="570" y="80" width="170" height="44" rx="8"/>
+  <text class="sm on-g" x="655" y="107" text-anchor="middle">能 → 用内置方案</text>
+
+  <rect class="bx" x="250" y="150" width="260" height="44" rx="8"/>
+  <text class="sm" x="380" y="177" text-anchor="middle">几十行代码能写好、且不易出错吗？</text>
+  <rect class="bx-g" x="570" y="150" width="170" height="44" rx="8"/>
+  <text class="sm on-g" x="655" y="177" text-anchor="middle">能 → 自己写一个小工具</text>
+
+  <rect class="bx" x="250" y="220" width="260" height="44" rx="8"/>
+  <text class="sm" x="380" y="247" text-anchor="middle">框架 / 已用的库是否自带？</text>
+  <rect class="bx-g" x="570" y="220" width="170" height="44" rx="8"/>
+  <text class="sm on-g" x="655" y="247" text-anchor="middle">是 → 用它自带的</text>
+
+  <rect class="bx-a" x="250" y="282" width="260" height="40" rx="8"/>
+  <text class="sm on-a" x="380" y="307" text-anchor="middle">按清单评估 2–3 个候选，选“默认选择”</text>
+
+  <path class="ln" d="M380 56 V76" marker-end="url(#ar)"/>
+  <path class="ln" d="M380 126 V146" marker-end="url(#ar)"/><text class="sm" x="388" y="140">否</text>
+  <path class="ln" d="M380 196 V216" marker-end="url(#ar)"/><text class="sm" x="388" y="210">否</text>
+  <path class="ln" d="M380 266 V278" marker-end="url(#ar)"/>
+  <path class="ln-g" d="M512 102 H566" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M512 172 H566" marker-end="url(#ar-g)"/>
+  <path class="ln-g" d="M512 242 H566" marker-end="url(#ar-g)"/>
+  <text class="sm" x="20" y="120">例：日期格式化 → Intl</text>
+  <text class="sm" x="20" y="190">例：useDebounce（第 39 章）</text>
+  <text class="sm" x="20" y="260">例：Next.js 自带路由</text>
+</svg>
+<figcaption>图 44-3　引入库之前，先问三个问题</figcaption>
+</figure>
+
+<h2 id="defaults">2025–2026 年的“默认选择”</h2>
+
+<p>
+  没有特殊需求时，下面这些是社区里<strong>风险最小</strong>的选择：用户多、维护活跃、文档好、和 React 19 兼容。
+  后面几章会逐类展开比较。
+</p>
+
+<div class="tw">
+<table>
+  <tr><th>类别</th><th>默认选择</th><th>常见替代</th><th>章节</th></tr>
+  <tr><td>构建工具</td><td>Vite</td><td>Rsbuild、框架自带</td><td>2</td></tr>
+  <tr><td>框架（需要 SSR / 全栈时）</td><td>Next.js</td><td>React Router 框架模式、TanStack Start、Astro</td><td>49、51</td></tr>
+  <tr><td>路由（SPA）</td><td>React Router</td><td>TanStack Router</td><td>36、49</td></tr>
+  <tr><td>服务端状态</td><td>TanStack Query</td><td>SWR、RTK Query、Apollo（GraphQL）</td><td>40、46</td></tr>
+  <tr><td>客户端全局状态</td><td>先 Context，不够再 Zustand</td><td>Redux Toolkit、Jotai</td><td>37、45</td></tr>
+  <tr><td>表单</td><td>React Hook Form（或原生 Actions）</td><td>TanStack Form</td><td>41、48</td></tr>
+  <tr><td>校验</td><td>Zod</td><td>Valibot、Yup</td><td>41、48</td></tr>
+  <tr><td>样式</td><td>Tailwind CSS 或 CSS Modules</td><td>零运行时 CSS-in-JS</td><td>26、27</td></tr>
+  <tr><td>组件库</td><td>shadcn/ui（C 端 / 自定义设计）<br>Ant Design（中后台）</td><td>MUI、Mantine、Radix、React Aria</td><td>47</td></tr>
+  <tr><td>测试</td><td>Vitest + Testing Library + MSW</td><td>Jest；E2E 用 Playwright</td><td>30、31</td></tr>
+  <tr><td>日期</td><td>date-fns 或 Day.js（简单场景直接用 Intl）</td><td>Luxon</td><td>48</td></tr>
+  <tr><td>国际化</td><td>react-i18next</td><td>FormatJS（react-intl）、Lingui</td><td>48</td></tr>
+  <tr><td>动画</td><td>Motion（原 Framer Motion）</td><td>CSS 过渡、React Spring</td><td>48</td></tr>
+  <tr><td>图表</td><td>Recharts（简单）/ ECharts（复杂、中文文档）</td><td>Nivo、Visx</td><td>48</td></tr>
+</table>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; 这张表会过时</div>
+  <p>
+    前端生态变化很快，这张表反映的是写作时（2025–2026 年）的情况。重要的不是记住答案，而是掌握上面的<strong>评估方法</strong> ——
+    一年后你可以用同样的清单重新检查一遍。
+  </p>
+</div>
+
+<h2 id="outdated">认出过时的库</h2>
+
+<p>跟着老教程学习时，看到下面这些库要多留个心眼 —— 它们不一定不能用，但大多已经有了更好的选择：</p>
+
+<div class="tw">
+<table>
+  <tr><th>老教程里常见</th><th>现状</th><th>现在通常用</th></tr>
+  <tr><td>Create React App</td><td>2025 年官方弃用</td><td>Vite、Next.js</td></tr>
+  <tr><td>Enzyme</td><td>停止维护，不支持 React 18+</td><td>React Testing Library</td></tr>
+  <tr><td>moment.js</td><td>官方进入维护模式，体积大、可变 API</td><td>date-fns、Day.js、Intl</td></tr>
+  <tr><td>“经典” Redux（手写 action type、connect、redux-thunk 样板）</td><td>官方推荐改用 Redux Toolkit</td><td>Redux Toolkit、Zustand</td></tr>
+  <tr><td>Formik</td><td>更新缓慢</td><td>React Hook Form、TanStack Form</td></tr>
+  <tr><td>React Router v5（<code>Switch</code>、<code>useHistory</code>）</td><td>API 已大改</td><td>React Router v7</td></tr>
+  <tr><td>react-query v3（<code>useQuery('key', fn)</code>）</td><td>已更名、API 已变化</td><td>@tanstack/react-query v5</td></tr>
+  <tr><td>styled-components 等运行时 CSS-in-JS</td><td>2025 年进入维护模式</td><td>Tailwind、CSS Modules</td></tr>
+  <tr><td>prop-types</td><td>React 19 不再检查</td><td>TypeScript</td></tr>
+  <tr><td>react-helmet（设置 &lt;title&gt;）</td><td>React 19 已内置文档元数据</td><td>直接在组件里渲染 <code>&lt;title&gt;</code>、<code>&lt;meta&gt;</code></td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>React 只做核心，其余由社区竞争：这带来灵活性，也带来选择困难。</li>
+  <li>引入库之前先问：内置能力能不能解决？自己写几十行行不行？框架是不是自带？</li>
+  <li>评估库看八个维度：解决问题、维护状态、使用趋势、兼容性、文档与类型、体积、退出成本、团队与许可证。</li>
+  <li>没有特殊需求时用“默认选择”，风险最小；并学会识别过时的库。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>在 npmtrends.com 上对比 <code>zustand</code>、<code>@reduxjs/toolkit</code>、<code>jotai</code> 的下载趋势。</li>
+    <li>在 bundlephobia.com 上对比 <code>moment</code>、<code>dayjs</code>、<code>date-fns</code> 的体积。</li>
+    <li>挑一个你正在用（或打算用）的库，按本章八个维度写一份简短的评估。</li>
+    <li>检查 Hacker Stories 的 <code>package.json</code>：哪些依赖其实可以用内置能力替代？（提示：lodash 的 <code>sortBy</code>。）</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>你在项目中如何选择第三方库？</summary>
+    <div><p>先确认是否真的需要（内置能力、自行实现、框架自带），再从解决问题的契合度、维护活跃度、使用趋势、React 版本与 SSR 兼容性、文档与 TS 支持、包体积、替换成本和许可证等方面比较 2–3 个候选。</p></div></details>
+  <details><summary>为什么不能只看 GitHub 星标？</summary>
+    <div><p>星标是累计值，不能反映当前的活跃度和使用趋势；应结合下载量趋势、近期发版和社区满意度调查判断。</p></div></details>
+  <details><summary>引入过多第三方库有什么问题？</summary>
+    <div><p>增加包体积和加载时间、学习和维护成本、升级兼容风险、供应链安全风险，以及库停更后的迁移成本。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

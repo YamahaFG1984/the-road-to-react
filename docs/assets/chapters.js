@@ -185,13 +185,95 @@ window.CHAPTERS = [
  },
  {
   "n": 36,
-  "t": "构建与部署",
-  "d": "npm run build、Firebase 与 GitHub Pages",
-  "part": "第九部分 · 上线"
+  "t": "路由：React Router",
+  "d": "多页面、URL 参数、搜索参数与文章详情页",
+  "part": "第九部分 · 进阶专题"
  },
  {
   "n": 37,
+  "t": "Context 实战",
+  "d": "主题切换与收藏夹：何时用 Context，何时不用"
+ },
+ {
+  "n": 38,
+  "t": "错误边界与 Suspense",
+  "d": "优雅地处理加载中与渲染出错"
+ },
+ {
+  "n": 39,
+  "t": "防抖与并发渲染",
+  "d": "防抖搜索、useTransition 与 useDeferredValue"
+ },
+ {
+  "n": 40,
+  "t": "TanStack Query",
+  "d": "用服务端状态库重写数据请求与无限加载"
+ },
+ {
+  "n": 41,
+  "t": "乐观更新与表单校验",
+  "d": "useOptimistic、React Hook Form 与 Zod"
+ },
+ {
+  "n": 42,
+  "t": "调试与 React DevTools",
+  "d": "定位 bug 与“为什么又重新渲染了”"
+ },
+ {
+  "n": 43,
+  "t": "可访问性",
+  "d": "语义化、键盘、焦点与读屏软件"
+ },
+ {
+  "n": 44,
+  "t": "React 生态地图与选型方法",
+  "d": "面对上百个库，怎么挑、怎么判断",
+  "part": "第十部分 · 生态与选型"
+ },
+ {
+  "n": 45,
+  "t": "状态管理库选型",
+  "d": "Context、Zustand、Redux Toolkit、Jotai 对比"
+ },
+ {
+  "n": 46,
+  "t": "数据请求库选型",
+  "d": "TanStack Query、SWR、RTK Query、Apollo、tRPC"
+ },
+ {
+  "n": 47,
+  "t": "UI 组件库与样式选型",
+  "d": "shadcn/ui、Ant Design、MUI、Mantine 等"
+ },
+ {
+  "n": 48,
+  "t": "常用工具库",
+  "d": "表单、校验、日期、国际化、动画、图表、工具函数"
+ },
+ {
+  "n": 49,
+  "t": "路由与框架选型",
+  "d": "React Router、TanStack Router、Next.js、Astro"
+ },
+ {
+  "n": 50,
+  "t": "组合实战：搭一套技术栈",
+  "d": "把常用库组合进一个项目"
+ },
+ {
+  "n": 51,
+  "t": "Next.js 入门",
+  "d": "服务端组件、服务端函数与全栈 React",
+  "part": "第十一部分 · 全栈与上线"
+ },
+ {
+  "n": 52,
+  "t": "构建与部署",
+  "d": "npm run build、Firebase 与 GitHub Pages"
+ },
+ {
+  "n": 53,
   "t": "下一步去哪里",
-  "d": "路由、框架、状态管理与更多方向"
+  "d": "全书速查、新旧对照与继续学习的方向"
  }
 ];

@@ -1,0 +1,425 @@
+<p class="lede">
+  “React 用什么做状态管理？” 大概是被问得最多、争论最多的问题。Redux、MobX、Zustand、Jotai、Recoil、Valtio……
+  这一章先回答一个更根本的问题：<strong>你说的“状态”是哪一种？</strong>分清类别后，你会发现大多数状态根本不需要状态管理库。
+  然后我们用同一个“收藏夹”功能，分别用 Zustand、Redux Toolkit 和 Jotai 实现一遍，直观地比较它们。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>把应用状态分成五类，并为每类找到合适的“家”</li>
+    <li>理解状态管理库解决的核心问题：共享 + 精确订阅</li>
+    <li>用 Zustand、Redux Toolkit、Jotai 实现同一个功能并比较</li>
+    <li>根据项目情况做出选择</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="kinds">先分清状态的种类</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="五类状态及其推荐工具">
+  <rect class="bx-g" x="20" y="20" width="230" height="130" rx="12"/>
+  <text class="ttl on-g" x="135" y="44" text-anchor="middle">① 局部 UI 状态</text>
+  <text class="sm" x="135" y="68" text-anchor="middle">弹窗开关、输入框草稿、</text>
+  <text class="sm" x="135" y="86" text-anchor="middle">当前选中的标签</text>
+  <text class="mono sm on-g" x="135" y="118" text-anchor="middle">useState / useReducer</text>
+  <text class="sm" x="135" y="138" text-anchor="middle">占了大多数</text>
+
+  <rect class="bx-b" x="265" y="20" width="230" height="130" rx="12"/>
+  <text class="ttl on-b" x="380" y="44" text-anchor="middle">② 服务端状态</text>
+  <text class="sm" x="380" y="68" text-anchor="middle">文章列表、用户资料、</text>
+  <text class="sm" x="380" y="86" text-anchor="middle">任何从 API 获取的数据</text>
+  <text class="mono sm on-b" x="380" y="118" text-anchor="middle">TanStack Query / SWR</text>
+  <text class="sm" x="380" y="138" text-anchor="middle">第 40、46 章</text>
+
+  <rect class="bx-a" x="510" y="20" width="230" height="130" rx="12"/>
+  <text class="ttl on-a" x="625" y="44" text-anchor="middle">③ URL 状态</text>
+  <text class="sm" x="625" y="68" text-anchor="middle">搜索词、筛选、分页、</text>
+  <text class="sm" x="625" y="86" text-anchor="middle">当前详情页 id</text>
+  <text class="mono sm on-a" x="625" y="118" text-anchor="middle">路由 / useSearchParams</text>
+  <text class="sm" x="625" y="138" text-anchor="middle">第 36 章</text>
+
+  <rect class="bx" x="140" y="170" width="230" height="130" rx="12"/>
+  <text class="ttl" x="255" y="194" text-anchor="middle">④ 表单状态</text>
+  <text class="sm" x="255" y="218" text-anchor="middle">字段值、错误、是否提交中</text>
+  <text class="mono sm" x="255" y="250" text-anchor="middle">Actions / React Hook Form</text>
+  <text class="sm" x="255" y="270" text-anchor="middle">第 24、41 章</text>
+
+  <rect class="bx-p" x="390" y="170" width="230" height="130" rx="12"/>
+  <text class="ttl on-p" x="505" y="194" text-anchor="middle">⑤ 全局客户端状态</text>
+  <text class="sm" x="505" y="218" text-anchor="middle">主题、收藏夹、购物车、</text>
+  <text class="sm" x="505" y="236" text-anchor="middle">多步骤向导、编辑器状态</text>
+  <text class="mono sm on-p" x="505" y="264" text-anchor="middle">Context / Zustand / RTK / Jotai</text>
+  <text class="sm on-p" x="505" y="286" text-anchor="middle">← 状态管理库只管这一类</text>
+</svg>
+<figcaption>图 45-1　五类状态。所谓“状态管理库”，只负责第 ⑤ 类</figcaption>
+</figure>
+
+<div class="box key">
+  <div class="t">&#9733; 最重要的一句话</div>
+  <p>
+    很多项目之所以觉得“状态管理很复杂、必须上 Redux”，是因为把<strong>服务端数据</strong>也塞进了全局 store，自己处理加载、缓存、同步。
+    把服务端数据交给 TanStack Query、把可分享的状态放进 URL 之后，剩下真正的全局客户端状态通常很少 —— Context 可能就够了。
+  </p>
+</div>
+
+<h2 id="problem">状态管理库解决什么问题</h2>
+
+<p>
+  第 37 章说过，Context 只是“传递”机制，而且<strong>没有选择性订阅</strong>：值一变，所有消费者都重新渲染。
+  状态管理库的核心价值是：把状态存在 React 组件<strong>外面</strong>的一个 store 里，组件通过<strong>选择器</strong>（selector）只订阅自己需要的那一小块。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="外部 store 加选择器实现精确订阅">
+  <rect class="bx-p" x="270" y="20" width="220" height="100" rx="14"/>
+  <text class="ttl on-p" x="380" y="46" text-anchor="middle">外部 store（组件树之外）</text>
+  <text class="mono sm" x="380" y="72" text-anchor="middle">{ favorites: […],</text>
+  <text class="mono sm" x="380" y="90" text-anchor="middle">theme: 'dark',</text>
+  <text class="mono sm" x="380" y="108" text-anchor="middle">cart: […] }</text>
+
+  <rect class="bx-g" x="20" y="170" width="220" height="60" rx="10"/>
+  <text class="sm on-g" x="130" y="194" text-anchor="middle">Header：s =&gt; s.favorites.length</text>
+  <text class="sm" x="130" y="214" text-anchor="middle">收藏数变了才重新渲染</text>
+  <rect class="bx" x="270" y="170" width="220" height="60" rx="10"/>
+  <text class="sm" x="380" y="194" text-anchor="middle">ThemeToggle：s =&gt; s.theme</text>
+  <text class="sm" x="380" y="214" text-anchor="middle">收藏变化时不受影响 ✓</text>
+  <rect class="bx-g" x="520" y="170" width="220" height="60" rx="10"/>
+  <text class="sm on-g" x="630" y="194" text-anchor="middle">Item：s =&gt; s.isFavorite(id)</text>
+  <text class="sm" x="630" y="214" text-anchor="middle">只有自己的状态变了才渲染</text>
+  <path class="ln-g" d="M320 122 L160 166" marker-end="url(#ar-g)"/>
+  <path class="ln" d="M380 122 V166" marker-end="url(#ar)"/>
+  <path class="ln-g" d="M440 122 L600 166" marker-end="url(#ar-g)"/>
+  <text class="sm" x="620" y="126" text-anchor="middle">不需要 Provider 包裹（Redux 除外）</text>
+</svg>
+<figcaption>图 45-2　选择器 = 精确订阅：每个组件只在自己关心的那部分变化时才重新渲染</figcaption>
+</figure>
+
+<h2 id="zustand">Zustand：最轻量的 store</h2>
+
+<p>Zustand（德语“状态”）是近几年增长最快的状态库：API 极少、不需要 Provider、几乎没有样板代码。</p>
+
+```bash
+npm install zustand
+```
+
+```js src/favorites-store.js
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+const useFavoritesStore = create(
+  persist(
+    (set) => ({
+      favorites: [],
+
+      toggleFavorite: (story) =>
+        set((state) => ({
+          favorites: state.favorites.some((s) => s.objectID === story.objectID)
+            ? state.favorites.filter((s) => s.objectID !== story.objectID)
+            : [...state.favorites, story],
+        })),
+
+      clearFavorites: () => set({ favorites: [] }),
+    }),
+    { name: 'favorites' } // 自动持久化到 localStorage 的这个键
+  )
+);
+
+export { useFavoritesStore };
+```
+
+```jsx
+// 不需要 Provider，任何组件直接使用；传入选择器只订阅需要的部分
+const Header = () => {
+  const count = useFavoritesStore((state) => state.favorites.length);
+  return <span>★ {count} saved</span>;
+};
+
+const Item = ({ item }) => {
+  const isFavorite = useFavoritesStore((state) =>
+    state.favorites.some((s) => s.objectID === item.objectID)
+  );
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+
+  return (
+    <button type="button" aria-pressed={isFavorite} onClick={() => toggleFavorite(item)}>
+      {isFavorite ? '★' : '☆'}
+    </button>
+  );
+};
+```
+
+<div class="box warn">
+  <div class="t">&#9888; 选择器不要每次返回新对象</div>
+  <p>
+    <code>useFavoritesStore((s) =&gt; ({ a: s.a, b: s.b }))</code> 每次都返回一个新对象，Zustand 会认为值变了，导致无限重新渲染（v5 中会直接报错）。
+    要么分开调用两次，要么用 <code>useShallow</code> 包一层：<code>useFavoritesStore(useShallow((s) =&gt; ({ a: s.a, b: s.b })))</code>。
+  </p>
+</div>
+
+<h2 id="redux">Redux Toolkit：规范与工具最完善</h2>
+
+<p>
+  Redux 是最老牌的状态库。“经典” Redux 以样板代码多著称，官方后来推出的 <strong>Redux Toolkit</strong>（RTK）大幅简化了写法，
+  是今天使用 Redux 的唯一推荐方式。它的核心就是第 20 章学过的 reducer + action + dispatch。
+</p>
+
+```bash
+npm install @reduxjs/toolkit react-redux
+```
+
+```js src/store.js
+import { configureStore, createSlice } from '@reduxjs/toolkit';
+
+const favoritesSlice = createSlice({
+  name: 'favorites',
+  initialState: [],
+  reducers: {
+    // 看起来像直接修改，其实 RTK 内置的 Immer 会生成不可变的新状态
+    toggleFavorite(state, action) {
+      const index = state.findIndex(
+        (s) => s.objectID === action.payload.objectID
+      );
+      if (index >= 0) state.splice(index, 1);
+      else state.push(action.payload);
+    },
+    clearFavorites: () => [],
+  },
+});
+
+export const { toggleFavorite, clearFavorites } = favoritesSlice.actions;
+
+export const store = configureStore({
+  reducer: {
+    favorites: favoritesSlice.reducer,
+  },
+});
+```
+
+```jsx src/main.jsx
+import { Provider } from 'react-redux';
+import { store } from './store';
+
+<Provider store={store}>
+  <App />
+</Provider>
+```
+
+```jsx
+import { useDispatch, useSelector } from 'react-redux';
+import { toggleFavorite } from './store';
+
+const Item = ({ item }) => {
+  const isFavorite = useSelector((state) =>
+    state.favorites.some((s) => s.objectID === item.objectID)
+  );
+  const dispatch = useDispatch();
+
+  return (
+    <button type="button" onClick={() => dispatch(toggleFavorite(item))}>
+      {isFavorite ? '★' : '☆'}
+    </button>
+  );
+};
+```
+
+<div class="vs">
+  <div class="old"><div class="h">经典 Redux <span class="ver old">不再推荐</span></div>
+```js
+// action type 常量
+const TOGGLE_FAVORITE = 'favorites/toggle';
+// action creator
+const toggleFavorite = (story) => ({
+  type: TOGGLE_FAVORITE, payload: story,
+});
+// reducer：手写不可变更新
+const favoritesReducer = (state = [], action) => {
+  switch (action.type) {
+    case TOGGLE_FAVORITE: /* … */
+    default: return state;
+  }
+};
+// createStore + combineReducers + applyMiddleware(thunk)
+// 组件里用 connect(mapStateToProps, mapDispatchToProps)
+```
+  </div>
+  <div class="new"><div class="h">Redux Toolkit <span class="ver">现在</span></div>
+```js
+const favoritesSlice = createSlice({
+  name: 'favorites',
+  initialState: [],
+  reducers: {
+    toggleFavorite(state, action) { /* 直接“修改” */ },
+  },
+});
+// action type、action creator 自动生成
+// configureStore 自带 DevTools 和 thunk
+// 组件里用 useSelector / useDispatch
+```
+  </div>
+</div>
+
+<p>
+  Redux 的强项在于<strong>规范</strong>：所有状态变化都经过 action，配合 Redux DevTools 可以看到每一次变化的前后差异，甚至“时间旅行”回放。
+  RTK 还自带 <strong>RTK Query</strong>（第 46 章）处理服务端数据。大团队、复杂业务逻辑、需要严格可追踪时，它依然是很好的选择。
+</p>
+
+<h2 id="jotai">Jotai：原子化的状态</h2>
+
+<p>
+  Jotai（日语“状态”）换了一个思路：状态不是一个大对象，而是很多小小的<strong>原子</strong>（atom），用法和 <code>useState</code> 几乎一样，
+  原子之间还可以派生：
+</p>
+
+```bash
+npm install jotai
+```
+
+```js src/favorites-atoms.js
+import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+
+// 一个原子：会持久化到 localStorage
+const favoritesAtom = atomWithStorage('favorites', []);
+
+// 派生原子：只读，自动跟随 favoritesAtom
+const favoritesCountAtom = atom((get) => get(favoritesAtom).length);
+
+export { favoritesAtom, favoritesCountAtom };
+```
+
+```jsx
+import { useAtom, useAtomValue } from 'jotai';
+
+const Header = () => {
+  const count = useAtomValue(favoritesCountAtom);
+  return <span>★ {count} saved</span>;
+};
+
+const Item = ({ item }) => {
+  const [favorites, setFavorites] = useAtom(favoritesAtom);
+  // …和 useState 的用法一样
+};
+```
+
+<p>Jotai 适合状态之间有大量派生关系、或者状态天然是“很多独立小块”的场景（比如画板上的每个图形、表格的每个单元格）。</p>
+
+<h2 id="compare">对比</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="四种方案在样板代码与结构化程度上的定位">
+  <path class="ln" d="M60 200 H720" marker-end="url(#ar)"/>
+  <path class="ln" d="M60 200 V30" marker-end="url(#ar)"/>
+  <text class="sm" x="720" y="222" text-anchor="end">规范性、工具、适合的团队规模 →</text>
+  <text class="sm" x="70" y="34">样板代码 / 学习成本 ↑</text>
+
+  <circle cx="140" cy="170" r="30" fill="var(--green-bg)" stroke="var(--green)" stroke-width="1.5"/>
+  <text class="sm on-g" x="140" y="174" text-anchor="middle">Context</text>
+  <circle cx="300" cy="150" r="34" fill="var(--purple-bg)" stroke="var(--purple)" stroke-width="1.5"/>
+  <text class="sm on-p" x="300" y="148" text-anchor="middle">Jotai</text>
+  <text class="sm" x="300" y="164" text-anchor="middle">原子</text>
+  <circle cx="420" cy="140" r="38" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.5"/>
+  <text class="sm on-a" x="420" y="138" text-anchor="middle">Zustand</text>
+  <text class="sm" x="420" y="154" text-anchor="middle">单一 store</text>
+  <circle cx="620" cy="80" r="44" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="1.5"/>
+  <text class="sm on-b" x="620" y="76" text-anchor="middle">Redux Toolkit</text>
+  <text class="sm" x="620" y="92" text-anchor="middle">action / slice</text>
+</svg>
+<figcaption>图 45-3　从轻到重：没有最好，只有是否适合当前项目</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>Context</th><th>Zustand</th><th>Redux Toolkit</th><th>Jotai</th></tr>
+  <tr><td>安装</td><td>内置</td><td>~1 KB</td><td>较大（RTK + react-redux）</td><td>~3 KB</td></tr>
+  <tr><td>需要 Provider</td><td>是</td><td>否</td><td>是</td><td>否（可选）</td></tr>
+  <tr><td>选择性订阅</td><td>否</td><td>是（选择器）</td><td>是（useSelector）</td><td>是（按原子）</td></tr>
+  <tr><td>心智模型</td><td>传递一个值</td><td>一个 store + 修改函数</td><td>action → reducer</td><td>很多个 useState</td></tr>
+  <tr><td>DevTools</td><td>React DevTools</td><td>可接 Redux DevTools</td><td>Redux DevTools（最强）</td><td>专用 DevTools</td></tr>
+  <tr><td>服务端数据</td><td>—</td><td>配合 TanStack Query</td><td>自带 RTK Query</td><td>配合 TanStack Query</td></tr>
+  <tr><td>最适合</td><td>少量、低频变化的全局值</td><td>大多数中小型应用</td><td>大团队、复杂业务、需要严格可追踪</td><td>大量细粒度、相互派生的状态</td></tr>
+</table>
+</div>
+
+<h2 id="choose">怎么选</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 320" role="img" aria-label="状态管理方案的选择流程">
+  <rect class="bx" x="240" y="10" width="280" height="40" rx="20"/>
+  <text class="ttl" x="380" y="35" text-anchor="middle">这个状态属于哪一类？</text>
+
+  <rect class="bx-b" x="20" y="80" width="170" height="48" rx="8"/>
+  <text class="sm on-b" x="105" y="100" text-anchor="middle">来自服务器</text>
+  <text class="sm" x="105" y="118" text-anchor="middle">→ TanStack Query</text>
+  <rect class="bx-a" x="205" y="80" width="170" height="48" rx="8"/>
+  <text class="sm on-a" x="290" y="100" text-anchor="middle">需要分享 / 刷新保留</text>
+  <text class="sm" x="290" y="118" text-anchor="middle">→ URL</text>
+  <rect class="bx-g" x="390" y="80" width="170" height="48" rx="8"/>
+  <text class="sm on-g" x="475" y="100" text-anchor="middle">只有一两个组件用</text>
+  <text class="sm" x="475" y="118" text-anchor="middle">→ useState + 状态提升</text>
+  <rect class="bx-p" x="575" y="80" width="165" height="48" rx="8"/>
+  <text class="sm on-p" x="657" y="100" text-anchor="middle">很多组件都要用</text>
+  <text class="sm" x="657" y="118" text-anchor="middle">↓ 继续</text>
+  <path class="ln" d="M300 52 L110 78"/><path class="ln" d="M350 52 L290 78"/><path class="ln" d="M410 52 L475 78"/><path class="ln" d="M460 52 L650 78"/>
+
+  <rect class="bx" x="480" y="160" width="260" height="44" rx="8"/>
+  <text class="sm" x="610" y="187" text-anchor="middle">变化不频繁、数量少（主题、用户、语言）？</text>
+  <rect class="bx-g" x="480" y="222" width="120" height="36" rx="8"/>
+  <text class="sm on-g" x="540" y="245" text-anchor="middle">是 → Context</text>
+  <rect class="bx-p" x="620" y="222" width="120" height="36" rx="8"/>
+  <text class="sm on-p" x="680" y="245" text-anchor="middle">否 → 状态库</text>
+  <path class="ln" d="M657 130 V156" marker-end="url(#ar)"/>
+  <path class="ln" d="M570 206 L545 220" marker-end="url(#ar)"/>
+  <path class="ln" d="M650 206 L675 220" marker-end="url(#ar)"/>
+
+  <rect class="bx-a" x="20" y="200" width="420" height="110" rx="10"/>
+  <text class="ttl on-a" x="230" y="224" text-anchor="middle">选哪个状态库</text>
+  <text class="sm" x="36" y="250">• 不确定 / 中小项目 → Zustand</text>
+  <text class="sm" x="36" y="272">• 团队已熟悉 Redux、需要严格规范和强大 DevTools → Redux Toolkit</text>
+  <text class="sm" x="36" y="294">• 状态是大量细粒度、互相派生的小块 → Jotai</text>
+  <path class="ln-p" d="M618 250 C560 290 500 280 444 270" marker-end="url(#ar-p)"/>
+</svg>
+<figcaption>图 45-4　先问“是哪类状态”，再问“要不要库”，最后才是“哪个库”</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 其他你可能听说过的</div>
+  <ul style="margin:0">
+    <li><strong>MobX</strong>：基于可观察对象的响应式方案，写法像直接修改对象，老项目中较常见。</li>
+    <li><strong>Valtio</strong>：和 Zustand、Jotai 同一作者团队，基于 Proxy 的“可变写法”。</li>
+    <li><strong>XState</strong>：状态机 / 状态图，适合流程复杂、状态转换规则严格的场景（第 20 章的“不可能状态”问题的终极解法）。</li>
+    <li><strong>Recoil</strong>：Meta 推出的原子化状态库，已停止维护，新项目请用 Jotai。</li>
+  </ul>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>状态分五类：局部 UI、服务端、URL、表单、全局客户端。状态管理库只负责最后一类。</li>
+  <li>先把服务端数据交给 TanStack Query、把可分享状态放进 URL，剩下的全局状态往往很少。</li>
+  <li>状态库的核心价值：store 放在组件外 + 选择器精确订阅。</li>
+  <li>Zustand 轻量无样板；Redux Toolkit 规范严格、工具最强；Jotai 原子化、适合细粒度派生。</li>
+  <li>不确定时：少量低频用 Context，否则用 Zustand。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>把第 37 章用 Context 实现的收藏夹改成 Zustand 版本，对比代码量，并用 React DevTools 观察重新渲染范围的变化。</li>
+    <li>再用 Redux Toolkit 实现一遍，安装 Redux DevTools 浏览器扩展，看看每次收藏产生的 action 和状态差异。</li>
+    <li>列出 Hacker Stories 里所有的状态，把它们按本章五类归类。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么时候需要引入状态管理库？</summary>
+    <div><p>当有大量组件需要共享、且变化较频繁的客户端状态，Context 导致过多重新渲染或代码难以组织时。服务端数据应交给数据请求库，而不是全局 store。</p></div></details>
+  <details><summary>Zustand 和 Redux Toolkit 的主要区别？</summary>
+    <div><p>Zustand 极简、无需 Provider、直接定义修改函数；RTK 基于 action/reducer 模式，结构规范、DevTools 强大，并提供 RTK Query，适合大型团队。</p></div></details>
+  <details><summary>为什么状态管理库比 Context 性能更好？</summary>
+    <div><p>它们支持选择器订阅，组件只在所选的状态片段变化时重新渲染；Context 在 value 变化时通知所有消费者。</p></div></details>
+  <details><summary>Redux Toolkit 里为什么可以“直接修改” state？</summary>
+    <div><p>createSlice 内部使用 Immer，把对草稿对象的修改转换成不可变的新状态。</p></div></details>
+</div>

@@ -33,10 +33,10 @@
   <text class="sm" x="360" y="144" text-anchor="middle">性能 · TS · 测试 · 结构</text>
   <rect class="bx-g" x="260" y="180" width="200" height="60" rx="10"/>
   <text class="ttl on-g" x="360" y="204" text-anchor="middle">实战进阶</text>
-  <text class="sm" x="360" y="224" text-anchor="middle">排序 · 历史 · 分页</text>
+  <text class="sm" x="360" y="224" text-anchor="middle">实战 · 进阶专题 · 生态选型</text>
   <rect class="bx" x="260" y="260" width="200" height="60" rx="10"/>
-  <text class="ttl" x="360" y="284" text-anchor="middle">部署上线</text>
-  <text class="sm" x="360" y="304" text-anchor="middle">第 36 章</text>
+  <text class="ttl" x="360" y="284" text-anchor="middle">全栈与上线</text>
+  <text class="sm" x="360" y="304" text-anchor="middle">第 51–53 章</text>
 
   <path class="ln-b" d="M192 160 L256 52" marker-end="url(#ar-b)"/>
   <path class="ln-p" d="M192 165 L256 132" marker-end="url(#ar-p)"/>
@@ -77,7 +77,9 @@
   <tr><td>第六部分 · 样式（26–27）</td><td>每一节是一个<strong>替代方案</strong></td><td>普通 CSS、CSS Modules、styled-components 只能选一种</td></tr>
   <tr><td>第七部分 · 维护（28–32）</td><td>各章内部线性</td><td>性能、TypeScript、测试、项目结构</td></tr>
   <tr><td>第八部分 · 实战（33–35）</td><td>线性</td><td>排序、搜索历史、分页</td></tr>
-  <tr><td>第九部分 · 上线（36–37）</td><td>线性</td><td>构建与部署</td></tr>
+  <tr><td>第九部分 · 进阶专题（36–43）</td><td>各章基本独立</td><td>路由、Context、错误边界、并发、TanStack Query、表单、调试、可访问性</td></tr>
+  <tr><td>第十部分 · 生态与选型（44–50）</td><td>先读 44 章，其余按需</td><td>状态管理、数据请求、UI 库、工具库、框架怎么选、怎么组合</td></tr>
+  <tr><td>第十一部分 · 全栈与上线（51–53）</td><td>线性</td><td>Next.js、构建与部署、下一步</td></tr>
 </table>
 </div>
 
@@ -178,7 +180,7 @@ const theme = use(ThemeContext);
   <div class="t">&#9432; 为什么本书没把 Context 用在 Hacker Stories 里</div>
   <p>
     我们的应用只有三四层组件，prop drilling 还不构成问题。强行引入 Context 只会让代码更复杂，却看不出它解决了什么。
-    对初学者来说它像一道坎，对中级开发者来说又像过早优化。遇到“同一个值要穿过很多层”的时候，再用它不迟。
+    对初学者来说它像一道坎，对中级开发者来说又像过早优化。遇到“同一个值要穿过很多层”的时候，再用它不迟 —— 第 37 章会用一个真实的例子完整演示。
     另外别忘了第 16 章的<strong>组件组合</strong>，它常常是比 Context 更简单的解法。
   </p>
 </div>

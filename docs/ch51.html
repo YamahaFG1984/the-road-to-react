@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 51 章 · Next.js 入门 — React 19 入门教程</title>
+<meta name="description" content="服务端组件、服务端函数与全栈 React">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚛</text></svg>">
+<script>try{var t=localStorage.getItem('r2r-doc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-chapter="51">
+<div id="app">
+<aside id="sidebar"></aside>
+<main>
+<span class="chapter-eyebrow">第 51 章 · 全栈与上线</span>
+<h1>Next.js 入门</h1>
+<p class="lede">
+  第 1 章讲了“服务器渲染 → 浏览器渲染”的历史，第 25 章预告了服务端组件，第 49 章比较了几个框架。
+  这一章真正动手：把 Hacker Stories 搬到 <strong>Next.js</strong> 上，体验 React 19 的<strong>服务端组件</strong>和<strong>服务端函数</strong>，
+  看看“全栈 React”和我们一直在写的 SPA 有什么不同。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>创建 Next.js 项目，理解 App Router 的文件路由约定</li>
+    <li>理解服务端组件与客户端组件的分工，以及 <code>'use client'</code> 边界</li>
+    <li>在服务端组件中直接获取数据，用 <code>loading.tsx</code> / <code>error.tsx</code> 处理状态</li>
+    <li>用服务端函数（<code>'use server'</code>）处理表单提交</li>
+    <li>对比 SPA 写法，知道哪些代码搬去了哪里</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="create">创建项目</h2>
+
+<div class="code" data-lang="bash"><div class="bar"><span class="tag">命令行</span></div><pre><span class="tk-kw">npx</span> create-next-app@latest hacker-stories-next
+<span class="tk-cm"># 按提示选择：TypeScript、ESLint、Tailwind CSS、App Router（默认都是 Yes）</span>
+<span class="tk-kw">cd</span> hacker-stories-next
+<span class="tk-kw">npm</span> run dev</pre></div>
+
+<p>App Router 用<strong>文件夹结构定义路由</strong>，每个文件夹里的特殊文件名各有含义：</p>
+
+<div class="code" data-lang="tree"><div class="bar"><span class="tag">目录结构</span></div><pre>app/
+├── layout.tsx            ← 所有页面共享的外壳（相当于第 36 章的 Layout）
+├── page.tsx              ← 路由 /（列表页）
+├── loading.tsx           ← 这一层加载中时显示（自动包成 Suspense）
+├── error.tsx             ← 这一层出错时显示（自动包成错误边界）
+├── not-found.tsx         ← 404
+├── favorites/
+│   └── page.tsx          ← 路由 /favorites
+└── story/
+    └── [id]/
+        ├── page.tsx      ← 路由 /story/42（动态参数）
+        └── loading.tsx</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 240" role="img" aria-label="Next.js 文件约定与 React 概念的对应">
+  <rect class="bx" x="20" y="20" width="330" height="200" rx="12"/>
+  <text class="ttl" x="185" y="46" text-anchor="middle">Next.js 文件</text>
+  <text class="mono sm" x="40" y="80">layout.tsx</text>
+  <text class="mono sm" x="40" y="108">page.tsx</text>
+  <text class="mono sm" x="40" y="136">[id]/</text>
+  <text class="mono sm" x="40" y="164">loading.tsx</text>
+  <text class="mono sm" x="40" y="192">error.tsx</text>
+
+  <rect class="bx-g" x="410" y="20" width="330" height="200" rx="12"/>
+  <text class="ttl on-g" x="575" y="46" text-anchor="middle">本教程学过的概念</text>
+  <text class="sm" x="430" y="80">嵌套路由的布局 + &lt;Outlet /&gt;（第 36 章）</text>
+  <text class="sm" x="430" y="108">路由对应的页面组件</text>
+  <text class="sm" x="430" y="136">动态参数 :storyId（第 36 章）</text>
+  <text class="sm" x="430" y="164">&lt;Suspense fallback&gt;（第 38 章）</text>
+  <text class="sm" x="430" y="192">错误边界（第 38 章）</text>
+  <path class="ln-d" d="M200 76 H426"/><path class="ln-d" d="M200 104 H426"/><path class="ln-d" d="M200 132 H426"/>
+  <path class="ln-d" d="M200 160 H426"/><path class="ln-d" d="M200 188 H426"/>
+</svg>
+<figcaption>图 51-1　Next.js 的文件约定，本质上是在帮你自动组装已经学过的概念</figcaption>
+</figure>
+
+<h2 id="server-components">服务端组件：直接在组件里取数据</h2>
+
+<p>在 App Router 中，组件<strong>默认是服务端组件</strong>。它们在服务器上运行，可以是 async 函数，直接 <code>await</code> 数据：</p>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/page.tsx</span></div><pre><span class="tk-kw">import</span> { <span class="tk-tp">StoryList</span> } <span class="tk-kw">from</span> <span class="tk-st">'./story-list'</span>;
+<span class="tk-kw">import</span> { <span class="tk-tp">SearchForm</span> } <span class="tk-kw">from</span> <span class="tk-st">'./search-form'</span>;
+
+<span class="tk-kw">type</span> <span class="tk-tp">Story</span> = {
+  objectID: string;
+  title: string;
+  url: string;
+  author: string;
+  num_comments: number;
+  points: number;
+};
+
+<span class="tk-kw">const</span> fetchStories = <span class="tk-kw">async</span> (query: string): <span class="tk-tp">Promise</span><span class="tk-tg">&lt;Story</span>[]&gt; =&gt; {
+  <span class="tk-kw">const</span> response = <span class="tk-kw">await</span> <span class="tk-fn">fetch</span>(
+    <span class="tk-st">`https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}`</span>
+  );
+  <span class="tk-kw">if</span> (!response.ok) <span class="tk-kw">throw</span> <span class="tk-kw">new</span> <span class="tk-tp">Error</span>(<span class="tk-st">'Failed to fetch stories'</span>);
+  <span class="tk-kw">const</span> result = <span class="tk-kw">await</span> response.<span class="tk-fn">json</span>();
+  <span class="tk-kw">return</span> result.hits;
+};
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-tp">StoriesPage</span>({
+  searchParams,
+}: {
+  searchParams: <span class="tk-tp">Promise</span>&lt;{ query?: string }&gt;;
+}) {
+  <span class="tk-kw">const</span> { query = <span class="tk-st">'React'</span> } = <span class="tk-kw">await</span> searchParams;
+  <span class="tk-kw">const</span> stories = <span class="tk-kw">await</span> <span class="tk-fn">fetchStories</span>(query);
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;&gt;</span>
+      <span class="tk-tg">&lt;h1</span>&gt;<span class="tk-tp">My</span> <span class="tk-tp">Hacker</span> <span class="tk-tp">Stories</span><span class="tk-tg">&lt;/h1</span>&gt;
+      <span class="tk-tg">&lt;SearchForm</span> defaultValue={query} <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;StoryList</span> stories={stories} <span class="tk-tg">/&gt;</span>
+    <span class="tk-tg">&lt;/&gt;</span>
+  );
+}</pre></div>
+
+<div class="vs">
+  <div class="old"><div class="h">Vite SPA（第 19–40 章）</div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-kw">const</span> <span class="tk-tp">App</span> = () =&gt; {
+  <span class="tk-kw">const</span> [stories, dispatch] = <span class="tk-fn">useReducer</span>(...);
+
+  <span class="tk-fn">useEffect</span>(() =&gt; {
+    <span class="tk-fn">dispatch</span>({ <span class="tk-kw">type</span>: <span class="tk-st">'INIT'</span> });
+    axios.<span class="tk-fn">get</span>(url)
+      .<span class="tk-fn">then</span>(...)
+      .<span class="tk-kw">catch</span>(...);
+  }, [url]);
+
+  <span class="tk-kw">if</span> (stories.isLoading) <span class="tk-kw">return</span> <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span>…<span class="tk-tg">&lt;/p</span>&gt;;
+  ...
+};
+<span class="tk-cm">// 浏览器下载 JS → 执行 → 再请求数据</span></pre></div>
+  </div>
+  <div class="new"><div class="h">Next.js 服务端组件</div>
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">TSX</span></div><pre><span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-tp">StoriesPage</span>() {
+  <span class="tk-kw">const</span> stories = <span class="tk-kw">await</span> <span class="tk-fn">fetchStories</span>(query);
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;StoryList</span> stories={stories} <span class="tk-tg">/&gt;</span>;
+}
+<span class="tk-cm">// 服务器取数据 + 渲染 HTML，浏览器直接看到内容</span>
+<span class="tk-cm">// 加载中交给 loading.tsx，出错交给 error.tsx</span></pre></div>
+  </div>
+</div>
+
+<p>
+  没有 useState、没有 useEffect、没有加载状态变量。因为这段代码在服务器上运行，还可以直接访问数据库、读文件、使用密钥 ——
+  这些代码<strong>不会被发送到浏览器</strong>。
+</p>
+
+<h2 id="client">客户端组件与 'use client'</h2>
+
+<p>
+  服务端组件不能有交互：不能用 <code>useState</code>、<code>useEffect</code>、<code>onClick</code>（它们只在服务器运行一次）。
+  需要交互的组件，在文件顶部写 <code>'use client'</code>，标记为<strong>客户端组件</strong>：
+</p>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/search-form.tsx</span></div><pre><span class="tk-st">'use client'</span>;
+
+<span class="tk-kw">import</span> { useRouter } <span class="tk-kw">from</span> <span class="tk-st">'next/navigation'</span>;
+<span class="tk-kw">import</span> { useState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">function</span> <span class="tk-tp">SearchForm</span>({ defaultValue }: { defaultValue: string }) {
+  <span class="tk-kw">const</span> [searchTerm, setSearchTerm] = <span class="tk-fn">useState</span>(defaultValue);
+  <span class="tk-kw">const</span> router = <span class="tk-fn">useRouter</span>();
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;form</span>
+      onSubmit={(event) =&gt; {
+        event.<span class="tk-fn">preventDefault</span>();
+        router.<span class="tk-fn">push</span>(<span class="tk-st">`/?query=${encodeURIComponent(searchTerm)}`</span>);
+      }}
+    &gt;
+      <span class="tk-tg">&lt;label</span> htmlFor=<span class="tk-st">"search"</span>&gt;<span class="tk-tp">Search</span>:<span class="tk-tg">&lt;/label</span>&gt;
+      <span class="tk-tg">&lt;input</span>
+        id=<span class="tk-st">"search"</span>
+        value={searchTerm}
+        onChange={(event) =&gt; <span class="tk-fn">setSearchTerm</span>(event.target.value)}
+      <span class="tk-tg">/&gt;</span>
+      <span class="tk-tg">&lt;button</span> <span class="tk-kw">type</span>=<span class="tk-st">"submit"</span> disabled={!searchTerm}&gt;<span class="tk-tp">Submit</span><span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/form</span>&gt;
+  );
+}</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="服务端组件与客户端组件在组件树中的分布">
+  <rect class="bx-b" x="280" y="20" width="200" height="46" rx="10"/>
+  <text class="ttl on-b" x="380" y="40" text-anchor="middle">layout.tsx</text>
+  <text class="sm" x="380" y="57" text-anchor="middle">服务端组件</text>
+  <rect class="bx-b" x="280" y="96" width="200" height="46" rx="10"/>
+  <text class="ttl on-b" x="380" y="116" text-anchor="middle">page.tsx</text>
+  <text class="sm" x="380" y="133" text-anchor="middle">服务端：await fetchStories()</text>
+
+  <rect class="bx-a" x="40" y="180" width="200" height="50" rx="10"/>
+  <text class="ttl on-a" x="140" y="200" text-anchor="middle">SearchForm</text>
+  <text class="sm" x="140" y="218" text-anchor="middle">'use client'：useState, onSubmit</text>
+  <rect class="bx-b" x="280" y="180" width="200" height="50" rx="10"/>
+  <text class="ttl on-b" x="380" y="200" text-anchor="middle">StoryList</text>
+  <text class="sm" x="380" y="218" text-anchor="middle">服务端：只负责渲染列表</text>
+  <rect class="bx-a" x="520" y="180" width="200" height="50" rx="10"/>
+  <text class="ttl on-a" x="620" y="200" text-anchor="middle">FavoriteButton × 20</text>
+  <text class="sm" x="620" y="218" text-anchor="middle">'use client'：onClick, Zustand</text>
+
+  <path class="ln" d="M380 68 V92"/><path class="ln" d="M340 144 L160 178"/><path class="ln" d="M380 144 V178"/>
+  <path class="ln" d="M440 206 H516"/>
+
+  <rect class="bx-b" x="40" y="252" width="16" height="16" rx="3"/>
+  <text class="sm" x="64" y="265">服务端组件：代码不进浏览器，可访问数据库和密钥</text>
+  <rect class="bx-a" x="420" y="252" width="16" height="16" rx="3"/>
+  <text class="sm" x="444" y="265">客户端组件：会被打包发送，可以交互</text>
+</svg>
+<figcaption>图 51-2　只有需要交互的“叶子”才是客户端组件，大部分界面在服务器渲染，发送到浏览器的 JS 大幅减少</figcaption>
+</figure>
+
+<div class="box key">
+  <div class="t">&#9733; 边界规则</div>
+  <ul style="margin:0">
+    <li><code>'use client'</code> 标记的是一个<strong>边界</strong>：这个文件，以及它导入的所有组件，都会成为客户端组件。</li>
+    <li>服务端组件可以渲染客户端组件，并通过 props 传数据（数据必须能序列化：不能传函数，除非是服务端函数）。</li>
+    <li>客户端组件不能直接 import 服务端组件，但可以通过 <code>children</code> 接收服务端组件渲染好的内容（第 16 章的组合）。</li>
+    <li>原则：让 <code>'use client'</code> 尽量靠近叶子节点，只把真正需要交互的部分放到客户端。</li>
+  </ul>
+</div>
+
+<div class="box note">
+  <div class="t">&#9432; 客户端组件也会在服务器上渲染一次</div>
+  <p>
+    名字容易误导：客户端组件也会参与服务端渲染（SSR）生成首屏 HTML，然后在浏览器里“激活”（hydrate）变得可交互。
+    区别在于：服务端组件<strong>只</strong>在服务器运行，它的代码永远不会发送到浏览器。
+  </p>
+</div>
+
+<h2 id="loading-error">加载与错误：loading.tsx 与 error.tsx</h2>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/loading.tsx</span></div><pre><span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">function</span> <span class="tk-tp">Loading</span>() {
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Loading</span> stories…<span class="tk-tg">&lt;/p</span>&gt;;
+}</pre></div>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/error.tsx</span></div><pre><span class="tk-st">'use client'</span>; <span class="tk-cm">// 错误边界必须是客户端组件</span>
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">function</span> <span class="tk-tp">Error</span>({
+  error,
+  reset,
+}: {
+  error: <span class="tk-tp">Error</span>;
+  reset: () =&gt; <span class="tk-kw">void</span>;
+}) {
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;div</span> role=<span class="tk-st">"alert"</span>&gt;
+      <span class="tk-tg">&lt;p</span>&gt;<span class="tk-tp">Something</span> went wrong: {error.message}<span class="tk-tg">&lt;/p</span>&gt;
+      <span class="tk-tg">&lt;button</span> onClick={reset}&gt;<span class="tk-tp">Try</span> again<span class="tk-tg">&lt;/button</span>&gt;
+    <span class="tk-tg">&lt;/div</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  这就是第 38 章的 Suspense + 错误边界，只是 Next.js 根据文件名自动帮你包好了。页面组件里的 <code>await</code> 还没完成时，显示 <code>loading.tsx</code>；
+  抛出错误时，显示 <code>error.tsx</code>。
+</p>
+
+<h2 id="dynamic">动态路由：详情页</h2>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/story/[id]/page.tsx</span></div><pre><span class="tk-kw">import</span> { notFound } <span class="tk-kw">from</span> <span class="tk-st">'next/navigation'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-fn">generateMetadata</span>({ params }) {
+  <span class="tk-kw">const</span> { id } = <span class="tk-kw">await</span> params;
+  <span class="tk-kw">const</span> story = <span class="tk-kw">await</span> <span class="tk-fn">fetchStory</span>(id);
+  <span class="tk-kw">return</span> { title: story ? story.title : <span class="tk-st">'Story not found'</span> };
+}
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-tp">StoryPage</span>({
+  params,
+}: {
+  params: <span class="tk-tp">Promise</span>&lt;{ id: string }&gt;;
+}) {
+  <span class="tk-kw">const</span> { id } = <span class="tk-kw">await</span> params;
+  <span class="tk-kw">const</span> story = <span class="tk-kw">await</span> <span class="tk-fn">fetchStory</span>(id);
+
+  <span class="tk-kw">if</span> (!story) <span class="tk-fn">notFound</span>(); <span class="tk-cm">// 显示 not-found.tsx</span>
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;article</span>&gt;
+      <span class="tk-tg">&lt;h1</span>&gt;
+        <span class="tk-tg">&lt;a</span> href={story.url}&gt;{story.title}<span class="tk-tg">&lt;/a</span>&gt;
+      <span class="tk-tg">&lt;/h1</span>&gt;
+      <span class="tk-tg">&lt;p</span>&gt;by {story.author} · {story.points} points<span class="tk-tg">&lt;/p</span>&gt;
+    <span class="tk-tg">&lt;/article</span>&gt;
+  );
+}</pre></div>
+
+<p>
+  <code>generateMetadata</code> 生成页面的 <code>&lt;title&gt;</code> 和 <code>&lt;meta&gt;</code>，搜索引擎和社交分享卡片都能读到 —— 这正是 SPA 做不好的 SEO。
+</p>
+
+<h2 id="server-functions">服务端函数：表单直接调用服务器</h2>
+
+<p>
+  第 24 章的 form action 在这里真正发挥威力：action 可以是一个<strong>在服务器上执行的函数</strong>。
+  不需要自己写 API 接口、不需要 fetch，表单提交就直接调用它：
+</p>
+
+<div class="code" data-lang="ts"><div class="bar"><span class="tag">app/actions.ts</span></div><pre><span class="tk-st">'use server'</span>;
+
+<span class="tk-kw">import</span> { z } <span class="tk-kw">from</span> <span class="tk-st">'zod'</span>;
+<span class="tk-kw">import</span> { revalidatePath } <span class="tk-kw">from</span> <span class="tk-st">'next/cache'</span>;
+
+<span class="tk-kw">const</span> storySchema = z.<span class="tk-fn">object</span>({
+  title: z.<span class="tk-fn">string</span>().<span class="tk-fn">trim</span>().<span class="tk-fn">min</span>(<span class="tk-nm">3</span>, <span class="tk-st">'Title must be at least 3 characters'</span>),
+  url: z.<span class="tk-fn">string</span>().<span class="tk-fn">url</span>(<span class="tk-st">'Please enter a valid URL'</span>),
+});
+
+<span class="tk-kw">export</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-fn">submitStory</span>(previousState, formData: <span class="tk-tp">FormData</span>) {
+  <span class="tk-kw">const</span> result = storySchema.<span class="tk-fn">safeParse</span>(<span class="tk-tp">Object</span>.<span class="tk-fn">fromEntries</span>(formData));
+
+  <span class="tk-kw">if</span> (!result.success) {
+    <span class="tk-kw">return</span> { errors: result.error.<span class="tk-fn">flatten</span>().fieldErrors };
+  }
+
+  <span class="tk-kw">await</span> db.story.<span class="tk-fn">create</span>({ data: result.data }); <span class="tk-cm">// 直接操作数据库</span>
+
+  <span class="tk-fn">revalidatePath</span>(<span class="tk-st">'/'</span>); <span class="tk-cm">// 让列表页重新获取数据</span>
+  <span class="tk-kw">return</span> { errors: {}, message: <span class="tk-st">'Story submitted!'</span> };
+}</pre></div>
+
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">app/submit/submit-form.tsx</span></div><pre><span class="tk-st">'use client'</span>;
+
+<span class="tk-kw">import</span> { useActionState } <span class="tk-kw">from</span> <span class="tk-st">'react'</span>;
+<span class="tk-kw">import</span> { submitStory } <span class="tk-kw">from</span> <span class="tk-st">'../actions'</span>;
+
+<span class="tk-kw">export</span> <span class="tk-kw">function</span> <span class="tk-tp">SubmitForm</span>() {
+  <span class="tk-kw">const</span> [state, formAction, isPending] = <span class="tk-fn">useActionState</span>(submitStory, {
+    errors: {},
+  });
+
+  <span class="tk-kw">return</span> (
+    <span class="tk-tg">&lt;form</span> action={formAction}&gt;
+      <span class="tk-tg">&lt;input</span> name=<span class="tk-st">"title"</span> <span class="tk-tg">/&gt;</span>
+      {state.errors?.title &amp;&amp; <span class="tk-tg">&lt;p</span> role=<span class="tk-st">"alert"</span>&gt;{state.errors.title[<span class="tk-nm">0</span>]}<span class="tk-tg">&lt;/p</span>&gt;}
+      <span class="tk-tg">&lt;input</span> name=<span class="tk-st">"url"</span> <span class="tk-tg">/&gt;</span>
+      {state.errors?.url &amp;&amp; <span class="tk-tg">&lt;p</span> role=<span class="tk-st">"alert"</span>&gt;{state.errors.url[<span class="tk-nm">0</span>]}<span class="tk-tg">&lt;/p</span>&gt;}
+      <span class="tk-tg">&lt;button</span> disabled={isPending}&gt;<span class="tk-tp">Submit</span><span class="tk-tg">&lt;/button</span>&gt;
+      {state.message &amp;&amp; <span class="tk-tg">&lt;p</span>&gt;{state.message}<span class="tk-tg">&lt;/p</span>&gt;}
+    <span class="tk-tg">&lt;/form</span>&gt;
+  );
+}</pre></div>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="服务端函数的调用过程">
+  <rect class="bx-a" x="20" y="60" width="200" height="100" rx="12"/>
+  <text class="ttl on-a" x="120" y="86" text-anchor="middle">浏览器</text>
+  <text class="mono sm" x="120" y="110" text-anchor="middle">&lt;form action={formAction}&gt;</text>
+  <text class="sm" x="120" y="132" text-anchor="middle">用户点击提交</text>
+
+  <rect class="bx-b" x="300" y="40" width="180" height="140" rx="12"/>
+  <text class="ttl on-b" x="390" y="66" text-anchor="middle">Next.js 自动生成</text>
+  <text class="sm" x="390" y="92" text-anchor="middle">一个 HTTP 接口</text>
+  <text class="sm" x="390" y="112" text-anchor="middle">序列化 FormData</text>
+  <text class="sm" x="390" y="132" text-anchor="middle">调用对应的函数</text>
+  <text class="sm" x="390" y="156" text-anchor="middle">返回结果</text>
+
+  <rect class="bx-g" x="560" y="60" width="180" height="100" rx="12"/>
+  <text class="ttl on-g" x="650" y="86" text-anchor="middle">服务器</text>
+  <text class="mono sm" x="650" y="110" text-anchor="middle">submitStory()</text>
+  <text class="sm" x="650" y="132" text-anchor="middle">校验 · 写数据库</text>
+
+  <path class="ln-a" d="M222 95 H296" marker-end="url(#ar-a)"/>
+  <path class="ln-b" d="M482 95 H556" marker-end="url(#ar-b)"/>
+  <path class="ln-g" d="M556 130 H484" marker-end="url(#ar-g)"/>
+  <path class="ln-b" d="M296 130 H224" marker-end="url(#ar-b)"/>
+  <text class="sm" x="380" y="212" text-anchor="middle">写起来像调用本地函数，实际是一次网络请求 —— 所以服务端函数里一定要做校验和权限检查</text>
+</svg>
+<figcaption>图 51-3　服务端函数：框架替你把“函数调用”变成了“API 请求”</figcaption>
+</figure>
+
+<div class="box warn">
+  <div class="t">&#9888; 服务端函数是公开的接口</div>
+  <p>
+    任何人都可以直接向服务端函数发请求，不一定经过你的表单。所以永远要在函数内部<strong>校验输入</strong>（上面的 Zod）和<strong>检查权限</strong>（用户是否登录、是否有权修改）。
+    这就是第 41 章说的“服务端校验是为了安全”。
+  </p>
+</div>
+
+<h2 id="migration">从 SPA 迁移：代码搬去了哪里</h2>
+
+<div class="tw">
+<table>
+  <tr><th>Vite SPA 中</th><th>Next.js App Router 中</th></tr>
+  <tr><td><code>index.html</code> + <code>main.jsx</code> 的 <code>createRoot</code></td><td><code>app/layout.tsx</code>（框架负责挂载）</td></tr>
+  <tr><td><code>createBrowserRouter</code> 路由表</td><td><code>app/</code> 下的文件夹结构</td></tr>
+  <tr><td>useEffect + reducer 获取列表</td><td>服务端组件里 <code>await fetch()</code></td></tr>
+  <tr><td><code>isLoading</code> / <code>isError</code> 条件渲染</td><td><code>loading.tsx</code> / <code>error.tsx</code></td></tr>
+  <tr><td>搜索词状态</td><td>URL <code>searchParams</code>（服务端读取）</td></tr>
+  <tr><td>收藏夹（Zustand / Context）</td><td>不变，放在 <code>'use client'</code> 组件里</td></tr>
+  <tr><td>后端 API + fetch 提交</td><td>服务端函数 <code>'use server'</code></td></tr>
+  <tr><td><code>&lt;title&gt;</code> 手动设置</td><td><code>metadata</code> / <code>generateMetadata</code></td></tr>
+  <tr><td><code>&lt;a&gt;</code> / React Router <code>&lt;Link&gt;</code></td><td><code>next/link</code> 的 <code>&lt;Link&gt;</code></td></tr>
+</table>
+</div>
+
+<h2 id="old-new">新旧对照：Pages Router</h2>
+
+<div class="vs">
+  <div class="old"><div class="h">Pages Router <span class="ver old">Next.js 12 及以前的主流</span></div>
+<div class="code" data-lang="jsx"><div class="bar"><span class="tag">JSX</span></div><pre><span class="tk-cm">// pages/index.jsx</span>
+<span class="tk-kw">export</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-fn">getServerSideProps</span>({ query }) {
+  <span class="tk-kw">const</span> stories = <span class="tk-kw">await</span> <span class="tk-fn">fetchStories</span>(query.query ?? <span class="tk-st">'React'</span>);
+  <span class="tk-kw">return</span> { props: { stories } };
+}
+
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">function</span> <span class="tk-tp">StoriesPage</span>({ stories }) {
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;StoryList</span> stories={stories} <span class="tk-tg">/&gt;</span>;
+}
+<span class="tk-cm">// 所有组件都会发送到浏览器</span></pre></div>
+  </div>
+  <div class="new"><div class="h">App Router <span class="ver">Next.js 13+ / React 19</span></div>
+<div class="code" data-lang="tsx"><div class="bar"><span class="tag">TSX</span></div><pre><span class="tk-cm">// app/page.tsx</span>
+<span class="tk-kw">export</span> <span class="tk-kw">default</span> <span class="tk-kw">async</span> <span class="tk-kw">function</span> <span class="tk-tp">StoriesPage</span>({ searchParams }) {
+  <span class="tk-kw">const</span> { query = <span class="tk-st">'React'</span> } = <span class="tk-kw">await</span> searchParams;
+  <span class="tk-kw">const</span> stories = <span class="tk-kw">await</span> <span class="tk-fn">fetchStories</span>(query);
+  <span class="tk-kw">return</span> <span class="tk-tg">&lt;StoryList</span> stories={stories} <span class="tk-tg">/&gt;</span>;
+}
+<span class="tk-cm">// 服务端组件不发送到浏览器</span></pre></div>
+  </div>
+</div>
+
+<p>
+  网上大量 Next.js 教程还是 Pages Router 写法（<code>getServerSideProps</code>、<code>getStaticProps</code>、<code>pages/</code> 目录）。
+  Pages Router 仍然被支持，但新项目请使用 App Router。另外，Next.js 的缓存策略在最近几个大版本中变化较大，
+  遇到“数据不更新”之类的问题时，请以你所用版本的官方文档为准。
+</p>
+
+<h2 id="deploy">部署</h2>
+
+<ul>
+  <li><strong>Vercel</strong>（Next.js 的开发公司）：连接 GitHub 仓库即可，所有功能开箱即用。</li>
+  <li><strong>自托管</strong>：<code>npm run build &amp;&amp; npm start</code> 运行 Node 服务器，或使用 Docker；Netlify、Cloudflare 等平台也有适配。</li>
+  <li><strong>静态导出</strong>：在 <code>next.config</code> 中设置 <code>output: 'export'</code> 可以生成纯静态文件部署到 GitHub Pages，但服务端函数、按请求的服务端渲染等功能将不可用。</li>
+</ul>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>App Router 用文件夹定义路由，<code>layout</code>、<code>page</code>、<code>loading</code>、<code>error</code>、<code>[param]</code> 对应布局、页面、Suspense、错误边界和动态参数。</li>
+  <li>组件默认是服务端组件：可以 async、直接取数据、访问服务器资源，代码不发送到浏览器。</li>
+  <li>需要状态和事件的组件加 <code>'use client'</code>，让边界尽量靠近叶子。</li>
+  <li>服务端函数（<code>'use server'</code>）让表单直接调用服务器逻辑，但要当作公开接口来校验和鉴权。</li>
+  <li>本教程学到的 React 基础全部适用，框架只是替你组装和扩展了它们。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>用 Next.js 实现 Hacker Stories 的列表页和详情页，搜索词放在 URL 中。</li>
+    <li>“查看网页源代码”，对比 Vite 版本：文章标题是否已经在 HTML 里了？</li>
+    <li>把收藏按钮做成客户端组件，用第 45 章的 Zustand store 管理收藏。</li>
+    <li>用服务端函数实现一个“提交反馈”表单，把提交内容打印在服务器终端里（观察它确实在服务器执行）。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>服务端组件和客户端组件有什么区别？</summary>
+    <div><p>服务端组件只在服务器运行，可以直接访问数据和服务器资源，代码不发送到浏览器，但不能使用状态、副作用和事件处理；客户端组件用 'use client' 标记，会被发送到浏览器并可以交互（首屏也会参与 SSR）。</p></div></details>
+  <details><summary>'use client' 的作用范围是什么？</summary>
+    <div><p>它标记一个模块边界：该文件及其导入的模块都作为客户端代码打包。服务端组件可以渲染客户端组件并传递可序列化的 props。</p></div></details>
+  <details><summary>什么是服务端函数（Server Functions / Server Actions）？</summary>
+    <div><p>用 'use server' 标记、在服务器上执行的异步函数，可以作为 form action 或在客户端调用；框架自动将其暴露为网络接口，因此必须在内部做输入校验和权限检查。</p></div></details>
+  <details><summary>Next.js App Router 如何处理加载和错误状态？</summary>
+    <div><p>通过 loading.tsx 和 error.tsx 约定文件，框架自动为对应路由段包裹 Suspense 边界和错误边界。</p></div></details>
+</div>
+
+<div id="pager"></div>
+</main>
+</div>
+<script src="assets/chapters.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

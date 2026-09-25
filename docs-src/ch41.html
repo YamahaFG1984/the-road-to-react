@@ -1,0 +1,406 @@
+<p class="lede">
+  第 24 章认识了 form Actions，但只是一个很简单的搜索框。这一章处理表单的两个实际问题：
+  <strong>让交互“感觉很快”</strong>（乐观更新：不等服务器返回就先显示结果），和<strong>确保输入合法</strong>（表单校验）。
+  我们会用 React 19 自带的 <code>useOptimistic</code>，以及社区最常用的表单组合 <strong>React Hook Form + Zod</strong>。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>用 <code>useOptimistic</code> 实现点赞的乐观更新，失败时自动回滚</li>
+    <li>了解表单校验的三个层次：HTML 原生、客户端 schema、服务端</li>
+    <li>用 <code>useActionState</code> + Zod 做无依赖的校验</li>
+    <li>用 React Hook Form + Zod 处理复杂表单，知道两种方案怎么选</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="optimistic">乐观更新</h2>
+
+<p>
+  给每篇文章加一个 ▲ Upvote 按钮。点击后要请求服务器，假设需要 1 秒。如果老老实实等服务器返回再更新数字，
+  用户会觉得“点了没反应”。<strong>乐观更新</strong>的做法是：先假设会成功，<strong>立刻</strong>把数字加 1；
+  服务器返回成功就保持，失败就退回去。社交网站的点赞几乎都是这么做的。
+</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 250" role="img" aria-label="普通更新与乐观更新的时间线对比">
+  <text class="ttl" x="20" y="24">普通更新</text>
+  <rect class="bx" x="20" y="36" width="100" height="32" rx="6"/><text class="sm" x="70" y="57" text-anchor="middle">点击 ▲</text>
+  <rect class="bx-d" x="126" y="36" width="300" height="32" rx="6"/><text class="sm" x="276" y="57" text-anchor="middle">⏳ 等待服务器 1 秒（数字不动）</text>
+  <rect class="bx-g" x="432" y="36" width="120" height="32" rx="6"/><text class="sm on-g" x="492" y="57" text-anchor="middle">显示 5</text>
+
+  <text class="ttl on-a" x="20" y="108">乐观更新</text>
+  <rect class="bx" x="20" y="120" width="100" height="32" rx="6"/><text class="sm" x="70" y="141" text-anchor="middle">点击 ▲</text>
+  <rect class="bx-a" x="126" y="120" width="300" height="32" rx="6"/><text class="sm on-a" x="276" y="141" text-anchor="middle">立刻显示 5（乐观值），后台请求中</text>
+  <rect class="bx-g" x="432" y="120" width="140" height="32" rx="6"/><text class="sm on-g" x="502" y="141" text-anchor="middle">成功：保持 5 ✓</text>
+  <rect class="bx-r" x="432" y="170" width="140" height="32" rx="6"/><text class="sm on-r" x="502" y="191" text-anchor="middle">失败：回滚到 4</text>
+  <path class="ln-r" d="M426 150 L430 176" />
+  <text class="sm" x="600" y="141">用户感觉“瞬间”</text>
+  <text class="sm" x="600" y="191">并提示出错</text>
+  <text class="sm" x="380" y="236" text-anchor="middle">适合“大概率会成功”的操作：点赞、收藏、勾选待办、发送消息</text>
+</svg>
+<figcaption>图 41-1　乐观更新：先按成功显示，再根据真实结果确认或回滚</figcaption>
+</figure>
+
+<h3>useOptimistic</h3>
+
+```jsx src/Upvote.jsx
+import { useOptimistic, useState, startTransition } from 'react';
+
+// 模拟一个会随机失败的 API
+const upvoteStory = (id) =>
+  new Promise((resolve, reject) =>
+    setTimeout(() => (Math.random() > 0.2 ? resolve() : reject()), 1000)
+  );
+
+const Upvote = ({ story }) => {
+  const [points, setPoints] = useState(story.points);
+
+  // 乐观值：平时等于 points；action 进行中可以临时“超前”
+  const [optimisticPoints, addOptimisticPoint] = useOptimistic(
+    points,
+    (currentPoints, increment) => currentPoints + increment
+  );
+
+  const handleUpvote = () => {
+    startTransition(async () => {
+      addOptimisticPoint(1); // ① 立即显示 +1
+
+      try {
+        await upvoteStory(story.objectID); // ② 请求服务器
+        startTransition(() => setPoints((p) => p + 1)); // ③ 成功：写入真实状态
+      } catch {
+        alert('Upvote failed');
+        // ④ 失败：什么都不用做，transition 结束后乐观值自动回到 points
+      }
+    });
+  };
+
+  return (
+    <button type="button" onClick={handleUpvote}>
+      ▲ {optimisticPoints}
+    </button>
+  );
+};
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 220" role="img" aria-label="useOptimistic 的乐观值在 transition 期间覆盖真实值，结束后回到真实值">
+  <rect class="bx-b" x="20" y="80" width="170" height="70" rx="10"/>
+  <text class="ttl on-b" x="105" y="106" text-anchor="middle">真实状态</text>
+  <text class="mono sm" x="105" y="128" text-anchor="middle">points = 4</text>
+
+  <rect class="bx-a" x="270" y="30" width="220" height="80" rx="12"/>
+  <text class="ttl on-a" x="380" y="56" text-anchor="middle">transition 进行中</text>
+  <text class="mono sm" x="380" y="80" text-anchor="middle">optimisticPoints = 5</text>
+  <text class="sm" x="380" y="98" text-anchor="middle">界面显示乐观值</text>
+
+  <rect class="bx" x="270" y="130" width="220" height="70" rx="12"/>
+  <text class="ttl" x="380" y="156" text-anchor="middle">transition 结束</text>
+  <text class="sm" x="380" y="178" text-anchor="middle">乐观值被丢弃，回到真实状态</text>
+
+  <rect class="bx-g" x="560" y="40" width="180" height="60" rx="10"/>
+  <text class="sm on-g" x="650" y="64" text-anchor="middle">成功：setPoints(5)</text>
+  <text class="sm" x="650" y="84" text-anchor="middle">真实状态也变成 5 ✓</text>
+  <rect class="bx-r" x="560" y="130" width="180" height="60" rx="10"/>
+  <text class="sm on-r" x="650" y="154" text-anchor="middle">失败：不改 points</text>
+  <text class="sm" x="650" y="174" text-anchor="middle">显示回到 4（自动回滚）</text>
+  <path class="ln-a" d="M192 105 L266 72" marker-end="url(#ar-a)"/>
+  <path class="ln" d="M380 112 V126" marker-end="url(#ar)"/>
+  <path class="ln-g" d="M492 150 L556 76" marker-end="url(#ar-g)"/>
+  <path class="ln-r" d="M492 165 H556" marker-end="url(#ar-r)"/>
+</svg>
+<figcaption>图 41-2　乐观值只在 action 期间有效，所以“回滚”不需要写任何代码</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; 注意事项</div>
+  <ul style="margin:0">
+    <li><code>addOptimistic</code> 必须在 action 或 <code>startTransition</code> 内调用；在 <code>&lt;form action&gt;</code> 的函数里调用时已经自动满足。</li>
+    <li>“成功后写入真实状态”那一步不能省：否则 transition 结束后界面也会回到旧值。</li>
+    <li>使用 TanStack Query（第 40 章）时，可以用 <code>useMutation</code> 的 <code>onMutate</code> 修改缓存、<code>onError</code> 回滚，思路相同。</li>
+  </ul>
+</div>
+
+<h2 id="validation">表单校验的三个层次</h2>
+
+<p>需求：页面上加一个“提交新文章”的表单，包含标题和网址两项。它们必须经过校验：</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="表单校验的三层：HTML 原生、客户端 schema、服务端">
+  <rect class="bx-b" x="20" y="40" width="220" height="150" rx="12"/>
+  <text class="ttl on-b" x="130" y="66" text-anchor="middle">① HTML 原生</text>
+  <text class="mono sm" x="130" y="94" text-anchor="middle">required · type="url"</text>
+  <text class="mono sm" x="130" y="112" text-anchor="middle">minLength · pattern</text>
+  <text class="sm" x="130" y="144" text-anchor="middle">零代码、浏览器自带提示</text>
+  <text class="sm" x="130" y="162" text-anchor="middle">样式和文案难以定制</text>
+
+  <rect class="bx-a" x="270" y="40" width="220" height="150" rx="12"/>
+  <text class="ttl on-a" x="380" y="66" text-anchor="middle">② 客户端 schema</text>
+  <text class="mono sm" x="380" y="94" text-anchor="middle">Zod：z.object({…})</text>
+  <text class="sm" x="380" y="126" text-anchor="middle">提示及时、文案可控</text>
+  <text class="sm" x="380" y="144" text-anchor="middle">提升体验，但可以被绕过</text>
+  <text class="sm" x="380" y="162" text-anchor="middle">（用户可以改 JS / 直接调 API）</text>
+
+  <rect class="bx-g" x="520" y="40" width="220" height="150" rx="12"/>
+  <text class="ttl on-g" x="630" y="66" text-anchor="middle">③ 服务端</text>
+  <text class="sm" x="630" y="100" text-anchor="middle">最后一道关，必须有</text>
+  <text class="sm" x="630" y="126" text-anchor="middle">可以复用同一个 Zod schema</text>
+  <text class="sm" x="630" y="144" text-anchor="middle">（Node 后端 / 服务端函数）</text>
+  <path class="ln" d="M242 115 H266" marker-end="url(#ar)"/>
+  <path class="ln" d="M492 115 H516" marker-end="url(#ar)"/>
+  <text class="sm" x="380" y="218" text-anchor="middle">客户端校验是为了体验，服务端校验是为了安全</text>
+</svg>
+<figcaption>图 41-3　校验要分层：先用浏览器能力，再加客户端 schema，最后服务端兜底</figcaption>
+</figure>
+
+<h3>第一层：HTML 原生校验</h3>
+
+```jsx
+<form action={submitAction}>
+  <input name="title" required minLength={3} />
+  <input name="url" type="url" required />
+  <button type="submit">Submit story</button>
+</form>
+```
+
+<p>不写一行 JavaScript，浏览器就会阻止不合法的提交并弹出提示。能用原生能力解决的，优先用原生。</p>
+
+<h2 id="zod">第二层：Zod schema</h2>
+
+<p>
+  <strong>Zod</strong> 是 TypeScript 生态最流行的校验库：你用代码描述数据“应该长什么样”（schema），它负责校验并给出错误信息，
+  还能直接推导出 TypeScript 类型。
+</p>
+
+```bash
+npm install zod
+```
+
+```js src/story-schema.js
+import { z } from 'zod';
+
+const storySchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Title must be at least 3 characters'),
+  url: z.string().url('Please enter a valid URL'),
+});
+
+export { storySchema };
+
+// TypeScript 中可以直接推导类型：
+// type StoryInput = z.infer<typeof storySchema>;
+```
+
+<div class="box note">
+  <div class="t">&#9432; Zod 4</div>
+  <p>
+    Zod 4（2025 年发布）把常用格式提升到了顶层，推荐写 <code>z.url()</code>、<code>z.email()</code>；
+    <code>z.string().url()</code> 这种旧写法仍然可用，但已标记为不推荐。还有 Valibot 等更轻量的替代品（第 48 章）。
+  </p>
+</div>
+
+<h3>方案 A：useActionState + Zod（无额外依赖）</h3>
+
+```jsx src/SubmitStoryForm.jsx
+import { useActionState } from 'react';
+import { storySchema } from './story-schema';
+
+const submitStory = async (previousState, formData) => {
+  const values = Object.fromEntries(formData);
+  const result = storySchema.safeParse(values);
+
+  if (!result.success) {
+    return {
+      values, // 把用户输入带回去，否则表单会被重置清空
+      errors: result.error.flatten().fieldErrors,
+    };
+  }
+
+  await api.createStory(result.data);
+  return { values: {}, errors: {}, message: 'Story submitted!' };
+};
+
+const SubmitStoryForm = () => {
+  const [state, formAction, isPending] = useActionState(submitStory, {
+    values: {},
+    errors: {},
+  });
+
+  return (
+    <form action={formAction} noValidate>
+      <label htmlFor="title">Title</label>
+      <input id="title" name="title" defaultValue={state.values.title} />
+      {state.errors.title && <p role="alert">{state.errors.title[0]}</p>}
+
+      <label htmlFor="url">URL</label>
+      <input id="url" name="url" defaultValue={state.values.url} />
+      {state.errors.url && <p role="alert">{state.errors.url[0]}</p>}
+
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Submitting…' : 'Submit story'}
+      </button>
+      {state.message && <p>{state.message}</p>}
+    </form>
+  );
+};
+```
+
+<p>
+  <code>noValidate</code> 关闭浏览器自带的提示，改用我们自己的错误信息。这种写法只在<strong>提交时</strong>校验，
+  非常适合简单表单；如果换成 Next.js 的服务端函数，同一段校验代码就直接运行在服务器上（第 51 章）。
+</p>
+
+<h2 id="rhf">方案 B：React Hook Form + Zod</h2>
+
+<p>
+  表单一复杂 —— 输入时实时校验、字段之间相互依赖、动态增删字段、多步骤 —— 手写就很吃力了。
+  <strong>React Hook Form</strong>（RHF）是目前最流行的表单库，它基于非受控输入，性能很好：
+</p>
+
+```bash
+npm install react-hook-form @hookform/resolvers
+```
+
+```jsx src/SubmitStoryForm.jsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { storySchema } from './story-schema';
+
+const SubmitStoryForm = () => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(storySchema), // 用 Zod schema 校验
+    mode: 'onBlur',                     // 离开输入框时就校验
+  });
+
+  const onSubmit = async (data) => {
+    // data 已经通过校验，类型正确
+    await api.createStory(data);
+    reset();
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <label htmlFor="title">Title</label>
+      <input id="title" {...register('title')} aria-invalid={!!errors.title} />
+      {errors.title && <p role="alert">{errors.title.message}</p>}
+
+      <label htmlFor="url">URL</label>
+      <input id="url" {...register('url')} aria-invalid={!!errors.url} />
+      {errors.url && <p role="alert">{errors.url.message}</p>}
+
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Submitting…' : 'Submit story'}
+      </button>
+    </form>
+  );
+};
+```
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 230" role="img" aria-label="React Hook Form 与 Zod 的协作关系">
+  <rect class="bx-b" x="20" y="70" width="170" height="90" rx="12"/>
+  <text class="ttl on-b" x="105" y="96" text-anchor="middle">&lt;input&gt;</text>
+  <text class="mono sm" x="105" y="120" text-anchor="middle">{...register('url')}</text>
+  <text class="sm" x="105" y="142" text-anchor="middle">注册到表单（非受控）</text>
+
+  <rect class="bx-a" x="260" y="40" width="240" height="150" rx="14"/>
+  <text class="ttl on-a" x="380" y="66" text-anchor="middle">useForm（React Hook Form）</text>
+  <text class="sm" x="380" y="92" text-anchor="middle">收集值 · 管理 touched / dirty</text>
+  <text class="sm" x="380" y="112" text-anchor="middle">决定何时校验（onBlur…）</text>
+  <text class="sm" x="380" y="132" text-anchor="middle">errors · isSubmitting</text>
+  <rect class="bx-p" x="290" y="146" width="180" height="32" rx="6"/>
+  <text class="mono sm on-p" x="380" y="167" text-anchor="middle">resolver: zodResolver</text>
+
+  <rect class="bx-g" x="570" y="70" width="170" height="90" rx="12"/>
+  <text class="ttl on-g" x="655" y="96" text-anchor="middle">storySchema</text>
+  <text class="sm" x="655" y="120" text-anchor="middle">Zod：规则和错误文案</text>
+  <text class="sm" x="655" y="140" text-anchor="middle">也可在服务端复用</text>
+
+  <path class="ln-b" d="M192 115 H256" marker-end="url(#ar-b)"/>
+  <path class="ln-p" d="M472 162 C520 162 530 120 566 118" marker-end="url(#ar-p)"/>
+  <text class="sm" x="380" y="218" text-anchor="middle">分工：RHF 管“表单的过程”，Zod 管“数据的规则”</text>
+</svg>
+<figcaption>图 41-4　React Hook Form 负责表单交互，Zod 负责校验规则，resolver 把两者连起来</figcaption>
+</figure>
+
+<h3>怎么选</h3>
+
+<div class="tw">
+<table>
+  <tr><th>场景</th><th>推荐</th></tr>
+  <tr><td>一两个字段、提交时校验即可（搜索、登录、留言）</td><td>HTML 原生校验 + form action / <code>useActionState</code></td></tr>
+  <tr><td>使用 Next.js 服务端函数，校验本来就在服务器做</td><td><code>useActionState</code> + Zod（前后端共用 schema）</td></tr>
+  <tr><td>字段多、需要实时校验、动态字段、多步骤表单</td><td>React Hook Form + Zod</td></tr>
+  <tr><td>偏好类型推导更强的新方案</td><td>TanStack Form（第 48 章）</td></tr>
+</table>
+</div>
+
+<div class="vs">
+  <div class="old"><div class="h">过去的常见写法 <span class="ver old">旧</span></div>
+```jsx
+// 每个字段一个受控状态 + 手写校验 + 手动错误状态
+const [title, setTitle] = useState('');
+const [errors, setErrors] = useState({});
+
+const handleSubmit = (e) => {
+  e.preventDefault();
+  const next = {};
+  if (title.length < 3) next.title = 'Too short';
+  setErrors(next);
+  ...
+};
+// 或者使用 Formik + Yup（现在维护不如 RHF 活跃）
+```
+  </div>
+  <div class="new"><div class="h">现在 <span class="ver">React 19</span></div>
+```jsx
+// 简单表单：Actions + FormData + Zod
+const [state, formAction] = useActionState(submitStory, init);
+
+// 复杂表单：RHF + Zod
+const { register, handleSubmit } = useForm({
+  resolver: zodResolver(storySchema),
+});
+```
+  </div>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>乐观更新：先按成功显示，失败回滚。<code>useOptimistic</code> 的乐观值只在 action 期间生效，回滚是自动的。</li>
+  <li>校验分三层：HTML 原生（零成本）、客户端 schema（体验）、服务端（安全，必须有）。</li>
+  <li>Zod 用 schema 描述数据规则，可推导 TS 类型，可前后端共用。</li>
+  <li>简单表单用 <code>useActionState</code> + Zod；复杂表单用 React Hook Form + Zod。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>给每条文章加上 Upvote 按钮，用 <code>useOptimistic</code> 实现，并把失败概率调高验证回滚。</li>
+    <li>实现“提交新文章”表单的方案 A，新文章加到列表最前面。</li>
+    <li>用方案 B 重写，并加一个可选的“文本”字段：标题和文本至少要填一个（提示：Zod 的 <code>refine</code>）。</li>
+    <li>给错误信息加上 <code>aria-describedby</code>，让读屏软件在聚焦输入框时读出错误（第 43 章）。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>什么是乐观更新？有什么风险？</summary>
+    <div><p>在服务器确认之前先更新界面，假设操作会成功，失败时回滚。风险是失败时界面会“跳回去”，因此适用于成功率高、可逆的操作，并需要给出失败提示。</p></div></details>
+  <details><summary>useOptimistic 是如何实现回滚的？</summary>
+    <div><p>乐观值只在 action / transition 进行期间覆盖真实状态；transition 结束后显示回到真实状态。成功时需要更新真实状态，失败时不改即自动回滚。</p></div></details>
+  <details><summary>为什么有了前端校验还需要后端校验？</summary>
+    <div><p>前端校验可以被绕过（修改脚本或直接调用接口），只能提升体验；后端校验才能保证数据安全和正确。</p></div></details>
+  <details><summary>React Hook Form 为什么性能好？</summary>
+    <div><p>默认使用非受控输入，通过 ref 读取值，输入时不会触发整个表单组件重新渲染；只在需要时（如错误变化）更新。</p></div></details>
+</div>

@@ -1,0 +1,239 @@
+<p class="lede">
+  到目前为止，Hacker Stories 是一个用 Vite 构建的纯客户端单页应用（SPA）。这是学习 React 最好的起点，但不是所有项目的最佳形态。
+  需要搜索引擎收录的网站、首屏要快的电商、需要后端接口的全栈应用……可能更适合用<strong>框架</strong>。
+  这一章梳理几种渲染方式，比较主流的路由库和框架，帮你判断新项目该从哪里开始。
+</p>
+
+<div class="goals">
+  <h4>本章目标</h4>
+  <ul>
+    <li>理解 CSR、SSR、SSG 和服务端组件这几种渲染方式</li>
+    <li>比较 React Router 与 TanStack Router</li>
+    <li>比较 Next.js、React Router 框架模式、TanStack Start、Astro</li>
+    <li>根据项目需求决定：纯 SPA 还是框架，选哪个</li>
+  </ul>
+</div>
+
+<div id="chapter-toc"></div>
+
+<h2 id="rendering">几种渲染方式</h2>
+
+<p>第 1 章讲过“服务器渲染 → 浏览器渲染”的历史。今天的 React 框架可以在这两者之间自由组合：</p>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 330" role="img" aria-label="CSR、SSR、SSG 的首屏过程对比">
+  <text class="ttl on-b" x="20" y="24">CSR 客户端渲染（Vite SPA，本教程）</text>
+  <rect class="bx" x="20" y="34" width="130" height="30" rx="5"/><text class="sm" x="85" y="54" text-anchor="middle">下载空 HTML</text>
+  <rect class="bx-b" x="154" y="34" width="170" height="30" rx="5"/><text class="sm on-b" x="239" y="54" text-anchor="middle">下载并执行 JS</text>
+  <rect class="bx-b" x="328" y="34" width="150" height="30" rx="5"/><text class="sm on-b" x="403" y="54" text-anchor="middle">请求数据</text>
+  <rect class="bx-g" x="482" y="34" width="120" height="30" rx="5"/><text class="sm on-g" x="542" y="54" text-anchor="middle">看到内容</text>
+  <text class="sm" x="612" y="54">首屏慢、SEO 弱</text>
+
+  <text class="ttl on-a" x="20" y="100">SSR 服务端渲染（每次请求时在服务器渲染）</text>
+  <rect class="bx-a" x="20" y="110" width="200" height="30" rx="5"/><text class="sm on-a" x="120" y="130" text-anchor="middle">服务器取数据 + 渲染 HTML</text>
+  <rect class="bx-g" x="224" y="110" width="120" height="30" rx="5"/><text class="sm on-g" x="284" y="130" text-anchor="middle">看到内容</text>
+  <rect class="bx" x="348" y="110" width="200" height="30" rx="5"/><text class="sm" x="448" y="130" text-anchor="middle">下载 JS，“激活”（hydrate）</text>
+  <text class="sm" x="560" y="130">首屏快、SEO 好、需服务器</text>
+
+  <text class="ttl on-g" x="20" y="176">SSG 静态生成（构建时渲染好 HTML）</text>
+  <rect class="bx-g" x="20" y="186" width="120" height="30" rx="5"/><text class="sm on-g" x="80" y="206" text-anchor="middle">看到内容</text>
+  <rect class="bx" x="144" y="186" width="200" height="30" rx="5"/><text class="sm" x="244" y="206" text-anchor="middle">下载 JS，激活</text>
+  <text class="sm" x="356" y="206">最快、可放 CDN，但数据是构建时的</text>
+
+  <text class="ttl on-p" x="20" y="252">RSC 服务端组件（React 19，Next.js 等框架）</text>
+  <rect class="bx-p" x="20" y="262" width="220" height="30" rx="5"/><text class="sm on-p" x="130" y="282" text-anchor="middle">服务端组件在服务器运行</text>
+  <rect class="bx-g" x="244" y="262" width="120" height="30" rx="5"/><text class="sm on-g" x="304" y="282" text-anchor="middle">看到内容</text>
+  <rect class="bx" x="368" y="262" width="200" height="30" rx="5"/><text class="sm" x="468" y="282" text-anchor="middle">只下载交互部分的 JS</text>
+  <text class="sm" x="580" y="282">更少的 JS</text>
+  <text class="sm" x="380" y="318" text-anchor="middle">这些方式可以在同一个应用里按页面混用</text>
+</svg>
+<figcaption>图 49-1　四种渲染方式：区别在于“HTML 在哪里、什么时候生成”</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>CSR</th><th>SSR</th><th>SSG</th><th>RSC</th></tr>
+  <tr><td>HTML 在哪生成</td><td>浏览器</td><td>服务器（每次请求）</td><td>构建时</td><td>服务器（组件级）</td></tr>
+  <tr><td>首屏速度</td><td>慢</td><td>快</td><td>最快</td><td>快</td></tr>
+  <tr><td>SEO</td><td>弱</td><td>好</td><td>好</td><td>好</td></tr>
+  <tr><td>部署</td><td>任何静态托管</td><td>需要 Node 等服务器</td><td>任何静态托管</td><td>需要支持的平台</td></tr>
+  <tr><td>适合</td><td>后台、登录后的应用、工具类</td><td>电商、动态内容</td><td>博客、文档、营销页</td><td>全栈应用</td></tr>
+</table>
+</div>
+
+<div class="box key">
+  <div class="t">&#9733; 什么时候纯 SPA 就够了</div>
+  <p>
+    <strong>登录后才能用的应用</strong>（管理后台、SaaS 工作台、内部工具）不需要 SEO，用户也会长时间停留，首屏多等几百毫秒无所谓 ——
+    Vite + React Router 的 SPA 简单、部署便宜（静态托管即可），完全够用。本教程的 Hacker Stories 就属于这一类。
+  </p>
+</div>
+
+<h2 id="routers">SPA 路由库</h2>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>React Router</th><th>TanStack Router</th></tr>
+  <tr><td>地位</td><td>历史最久、使用最广（第 36 章）</td><td>较新，增长快</td></tr>
+  <tr><td>类型安全</td><td>框架模式下有类型生成</td><td>核心卖点：路径、参数、搜索参数全部类型安全</td></tr>
+  <tr><td>搜索参数</td><td><code>useSearchParams</code>（字符串）</td><td>可以用 Zod 等 schema 校验和解析，带类型</td></tr>
+  <tr><td>数据加载</td><td>loader / action</td><td>loader，内置缓存，与 TanStack Query 深度集成</td></tr>
+  <tr><td>路由定义</td><td>配置对象或文件路由（框架模式）</td><td>文件路由（推荐）或代码</td></tr>
+  <tr><td>适合</td><td>大多数项目、需要大量现成资料</td><td>重度 TypeScript 项目</td></tr>
+</table>
+</div>
+
+<div class="vs">
+  <div class="old"><div class="h">React Router：参数是字符串</div>
+```jsx
+const [searchParams] = useSearchParams();
+const page = Number(searchParams.get('page') ?? 0);
+// 写错参数名？运行时才发现
+```
+  </div>
+  <div class="new"><div class="h">TanStack Router：参数有类型</div>
+```jsx
+export const Route = createFileRoute('/')({
+  validateSearch: z.object({
+    query: z.string().default('React'),
+    page: z.number().default(0),
+  }),
+});
+
+const { query, page } = Route.useSearch();
+//      ^? string    ^? number
+```
+  </div>
+</div>
+
+<h2 id="frameworks">React 框架</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 300" role="img" aria-label="主流 React 框架的定位">
+  <rect class="bx-a" x="20" y="20" width="350" height="120" rx="12"/>
+  <text class="ttl on-a" x="195" y="46" text-anchor="middle">Next.js</text>
+  <text class="sm" x="195" y="70" text-anchor="middle">最流行的全栈 React 框架（Vercel）</text>
+  <text class="sm" x="195" y="90" text-anchor="middle">App Router · 服务端组件 · 服务端函数</text>
+  <text class="sm" x="195" y="110" text-anchor="middle">React 新特性通常最先在这里落地</text>
+  <text class="sm on-g" x="195" y="130" text-anchor="middle">第 51 章入门</text>
+
+  <rect class="bx-b" x="390" y="20" width="350" height="120" rx="12"/>
+  <text class="ttl on-b" x="565" y="46" text-anchor="middle">React Router 框架模式</text>
+  <text class="sm" x="565" y="70" text-anchor="middle">原 Remix，v7 合并进 React Router</text>
+  <text class="sm" x="565" y="90" text-anchor="middle">loader / action · 贴近 Web 标准</text>
+  <text class="sm" x="565" y="110" text-anchor="middle">从 SPA 渐进升级最平滑（第 36 章的代码可以复用）</text>
+
+  <rect class="bx-p" x="20" y="160" width="350" height="120" rx="12"/>
+  <text class="ttl on-p" x="195" y="186" text-anchor="middle">TanStack Start</text>
+  <text class="sm" x="195" y="210" text-anchor="middle">基于 TanStack Router + Vite 的全栈框架</text>
+  <text class="sm" x="195" y="230" text-anchor="middle">端到端类型安全 · 服务端函数</text>
+  <text class="sm" x="195" y="250" text-anchor="middle">较新，适合喜欢 TanStack 生态的团队</text>
+
+  <rect class="bx-g" x="390" y="160" width="350" height="120" rx="12"/>
+  <text class="ttl on-g" x="565" y="186" text-anchor="middle">Astro</text>
+  <text class="sm" x="565" y="210" text-anchor="middle">内容型网站（博客、文档、营销页）</text>
+  <text class="sm" x="565" y="230" text-anchor="middle">默认输出零 JS 的静态 HTML</text>
+  <text class="sm" x="565" y="250" text-anchor="middle">需要交互的“岛屿”里可以用 React 组件</text>
+</svg>
+<figcaption>图 49-2　四个主流框架的定位。移动端还有 Expo（React Native 框架）</figcaption>
+</figure>
+
+<div class="tw">
+<table>
+  <tr><th></th><th>Next.js</th><th>React Router 框架</th><th>TanStack Start</th><th>Astro</th></tr>
+  <tr><td>渲染</td><td>RSC / SSR / SSG / CSR</td><td>SSR / SSG / SPA</td><td>SSR / SPA</td><td>SSG / SSR + 岛屿</td></tr>
+  <tr><td>服务端组件</td><td>完整支持</td><td>逐步支持中</td><td>逐步支持中</td><td>不适用（Astro 组件本身在服务器渲染）</td></tr>
+  <tr><td>后端能力</td><td>路由处理器、服务端函数</td><td>loader / action</td><td>服务端函数</td><td>API 端点</td></tr>
+  <tr><td>学习曲线</td><td>较陡（缓存、服务端/客户端边界）</td><td>平缓</td><td>中</td><td>平缓</td></tr>
+  <tr><td>部署</td><td>Vercel 最省心，也可自托管</td><td>任意 Node / 边缘平台</td><td>任意 Node / 边缘平台</td><td>静态托管或服务器</td></tr>
+</table>
+</div>
+
+<h2 id="decide">怎么选</h2>
+
+<figure>
+<svg class="dgm" viewBox="0 0 760 320" role="img" aria-label="选择 SPA 或框架的决策流程">
+  <rect class="bx" x="250" y="10" width="260" height="40" rx="20"/>
+  <text class="ttl" x="380" y="35" text-anchor="middle">新项目从哪里开始？</text>
+
+  <rect class="bx" x="230" y="76" width="300" height="40" rx="8"/>
+  <text class="sm" x="380" y="101" text-anchor="middle">主要是内容（博客、文档、官网），交互很少？</text>
+  <rect class="bx-g" x="580" y="76" width="160" height="40" rx="8"/>
+  <text class="sm on-g" x="660" y="101" text-anchor="middle">是 → Astro</text>
+
+  <rect class="bx" x="230" y="142" width="300" height="40" rx="8"/>
+  <text class="sm" x="380" y="167" text-anchor="middle">需要 SEO、首屏性能，或者要写后端逻辑？</text>
+  <rect class="bx-b" x="20" y="142" width="160" height="40" rx="8"/>
+  <text class="sm on-b" x="100" y="160" text-anchor="middle">否 → Vite SPA</text>
+  <text class="sm" x="100" y="175" text-anchor="middle">+ React Router</text>
+
+  <rect class="bx" x="230" y="208" width="300" height="40" rx="8"/>
+  <text class="sm" x="380" y="233" text-anchor="middle">想用服务端组件、生态最大的方案？</text>
+  <rect class="bx-a" x="580" y="208" width="160" height="40" rx="8"/>
+  <text class="sm on-a" x="660" y="233" text-anchor="middle">是 → Next.js</text>
+
+  <rect class="bx-p" x="200" y="274" width="360" height="40" rx="8"/>
+  <text class="sm on-p" x="380" y="292" text-anchor="middle">否 → React Router 框架模式（从 SPA 升级最平滑）</text>
+  <text class="sm" x="380" y="308" text-anchor="middle">或 TanStack Start（重度 TypeScript）</text>
+
+  <path class="ln" d="M380 52 V72" marker-end="url(#ar)"/>
+  <path class="ln-g" d="M532 96 H576" marker-end="url(#ar-g)"/>
+  <path class="ln" d="M380 118 V138" marker-end="url(#ar)"/><text class="sm" x="388" y="132">否</text>
+  <path class="ln-b" d="M228 162 H184" marker-end="url(#ar-b)"/>
+  <path class="ln" d="M380 184 V204" marker-end="url(#ar)"/><text class="sm" x="388" y="198">是</text>
+  <path class="ln-a" d="M532 228 H576" marker-end="url(#ar-a)"/>
+  <path class="ln" d="M380 250 V270" marker-end="url(#ar)"/>
+</svg>
+<figcaption>图 49-3　从需求出发选择项目形态</figcaption>
+</figure>
+
+<div class="box note">
+  <div class="t">&#9432; React 官方的建议</div>
+  <p>
+    react.dev 在“创建新 React 应用”中推荐优先使用框架（Next.js、React Router 等），因为它们内置了路由、数据加载、代码分割、服务端渲染等生产环境需要的能力；
+    同时也提供了“从零搭建”（Vite 等构建工具）的指南，适合学习、纯客户端应用或已有特殊架构的场景。本教程先用 Vite 学透 React 本身，
+    第 51 章再体验框架 —— 这是最稳妥的学习顺序。
+  </p>
+</div>
+
+<h2 id="build-tools">构建工具</h2>
+
+<div class="tw">
+<table>
+  <tr><th>工具</th><th>现状</th></tr>
+  <tr><td><strong>Vite</strong></td><td>SPA 的默认选择，React Router 框架、TanStack Start、Astro 底层也用它</td></tr>
+  <tr><td>Next.js 内置（Turbopack）</td><td>用 Next.js 时无需关心</td></tr>
+  <tr><td>Rsbuild / Rspack</td><td>字节开源，兼容 webpack 生态、速度快，适合从 webpack 迁移</td></tr>
+  <tr><td>webpack</td><td>老项目大量使用，新项目很少从它开始（第 53 章建议了解其原理）</td></tr>
+  <tr><td>Create React App</td><td>&#10060; 已弃用</td></tr>
+</table>
+</div>
+
+<h2 id="summary">小结</h2>
+<ul>
+  <li>渲染方式：CSR（浏览器）、SSR（每次请求在服务器）、SSG（构建时）、RSC（组件级服务端运行）。</li>
+  <li>登录后使用的应用，Vite SPA + React Router 往往就够了；需要 SEO、首屏性能或后端逻辑时考虑框架。</li>
+  <li>路由库：React Router 最通用，TanStack Router 类型安全最强。</li>
+  <li>框架：Next.js 生态最大、最先支持新特性；React Router 框架模式从 SPA 升级最平滑；Astro 适合内容站。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习</h3>
+  <ol>
+    <li>对 Hacker Stories 的 <code>dist/index.html</code> 执行“查看网页源代码”，确认里面几乎没有内容 —— 这就是 CSR。</li>
+    <li>用 <code>npx create-react-router@latest</code> 创建一个框架模式项目，看看生成的目录结构和第 36 章有什么不同。</li>
+    <li>列出你想做的三个项目，分别判断适合 SPA、Next.js 还是 Astro，写下理由。</li>
+  </ol>
+</div>
+
+<h2 id="qa">面试题</h2>
+<div class="qa">
+  <details><summary>CSR、SSR、SSG 的区别？</summary>
+    <div><p>CSR 在浏览器中用 JS 生成页面；SSR 在每次请求时由服务器生成 HTML；SSG 在构建时预先生成静态 HTML。SSR/SSG 首屏更快、SEO 更好，CSR 部署简单。</p></div></details>
+  <details><summary>什么是 hydration（水合 / 激活）？</summary>
+    <div><p>服务器返回已渲染好的 HTML 后，客户端 React 加载并把事件处理和状态“附着”到这份 HTML 上，使其变得可交互。</p></div></details>
+  <details><summary>什么时候选择纯 SPA 而不是框架？</summary>
+    <div><p>不需要 SEO 和极致首屏（如登录后的后台、内部工具），希望部署简单（静态托管）、后端已独立存在时。</p></div></details>
+  <details><summary>Next.js 和 React Router 框架模式怎么选？</summary>
+    <div><p>需要服务端组件和最大生态选 Next.js；希望贴近 Web 标准、从现有 React Router SPA 平滑升级、部署平台自由度高时选 React Router 框架模式。</p></div></details>
+</div>
